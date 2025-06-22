@@ -1,151 +1,126 @@
-import React from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
-import { SafeAreaWrapper } from '../../src/components/SafeAreaWrapper';
-import { Header } from '../../src/components/Header';
-import { Button } from '../../src/components/Button';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, Alert, Linking } from 'react-native';
+import { CameraView, useCameraPermissions, Camera } from 'expo-camera';
 import { Icon } from '../../src/components/Icon';
-import { Card } from '../../src/components/Card';
-import { useTheme } from '../../src/contexts/ThemeContext';
-import { SPACING, TYPOGRAPHY } from '../../src/constants/theme';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
-export default function CameraTab() {
-  const { colors } = useTheme();
+export default function CameraScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const cameraRef = useRef<CameraView>(null);
+  
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [flash, setFlash] = useState<'off' | 'on' | 'auto'>('off');
 
-  const handleTakePhoto = () => {
-    Alert.alert(
-      'Take Photo',
-      'This will open the camera to take a photo for your journal',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Open Camera', 
-          onPress: () => {
-            // In a real app, would open camera
-            console.log('Camera functionality - Phase 5');
-            // After photo taken, navigate to entry editor
-            router.push('/entry-editor');
-          }
-        },
-      ]
+  useEffect(() => {
+    if (!permission) {
+      requestPermission();
+    }
+  }, [permission, requestPermission]);
+
+  const handleTakePhoto = async () => {
+    if (cameraRef.current) {
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.8,
+          exif: false,
+        });
+        console.log('Photo taken:', photo.uri);
+        router.push({ pathname: '/entry-editor', params: { photoUri: photo.uri } });
+      } catch (error) {
+        console.error('Error taking picture:', error);
+        Alert.alert('Error', 'Could not take picture.');
+      }
+    }
+  };
+
+  const toggleCameraType = () => {
+    setFacing(current => (current === 'back' ? 'front' : 'back'));
+  };
+
+  const toggleFlash = () => {
+    setFlash(current => (current === 'off' ? 'on' : 'off'));
+  };
+  
+  if (!permission) {
+    return <View style={styles.permissionContainer} />;
+  }
+  if (!permission.granted) {
+    return (
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionText}>We need your permission to show the camera</Text>
+        <Pressable style={styles.permissionButton} onPress={requestPermission}>
+          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+        </Pressable>
+      </View>
     );
-  };
-
-  const handleTakeVideo = () => {
-    Alert.alert(
-      'Record Video',
-      'This will open the camera to record a video for your journal',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Record Video', 
-          onPress: () => {
-            console.log('Video recording functionality - Phase 5');
-            router.push('/entry-editor');
-          }
-        },
-      ]
-    );
-  };
-
-  const handleQuickEntry = () => {
-    router.push('/entry-editor');
-  };
+  }
 
   return (
-    <SafeAreaWrapper variant="full">
-      <Header title="Capture" />
-      
-      <View style={styles.container}>
-        <View style={styles.content}>
-          <Icon name="camera" size="xxl" color={colors.primary[500]} />
-          <Text style={[styles.title, { color: colors.text.primary }]}>
-            Capture Your Journey
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-            Take photos and videos to document your travels and create memorable entries
-          </Text>
-          
-          <View style={styles.actionContainer}>
-            <Card variant="elevated" style={styles.actionCard}>
-              <Button
-                title="📸 Take Photo"
-                variant="primary"
-                onPress={handleTakePhoto}
-                style={styles.actionButton}
-              />
-              <Text style={[styles.actionDescription, { color: colors.text.secondary }]}>
-                Capture a moment and create a journal entry
-              </Text>
-            </Card>
-
-            <Card variant="elevated" style={styles.actionCard}>
-              <Button
-                title="🎥 Record Video"
-                variant="secondary"
-                onPress={handleTakeVideo}
-                style={styles.actionButton}
-              />
-              <Text style={[styles.actionDescription, { color: colors.text.secondary }]}>
-                Record a video memory of your adventure
-              </Text>
-            </Card>
-
-            <Card variant="elevated" style={styles.actionCard}>
-              <Button
-                title="✍️ Quick Entry"
-                variant="ghost"
-                onPress={handleQuickEntry}
-                style={styles.actionButton}
-              />
-              <Text style={[styles.actionDescription, { color: colors.text.secondary }]}>
-                Write a text entry without media
-              </Text>
-            </Card>
+    <View style={styles.container}>
+      <CameraView
+        style={styles.camera}
+        facing={facing}
+        flash={flash}
+        ref={cameraRef}
+      >
+        <SafeAreaView style={styles.cameraUIContainer} edges={['top', 'bottom']}>
+          {/* Top Controls */}
+          <View style={styles.topControls}>
+            <Pressable style={styles.controlButton} onPress={() => router.back()}>
+              <Icon name="close" size="xl" color="#FFFFFF" />
+            </Pressable>
+            <Pressable style={styles.controlButton} onPress={toggleFlash}>
+              <Icon name={flash === 'on' ? 'flash' : 'flash-off'} size="xl" color="#FFFFFF" />
+            </Pressable>
           </View>
-        </View>
-      </View>
-    </SafeAreaWrapper>
+
+          {/* Bottom Controls */}
+          <View style={styles.bottomControls}>
+            <View style={styles.controlButton} />
+            <Pressable style={styles.shutterButton} onPress={handleTakePhoto}>
+              <View style={styles.shutterButtonInner} />
+            </Pressable>
+            <Pressable style={styles.controlButton} onPress={toggleCameraType}>
+              <Icon name="camera-reverse" size="xl" color="#FFFFFF" />
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </CameraView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: SPACING.lg,
-  },
-  content: {
-    flex: 1,
+  container: { flex: 1 },
+  camera: { flex: 1 },
+  cameraUIContainer: { flex: 1, backgroundColor: 'transparent', justifyContent: 'space-between' },
+  topControls: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
+  bottomControls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 30, paddingBottom: 20 },
+  controlButton: { padding: 10, width: 60, alignItems: 'center' },
+  shutterButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'transparent',
+    borderColor: '#FFFFFF',
+    borderWidth: 4,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  title: {
-    ...TYPOGRAPHY.styles.h2,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.sm,
-    textAlign: 'center',
+  shutterButtonInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
   },
-  subtitle: {
-    ...TYPOGRAPHY.styles.body,
-    textAlign: 'center',
-    marginBottom: SPACING.xl,
-    lineHeight: 22,
-  },
-  actionContainer: {
-    width: '100%',
-    maxWidth: 320,
-    gap: SPACING.md,
-  },
-  actionCard: {
-    alignItems: 'center',
-    paddingVertical: SPACING.lg,
-  },
-  actionButton: {
-    width: '100%',
-    marginBottom: SPACING.sm,
-  },
-  actionDescription: {
-    ...TYPOGRAPHY.styles.caption,
-    textAlign: 'center',
-  },
+  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
+  permissionText: { color: 'white', fontSize: 18, marginBottom: 20 },
+  permissionButton: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#333', borderRadius: 8 },
+  permissionButtonText: { color: 'white', fontSize: 16 },
 }); 

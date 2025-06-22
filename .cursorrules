@@ -1,0 +1,227 @@
+# Travel Diary Mobile App - Cursor Rules
+
+## Project Overview
+Building a premium travel diary mobile app with map-centric design and "Airbnb-level polish". This is a React Native + Expo project targeting iOS and Android.
+
+## Development Philosophy
+- **UI-FIRST APPROACH**: Build all UI components and screens before implementing any backend functionality
+- **Design Excellence**: Every component should meet "Airbnb-level polish" standards
+- **Mobile-First**: Optimize for mobile touch interactions and gestures
+- **Performance**: Smooth 60fps animations and fast loading times
+
+## Tech Stack & Preferences
+
+### Core Framework
+- React Native 0.74+ with Expo SDK 50+
+- TypeScript (strict mode)
+- Expo Router for navigation
+- React Navigation 6 for nested navigation
+
+### UI & Styling
+- Use Expo-compatible libraries only
+- Prefer functional components with hooks
+- Use StyleSheet.create for styles, avoid inline styles
+- Implement responsive design for different screen sizes
+- Use react-native-reanimated for smooth animations
+- Prefer expo-linear-gradient for gradients
+
+### State Management (UI Phase)
+- React useState and useContext for local state
+- No external state management libraries until backend integration
+- Use React.memo for performance optimization
+
+### Maps & Location
+- Mapbox React Native SDK for maps
+- @react-native-mapbox-gl/maps
+- expo-location for location services
+- Focus on smooth map interactions and clustering
+
+### Media & Images
+- expo-image for optimized image loading
+- expo-image-picker for photo selection
+- expo-av for video handling
+- Implement progressive image loading with blurhash
+
+### Offline & Storage (UI Phase)
+- expo-secure-store for sensitive data
+- @react-native-async-storage/async-storage for app state
+- expo-sqlite for local data (mock data during UI phase)
+
+## Code Style & Standards
+
+### General Guidelines
+- Use TypeScript interfaces for all props and data structures
+- Implement proper error boundaries
+- Use descriptive variable and function names
+- Write self-documenting code with minimal comments
+- Follow React Native best practices for performance
+
+### File Structure
+```
+src/
+├── components/          # Reusable UI components
+├── screens/            # Screen components
+├── navigation/         # Navigation configuration
+├── hooks/              # Custom hooks
+├── types/              # TypeScript type definitions
+├── utils/              # Utility functions
+├── constants/          # App constants and config
+└── assets/            # Images, fonts, etc.
+```
+
+### Component Structure
+- One component per file
+- Export component as default
+- Use PascalCase for component names
+- Props interface should be named `ComponentNameProps`
+- Keep components under 200 lines when possible
+
+### Naming Conventions
+- Components: PascalCase (UserProfile.tsx)
+- Files/Folders: camelCase (userProfile.ts)
+- Constants: UPPER_SNAKE_CASE
+- Hooks: start with 'use' (useLocationPicker)
+
+## UI Development Rules
+
+### Design System
+- Create a centralized theme system (colors, typography, spacing)
+- Use consistent spacing scale (4, 8, 16, 24, 32px)
+- Implement dark/light mode support from the start
+- Create reusable component library (buttons, inputs, cards)
+
+### Accessibility
+- Add accessibilityLabel to all interactive elements
+- Use semantic HTML/RN elements
+- Ensure minimum touch target size (44px)
+- Support VoiceOver and TalkBack
+
+### Performance
+- Use FlatList for long lists, not ScrollView
+- Implement lazy loading for images
+- Use React.memo for expensive components
+- Optimize re-renders with useMemo and useCallback
+
+### Responsive Design
+- Use Dimensions API for screen size detection
+- Implement safe area handling with react-native-safe-area-context
+- Design for both portrait and landscape orientations
+- Consider different device sizes (phones, tablets)
+
+## Screen-Specific Guidelines
+
+### Map Screen
+- Smooth map interactions with proper gesture handling
+- Implement map clustering for pins
+- Custom map markers with trip preview
+- Floating action button for adding new entries
+
+### Trip/Journal Screens
+- Card-based layouts with smooth transitions
+- Timeline view for entries
+- Rich media galleries with smooth scrolling
+- Pull-to-refresh functionality
+
+### Entry Editor
+- Rich text editing capabilities
+- Media picker with preview
+- Auto-save drafts functionality
+- Smooth keyboard handling
+
+### Profile & Settings
+- Clean, minimal design
+- Smooth navigation between sections
+- Proper form validation and feedback
+
+## Mock Data Strategy
+- Create comprehensive mock data that reflects real usage patterns
+- Use TypeScript interfaces to ensure data consistency
+- Implement realistic data relationships (users, trips, entries, media)
+- Create data generators for testing different scenarios
+
+## Testing Approach (UI Phase)
+- Focus on component testing with React Native Testing Library
+- Test user interactions and navigation flows
+- Visual regression testing for design consistency
+- Performance testing for smooth animations
+
+## Backend Integration Preparation
+- Design all API interfaces but don't implement
+- Create service layer abstractions
+- Use dependency injection pattern for easy backend swapping
+- Implement loading and error states for all async operations
+
+## Common Patterns to Follow
+
+### Loading States
+```typescript
+const [isLoading, setIsLoading] = useState(false);
+// Always implement skeleton screens or spinners
+```
+
+### Error Handling
+```typescript
+// Always implement proper error boundaries and user feedback
+const [error, setError] = useState<string | null>(null);
+```
+
+### Navigation
+```typescript
+// Use type-safe navigation with proper TypeScript
+import { NavigationProp } from '@react-navigation/native';
+```
+
+## Code Quality Checklist
+- [ ] TypeScript strict mode compliance
+- [ ] No console.log statements in production code
+- [ ] Proper error handling for all user actions
+- [ ] Loading states for all async operations
+- [ ] Accessibility labels and semantic elements
+- [ ] Responsive design for different screen sizes
+- [ ] Smooth animations and transitions
+- [ ] Proper memory management (cleanup useEffect)
+
+## Specific Feature Requirements
+
+### Maps
+- Implement custom clustering algorithm
+- Smooth pin animations when zooming
+- Custom map styling to match app theme
+- Gesture handling for map interactions
+
+### Media
+- Progressive image loading with placeholder
+- Image compression before upload preparation
+- Gallery view with smooth transitions
+- Video thumbnail generation
+
+### Offline Experience
+- Design for offline-first approach
+- Queue system for pending actions
+- Proper sync indicators
+- Graceful degradation when offline
+
+## Checklist Management Protocol
+
+**MANDATORY BEFORE ANY WORK**: Always read `PROJECT_CHECKLIST.md` first to understand:
+- Current project status and progress
+- What has been completed (checked items)
+- What needs to be done next (unchecked items)
+- Implementation notes from previous work
+
+**MANDATORY AFTER COMPLETING WORK**:
+1. Update the checklist by checking off completed items
+2. Add implementation notes explaining what was built/implemented
+3. Update the "Current Status" and "Next Priority" sections
+4. Include the date when items were completed
+
+**Checklist Update Format**:
+When checking off items, add notes like:
+```
+- [x] Create Button component (primary, secondary, ghost variants)
+  ✅ Implemented 2024-01-15: Created reusable Button component with three variants, proper TypeScript props, and accessibility support. Located in src/components/Button.tsx
+```
+
+**Context Requirement**: Every development session must begin by reviewing the checklist to maintain project continuity and ensure no work is duplicated.
+
+Remember: Build beautiful, polished UI components first. Backend integration comes later once all screens are designed and user flows are perfected. 

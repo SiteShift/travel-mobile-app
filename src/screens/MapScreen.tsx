@@ -1,19 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  Alert,
-  Platform,
-  Text,
-} from 'react-native';
+import { View, StyleSheet, Alert, Platform, Text } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { SafeAreaWrapper } from '../components/SafeAreaWrapper';
-import { Header } from '../components/Header';
-import { FloatingActionButton } from '../components/FloatingActionButton';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTheme } from '../contexts/ThemeContext';
-import { SPACING, BORDER_RADIUS } from '../constants/theme';
 
 interface MapScreenProps {
   // Navigation props would be typed here
@@ -118,12 +108,9 @@ export default function MapScreen({}: MapScreenProps) {
 
   if (isLoading) {
     return (
-      <SafeAreaWrapper variant="full">
-        <LoadingSpinner 
-          variant="overlay" 
-          message="Loading map..." 
-        />
-      </SafeAreaWrapper>
+      <View style={styles.container}>
+        <LoadingSpinner variant="overlay" message="Loading map..." />
+      </View>
     );
   }
 
@@ -150,110 +137,68 @@ export default function MapScreen({}: MapScreenProps) {
   ];
 
   return (
-    <SafeAreaWrapper variant="full">
-      <Header
-        title="Travel Map"
-        variant="transparent"
-        rightActions={[
-          {
-            icon: 'search',
-            onPress: () => console.log('Search locations'),
-            badge: false,
-          },
-          {
-            icon: 'filter',
-            onPress: () => console.log('Filter entries'),
-            badge: false,
-          },
-        ]}
-      />
-      
-      <View style={styles.mapContainer}>
-        {userLocation ? (
-          <MapView
-            style={styles.map}
-            provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-            initialRegion={{
-              latitude: userLocation.latitude,
-              longitude: userLocation.longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }}
-            onPress={handleMapPress}
-            onLongPress={handleMapLongPress}
-            showsUserLocation={hasLocationPermission}
-            showsMyLocationButton={hasLocationPermission}
-            showsCompass={true}
-            showsScale={true}
-            mapType={isDark ? 'hybrid' : 'standard'}
-          >
-            {/* User location marker */}
-            {hasLocationPermission && userLocation && (
-              <Marker
-                coordinate={userLocation}
-                title="Your Location"
-                description="You are here"
-              >
-                <View style={[styles.userLocationMarker, { backgroundColor: colors.primary[500] }]}>
-                  <View style={styles.userLocationInner} />
-                </View>
-              </Marker>
-            )}
-            
-            {/* Travel entry markers */}
-            {travelEntries.map((entry) => (
-              <Marker
-                key={entry.id}
-                coordinate={entry.coordinate}
-                title={entry.title}
-                description={entry.description}
-                onPress={() => {
-                  Alert.alert(
-                    entry.title,
-                    entry.description,
-                    [
-                      { text: 'Close', style: 'cancel' },
-                      { text: 'View Details', onPress: () => console.log('View entry:', entry.id) },
-                    ]
-                  );
-                }}
-              >
-                <View style={[styles.entryMarker, { backgroundColor: colors.secondary[500] }]}>
-                  <Text style={styles.entryMarkerText}>📍</Text>
-                </View>
-              </Marker>
-            ))}
-          </MapView>
-        ) : (
-          <View style={[styles.errorContainer, { backgroundColor: colors.surface.secondary }]}>
-            <Text style={[styles.errorText, { color: colors.text.primary }]}>
-              Unable to load map
-            </Text>
-            <Text style={[styles.errorSubtext, { color: colors.text.secondary }]}>
-              Please check your internet connection and location permissions
-            </Text>
-          </View>
-        )}
-      </View>
-      
-      {/* Floating Action Button for adding entries */}
-      <FloatingActionButton
-        variant="primary"
-        position="bottom-right"
-        icon="add"
-        onPress={handleAddEntry}
-        size="large"
-      />
-    </SafeAreaWrapper>
+    <View style={styles.container}>
+      {userLocation ? (
+        <MapView
+          style={StyleSheet.absoluteFillObject}
+          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+          initialRegion={{
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          }}
+          onPress={handleMapPress}
+          onLongPress={handleMapLongPress}
+          showsUserLocation={hasLocationPermission}
+          showsMyLocationButton={false} // Hiding default button for a cleaner look
+          showsCompass={false}
+          showsScale={false}
+          mapType={isDark ? 'hybrid' : 'standard'}
+        >
+          {/* User location marker */}
+          {hasLocationPermission && userLocation && (
+            <Marker
+              coordinate={userLocation}
+              title="Your Location"
+              description="You are here"
+            >
+              <View style={[styles.userLocationMarker, { backgroundColor: colors.primary[500] }]}>
+                <View style={styles.userLocationInner} />
+              </View>
+            </Marker>
+          )}
+
+          {/* Render travel entry markers */}
+          {travelEntries.map((entry) => (
+            <Marker
+              key={entry.id}
+              coordinate={entry.coordinate}
+              title={entry.title}
+              description={entry.description}
+            />
+          ))}
+        </MapView>
+      ) : (
+        <View style={styles.permissionDeniedContainer}>
+          <Text style={[styles.permissionText, { color: colors.text.primary }]}>
+            Enable location access to use the map.
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mapContainer: {
+  container: {
     flex: 1,
+    backgroundColor: '#000', // To avoid flashes of white
   },
-  map: {
+  permissionDeniedContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   userLocationMarker: {
     width: 20,
@@ -273,36 +218,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: 'white',
   },
-  entryMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  entryMarkerText: {
-    fontSize: 16,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: SPACING.xl,
-  },
-  errorText: {
+  permissionText: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: SPACING.sm,
+    marginBottom: 20,
     textAlign: 'center',
-  },
-  errorSubtext: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
   },
 }); 
