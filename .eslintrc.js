@@ -1,4 +1,5 @@
 module.exports = {
+  root: true,
   parser: '@typescript-eslint/parser',
   extends: [
     'expo',
@@ -26,4 +27,9 @@ module.exports = {
       version: 'detect',
     },
   },
+  env: {
+    es2020: true,
+    node: true,
+  },
+  ignorePatterns: ['node_modules/', 'dist/', '.expo/'],
 }; 
