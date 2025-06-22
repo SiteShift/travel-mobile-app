@@ -68,30 +68,31 @@ export default function CameraScreen() {
         facing={facing}
         flash={flash}
         ref={cameraRef}
-      >
-        <SafeAreaView style={styles.cameraUIContainer} edges={['top', 'bottom']}>
-          {/* Top Controls */}
-          <View style={styles.topControls}>
-            <Pressable style={styles.controlButton} onPress={() => router.back()}>
-              <Icon name="close" size="xl" color="#FFFFFF" />
-            </Pressable>
-            <Pressable style={styles.controlButton} onPress={toggleFlash}>
-              <Icon name={flash === 'on' ? 'flash' : 'flash-off'} size="xl" color="#FFFFFF" />
-            </Pressable>
-          </View>
+      />
+      
+      {/* UI Overlay - positioned absolutely over the camera */}
+      <SafeAreaView style={styles.uiOverlay} edges={['top', 'bottom']}>
+        {/* Top Controls */}
+        <View style={styles.topControls}>
+          <Pressable style={styles.controlButton} onPress={() => router.back()}>
+            <Icon name="close" size="xl" color="#FFFFFF" />
+          </Pressable>
+          <Pressable style={styles.controlButton} onPress={toggleFlash}>
+            <Icon name={flash === 'on' ? 'flash' : 'flash-off'} size="xl" color="#FFFFFF" />
+          </Pressable>
+        </View>
 
-          {/* Bottom Controls */}
-          <View style={styles.bottomControls}>
-            <View style={styles.controlButton} />
-            <Pressable style={styles.shutterButton} onPress={handleTakePhoto}>
-              <View style={styles.shutterButtonInner} />
-            </Pressable>
-            <Pressable style={styles.controlButton} onPress={toggleCameraType}>
-              <Icon name="camera-reverse" size="xl" color="#FFFFFF" />
-            </Pressable>
-          </View>
-        </SafeAreaView>
-      </CameraView>
+        {/* Bottom Controls */}
+        <View style={styles.bottomControls}>
+          <View style={styles.controlButton} />
+          <Pressable style={styles.shutterButton} onPress={handleTakePhoto}>
+            <View style={styles.shutterButtonInner} />
+          </Pressable>
+          <Pressable style={styles.controlButton} onPress={toggleCameraType}>
+            <Icon name="camera-reverse" size="xl" color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -99,7 +100,15 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   camera: { flex: 1 },
-  cameraUIContainer: { flex: 1, backgroundColor: 'transparent', justifyContent: 'space-between' },
+  uiOverlay: { 
+    position: 'absolute', 
+    top: 0, 
+    left: 0, 
+    right: 0, 
+    bottom: 0, 
+    justifyContent: 'space-between',
+    pointerEvents: 'box-none', // Allow touches to pass through to camera
+  },
   topControls: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
   bottomControls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 30, paddingBottom: 20 },
   controlButton: { padding: 10, width: 60, alignItems: 'center' },
