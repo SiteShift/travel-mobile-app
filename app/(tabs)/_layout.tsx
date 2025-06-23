@@ -125,6 +125,8 @@ export default function TabLayout() {
         name="camera"
         options={{
           title: '',
+          tabBarStyle: { display: 'none' }, // Hide tab bar for full viewport
+          headerShown: false,
           tabBarButton: () => (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
               <CameraTabButton 

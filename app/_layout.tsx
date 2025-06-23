@@ -16,6 +16,15 @@ export default function RootLayout() {
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen 
+            name="entry-editor" 
+            options={{ 
+              headerShown: false, 
+              presentation: 'fullScreenModal',
+              animation: 'slide_from_bottom',
+              gestureEnabled: false,
+            }} 
+          />
+          <Stack.Screen 
             name="trip-detail" 
             options={{ 
               headerShown: false, 

@@ -65,6 +65,8 @@ export type TravelIconName =
   | 'fishing'
   | 'camping'
   | 'adventure'
+  | 'flash'
+  | 'flash-off'
   
   // Journal & Content
   | 'journal'
@@ -169,6 +171,8 @@ const TRAVEL_ICON_MAP: Record<TravelIconName, { library: IconLibrary; name: stri
   fishing: { library: 'MaterialCommunityIcons', name: 'fish' },
   camping: { library: 'MaterialCommunityIcons', name: 'campfire' },
   adventure: { library: 'MaterialCommunityIcons', name: 'compass-rose' },
+  flash: { library: 'Ionicons', name: 'flash-outline' },
+  'flash-off': { library: 'Ionicons', name: 'flash-off-outline' },
   
   // Journal & Content
   journal: { library: 'Ionicons', name: 'journal-outline' },
@@ -287,7 +291,9 @@ export const Icon: React.FC<IconProps> = ({
 
   // Get icon color
   const getIconColor = (): string => {
-    if (color.startsWith('#') || color.startsWith('rgb')) {
+    // Handle hex colors, rgb colors, and CSS color names
+    if (color.startsWith('#') || color.startsWith('rgb') || 
+        ['white', 'black', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'gray', 'grey', 'transparent'].includes(color.toLowerCase())) {
       return color;
     }
 

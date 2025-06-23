@@ -3,9 +3,9 @@
 ## Project Overview
 Building a premium travel diary mobile app with map-centric design and "Airbnb-level polish". This is a React Native + Expo project targeting iOS and Android.
 
-**Current Status**: Phase 8 Complete - Performance & Polish ✅  
+**Current Status**: Phase 8.5 Complete - Camera & Entry Editor Implementation ✅  
 **Next Priority**: Phase 9 - Advanced Features  
-**Last Updated**: 2024-01-15
+**Last Updated**: 2024-01-21
 
 ---
 
@@ -161,6 +161,63 @@ Building a premium travel diary mobile app with map-centric design and "Airbnb-l
   ✅ Implemented 2024-01-15: Exponential backoff retry logic, maximum retry limits, and user-controlled retry options with progress tracking.
 - [x] Add success feedback animations
   ✅ Implemented 2024-01-15: SuccessFeedback component with scale animations, color transitions, and visual confirmation of successful actions.
+
+---
+
+## Phase 8.5: Camera & Entry Editor Implementation ✅ COMPLETE
+### Camera Functionality (8 items)
+- [x] Full-screen camera interface with tab bar hiding
+  ✅ Implemented 2024-01-21: Camera takes entire viewport by hiding tab bar with `tabBarStyle: { display: 'none' }`. Located in app/(tabs)/camera.tsx
+- [x] Photo and video capture with timer-based detection
+  ✅ Implemented 2024-01-21: Quick tap (<300ms) for photos, hold for video recording with visual feedback and proper state management.
+- [x] Pinch-to-zoom functionality with smooth animations
+  ✅ Implemented 2024-01-21: Smooth zoom using react-native-gesture-handler and react-native-reanimated with responsive gesture handling.
+- [x] Flash toggle with lightning icon positioning
+  ✅ Implemented 2024-01-21: Flash toggle moved to bottom-left with lightning icon, proper flash state management and visual feedback.
+- [x] Video recording with visual feedback
+  ✅ Implemented 2024-01-21: Red recording circle with animated progress ring, "REC" indicator, and proper recording state management.
+- [x] Camera controls and UI polish
+  ✅ Implemented 2024-01-21: Enhanced Icon component color handling for CSS color names like "white", improved camera control layout.
+- [x] Navigation to entry editor after capture
+  ✅ Implemented 2024-01-21: Fixed race conditions between UI updates and file saving, ensuring proper navigation after media capture.
+- [x] Reanimated integration and performance optimization
+  ✅ Implemented 2024-01-21: Added babel.config.js with Reanimated plugin, downgraded to compatible version (~3.17.4) for stability.
+
+### Entry Editor Redesign (10 items)
+- [x] Auto-playing looped videos without controls
+  ✅ Implemented 2024-01-21: Videos auto-play on loop using expo-av with proper video player configuration and seamless playback.
+- [x] Full-screen media presentation
+  ✅ Implemented 2024-01-21: Changed navigation presentation from `modal` to `fullScreenModal`, disabled swipe gestures with `gestureEnabled: false`.
+- [x] Trip selection with beautiful image cards
+  ✅ Implemented 2024-01-21: Replaced location slider with square trip cards showing names, locations, and visual selection indicators.
+- [x] Animated header that scrolls and fades
+  ✅ Implemented 2024-01-21: Header fades out and moves up when scrolling, using `headerAnimatedStyle` with opacity and translateY interpolation.
+- [x] Fixed scrolling layout issues
+  ✅ Implemented 2024-01-21: Restructured layout so media is part of scroll content instead of behind it, eliminating ugly background reveals.
+- [x] Enhanced keyboard handling
+  ✅ Implemented 2024-01-21: Manual keyboard listeners with dynamic scroll padding, programmatic scrolling using `onLayout` for text input positioning.
+- [x] Floating "Save Memory" button with safe area support
+  ✅ Implemented 2024-01-21: White floating button at bottom with proper safe area insets and visual elevation effects.
+- [x] Performance optimizations with React.memo
+  ✅ Implemented 2024-01-21: Memoized TripSelector component, moved helper functions outside component, used useCallback for event handlers.
+- [x] Local compressed WebP images for trip cards
+  ✅ Implemented 2024-01-21: Updated mock data to use local WebP images (yosemite_compressed.webp, lake-tahoe.webp, los-angeles-city-skyline_compressed.webp).
+- [x] Scroll behavior and input focus improvements
+  ✅ Implemented 2024-01-21: Improved text input scroll positioning, extended scroll range for comfortable typing, full-width carousel without cutoff.
+
+### Technical Improvements (6 items)
+- [x] Fixed scroll handler errors with Animated.ScrollView
+  ✅ Implemented 2024-01-21: Replaced regular ScrollView with Animated.ScrollView to properly work with useAnimatedScrollHandler.
+- [x] Route resolution and navigation configuration
+  ✅ Implemented 2024-01-21: Added missing `entry-editor` route to app/_layout.tsx with proper navigation options.
+- [x] Package compatibility and dependency management
+  ✅ Implemented 2024-01-21: Resolved react-native-reanimated version conflicts, configured babel for proper plugin support.
+- [x] Icon component color handling enhancements
+  ✅ Implemented 2024-01-21: Enhanced `getIconColor` function to handle CSS color names like "white" in addition to theme colors.
+- [x] Video navigation bug fixes
+  ✅ Implemented 2024-01-21: Fixed race conditions in video recording by restructuring logic to decouple UI updates from file saving.
+- [x] Layout restructuring for proper scroll behavior
+  ✅ Implemented 2024-01-21: Media is now part of scroll content with proper overlay positioning, eliminating background reveal issues.
 
 ---
 
