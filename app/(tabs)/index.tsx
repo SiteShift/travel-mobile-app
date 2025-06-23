@@ -51,9 +51,9 @@ const mockTrips = [
   },
 ];
 
-const CARD_WIDTH = screenWidth * 0.8;
+const CARD_WIDTH = screenWidth * 0.75;
 const SPACING_VALUE = SPACING.md;
-const ITEM_FULL_WIDTH = CARD_WIDTH + SPACING_VALUE * 2;
+const ITEM_SPACING = screenWidth * 0.72; // Increased spacing for better card separation
 const DUPLICATE_COUNT = mockTrips.length;
 const CARD_HEIGHT = screenHeight * 0.6;
 const BUTTON_HEIGHT = 54;
@@ -68,7 +68,7 @@ export default function HomeTab() {
   useEffect(() => {
     const infiniteData = [...mockTrips, ...mockTrips, ...mockTrips];
     setData(infiniteData);
-    const initialOffset = DUPLICATE_COUNT * ITEM_FULL_WIDTH;
+    const initialOffset = DUPLICATE_COUNT * ITEM_SPACING;
     scrollX.setValue(initialOffset);
     setTimeout(() => {
       flatListRef.current?.scrollToOffset({
@@ -95,7 +95,7 @@ export default function HomeTab() {
   };
   
   const onMomentumScrollEnd = (event: any) => {
-    const newIndex = Math.round(event.nativeEvent.contentOffset.x / ITEM_FULL_WIDTH);
+    const newIndex = Math.round(event.nativeEvent.contentOffset.x / ITEM_SPACING);
     if (newIndex <= 1 || newIndex >= data.length - 2) {
       const targetIndex = DUPLICATE_COUNT + (newIndex % DUPLICATE_COUNT);
       flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
@@ -104,9 +104,9 @@ export default function HomeTab() {
 
   const TripCard = ({ index }: { index: number }) => {
     const inputRange = [
-      (index - 1) * ITEM_FULL_WIDTH,
-      index * ITEM_FULL_WIDTH,
-      (index + 1) * ITEM_FULL_WIDTH,
+      (index - 1) * ITEM_SPACING,
+      index * ITEM_SPACING,
+      (index + 1) * ITEM_SPACING,
     ];
 
     const rotateY = scrollX.interpolate({ inputRange, outputRange: ['40deg', '0deg', '-40deg'], extrapolate: 'clamp' });
@@ -148,13 +148,13 @@ export default function HomeTab() {
       </View>
       <Animated.FlatList
         ref={flatListRef} data={data} renderItem={TripCard} keyExtractor={(item, index) => `${item?.id}-${index}`}
-        horizontal showsHorizontalScrollIndicator={false} snapToInterval={ITEM_FULL_WIDTH} decelerationRate="fast"
-        contentContainerStyle={{ paddingHorizontal: (screenWidth - CARD_WIDTH) / 2 - SPACING_VALUE }}
+        horizontal showsHorizontalScrollIndicator={false} snapToInterval={ITEM_SPACING} decelerationRate="fast"
+        contentContainerStyle={{ paddingHorizontal: (screenWidth - ITEM_SPACING) / 2 }}
         onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig}
         onMomentumScrollEnd={onMomentumScrollEnd}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
-        getItemLayout={(data, index) => ({ length: ITEM_FULL_WIDTH, offset: ITEM_FULL_WIDTH * index, index })}
+        getItemLayout={(data, index) => ({ length: ITEM_SPACING, offset: ITEM_SPACING * index, index })}
       />
     </View>
   );
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.medium,
   },
   itemContainer: {
-    width: ITEM_FULL_WIDTH,
+    width: ITEM_SPACING,
     height: screenHeight,
     justifyContent: 'center',
     alignItems: 'center',
