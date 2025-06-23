@@ -1,7 +1,6 @@
 import React from 'react';
-import EntryEditorScreen from '../src/screens/EntryEditorScreen';
+import StreamlinedEntryEditor from '../src/screens/StreamlinedEntryEditor';
 
 export default function EntryEditorRoute() {
-  // Pass mock tripId for now - in real app would come from route params
-  return <EntryEditorScreen tripId="mock-trip-id" />;
+  return <StreamlinedEntryEditor />;
 } 

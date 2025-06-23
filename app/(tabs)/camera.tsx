@@ -1,135 +1,156 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, Linking } from 'react-native';
-import { CameraView, useCameraPermissions, Camera } from 'expo-camera';
-import { Icon } from '../../src/components/Icon';
+import { useState, useRef } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { CameraView, useCameraPermissions, CameraType, FlashMode } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { Icon } from '../../src/components/Icon';
 
 export default function CameraScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const cameraRef = useRef<CameraView>(null);
-  
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [flash, setFlash] = useState<FlashMode>('off');
   const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState<'back' | 'front'>('back');
-  const [flash, setFlash] = useState<'off' | 'on' | 'auto'>('off');
+  const cameraRef = useRef<CameraView>(null);
+  const router = useRouter();
 
-  useEffect(() => {
-    if (!permission) {
-      requestPermission();
-    }
-  }, [permission, requestPermission]);
-
-  const handleTakePhoto = async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          exif: false,
-        });
-        console.log('Photo taken:', photo.uri);
-        router.push({ pathname: '/entry-editor', params: { photoUri: photo.uri } });
-      } catch (error) {
-        console.error('Error taking picture:', error);
-        Alert.alert('Error', 'Could not take picture.');
-      }
-    }
-  };
-
-  const toggleCameraType = () => {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
-  };
-
-  const toggleFlash = () => {
-    setFlash(current => (current === 'off' ? 'on' : 'off'));
-  };
-  
   if (!permission) {
-    return <View style={styles.permissionContainer} />;
+    // Camera permissions are still loading.
+    return <View />;
   }
+
   if (!permission.granted) {
+    // Camera permissions are not granted yet.
     return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>We need your permission to show the camera</Text>
-        <Pressable style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
-        </Pressable>
+      <View style={styles.container}>
+        <Text style={{ textAlign: 'center' }}>We need your permission to show the camera</Text>
+        <TouchableOpacity onPress={requestPermission} style={styles.button}>
+            <Text style={styles.text}>Grant permission</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
+  function toggleCameraFacing() {
+    setFacing(current => (current === 'back' ? 'front' : 'back'));
+  }
+
+  function toggleFlash() {
+    setFlash(current => (current === 'off' ? 'on' : 'off'));
+  }
+
+  const takePicture = async () => {
+    if (cameraRef.current) {
+      const photo = await cameraRef.current.takePictureAsync();
+      if (photo) {
+        console.log('Photo taken:', photo.uri);
+        router.push({
+          pathname: '/entry-editor',
+          params: { photoUri: photo.uri },
+        });
+      }
+    }
+  };
+
+  const closeCamera = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push('/(tabs)/');
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <CameraView
-        style={styles.camera}
+      <CameraView 
+        style={styles.camera} 
         facing={facing}
         flash={flash}
         ref={cameraRef}
-      />
-      
-      {/* UI Overlay - positioned absolutely over the camera */}
-      <SafeAreaView style={styles.uiOverlay} edges={['top', 'bottom']}>
-        {/* Top Controls */}
-        <View style={styles.topControls}>
-          <Pressable style={styles.controlButton} onPress={() => router.back()}>
-            <Icon name="close" size="xl" color="#FFFFFF" />
-          </Pressable>
-          <Pressable style={styles.controlButton} onPress={toggleFlash}>
-            <Icon name={flash === 'on' ? 'flash' : 'flash-off'} size="xl" color="#FFFFFF" />
-          </Pressable>
+      >
+        <View style={styles.controlsOverlay}>
+            <View style={styles.topControls}>
+                <TouchableOpacity style={styles.controlButton} onPress={closeCamera}>
+                    <Icon name="close" size="xl" color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.controlButton} onPress={toggleFlash}>
+                    <Icon name={flash === 'on' ? 'sun' : 'cloud'} size="xl" color="white" />
+                </TouchableOpacity>
+            </View>
+            <View style={styles.bottomControls}>
+                <View style={styles.controlButton} />
+                <TouchableOpacity style={styles.shutterButton} onPress={takePicture}>
+                    <View style={styles.shutterButtonInner} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.controlButton} onPress={toggleCameraFacing}>
+                    <Icon name="refresh" size="xl" color="white" />
+                </TouchableOpacity>
+            </View>
         </View>
-
-        {/* Bottom Controls */}
-        <View style={styles.bottomControls}>
-          <View style={styles.controlButton} />
-          <Pressable style={styles.shutterButton} onPress={handleTakePhoto}>
-            <View style={styles.shutterButtonInner} />
-          </Pressable>
-          <Pressable style={styles.controlButton} onPress={toggleCameraType}>
-            <Icon name="camera-reverse" size="xl" color="#FFFFFF" />
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      </CameraView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  camera: { flex: 1 },
-  uiOverlay: { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0, 
-    right: 0, 
-    bottom: 0, 
-    justifyContent: 'space-between',
-    pointerEvents: 'box-none', // Allow touches to pass through to camera
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: '#000',
   },
-  topControls: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
-  bottomControls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 30, paddingBottom: 20 },
-  controlButton: { padding: 10, width: 60, alignItems: 'center' },
+  camera: {
+    flex: 1,
+  },
+  buttonContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+    margin: 64,
+  },
+  button: {
+    flex: 1,
+    alignSelf: 'flex-end',
+    alignItems: 'center',
+  },
+  text: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  controlsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    padding: 20,
+  },
+  topControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 40,
+  },
+  bottomControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 20,
+  },
+  controlButton: {
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 25,
+  },
   shutterButton: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: 'transparent',
-    borderColor: '#FFFFFF',
-    borderWidth: 4,
-    justifyContent: 'center',
+    backgroundColor: 'white',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   shutterButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FFFFFF',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 2,
+    borderColor: 'black',
   },
-  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
-  permissionText: { color: 'white', fontSize: 18, marginBottom: 20 },
-  permissionButton: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#333', borderRadius: 8 },
-  permissionButtonText: { color: 'white', fontSize: 16 },
 }); 
