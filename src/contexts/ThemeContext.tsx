@@ -29,26 +29,18 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     loadThemePreference();
   }, []);
 
-  // Apply system theme if no preference is saved
-  useEffect(() => {
-    if (!isLoading && mode === 'light' && systemColorScheme === 'dark') {
-      // Only auto-apply dark mode if user hasn't set a preference
-      loadThemePreference();
-    }
-  }, [systemColorScheme, isLoading]);
-
   const loadThemePreference = async () => {
     try {
       const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
       if (savedTheme) {
         setMode(savedTheme as ThemeMode);
       } else {
-        // Use system preference as default
-        setMode(systemColorScheme || 'light');
+        // Default to light mode instead of system preference
+        setMode('light');
       }
     } catch (error) {
       console.warn('Failed to load theme preference:', error);
-      setMode(systemColorScheme || 'light');
+      setMode('light');
     } finally {
       setIsLoading(false);
     }

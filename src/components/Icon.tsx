@@ -128,7 +128,24 @@ export type TravelIconName =
   | 'eye'
   | 'eyeOff'
   | 'star'
-  | 'flag';
+  | 'flag'
+  
+  // Additional UI icons
+  | 'chevron-right'
+  | 'verified'
+  | 'award'
+  | 'notebook'
+  | 'message-circle'
+  | 'moon'
+  | 'earth'
+  | 'briefcase'
+  | 'key'
+  | 'shield'
+  | 'globe'
+  | 'help-circle'
+  | 'log-out'
+  | 'plus'
+  | 'grid';
 
 // Icon mapping for travel-themed presets
 const TRAVEL_ICON_MAP: Record<TravelIconName, { library: IconLibrary; name: string }> = {
@@ -151,7 +168,7 @@ const TRAVEL_ICON_MAP: Record<TravelIconName, { library: IconLibrary; name: stri
   hotel: { library: 'Ionicons', name: 'bed-outline' },
   home: { library: 'Ionicons', name: 'home-outline' },
   tent: { library: 'MaterialCommunityIcons', name: 'tent' },
-  mountain: { library: 'Ionicons', name: 'mountain-outline' },
+  mountain: { library: 'Ionicons', name: 'triangle-outline' },
   beach: { library: 'MaterialCommunityIcons', name: 'beach' },
   city: { library: 'Ionicons', name: 'business-outline' },
   building: { library: 'Ionicons', name: 'business-outline' },
@@ -235,6 +252,23 @@ const TRAVEL_ICON_MAP: Record<TravelIconName, { library: IconLibrary; name: stri
   eyeOff: { library: 'Ionicons', name: 'eye-off-outline' },
   star: { library: 'Ionicons', name: 'star-outline' },
   flag: { library: 'Ionicons', name: 'flag-outline' },
+  
+  // Missing icons that were causing warnings
+  'chevron-right': { library: 'Ionicons', name: 'chevron-forward-outline' },
+  'verified': { library: 'Ionicons', name: 'checkmark-circle' },
+  'award': { library: 'Ionicons', name: 'trophy-outline' },
+  'notebook': { library: 'Ionicons', name: 'book-outline' },
+  'message-circle': { library: 'Ionicons', name: 'chatbubble-outline' },
+  'moon': { library: 'Ionicons', name: 'moon-outline' },
+  'earth': { library: 'Ionicons', name: 'earth-outline' },
+  'briefcase': { library: 'Ionicons', name: 'briefcase-outline' },
+  'key': { library: 'Ionicons', name: 'key-outline' },
+  'shield': { library: 'Ionicons', name: 'shield-outline' },
+  'globe': { library: 'Ionicons', name: 'globe-outline' },
+  'help-circle': { library: 'Ionicons', name: 'help-circle-outline' },
+  'log-out': { library: 'Ionicons', name: 'log-out-outline' },
+  plus: { library: 'Ionicons', name: 'add-outline' },
+  grid: { library: 'Ionicons', name: 'grid-outline' },
 };
 
 export interface IconProps {

@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Icon } from '../../src/components/Icon';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../src/constants/theme';
 
 // --- MOCK DATA ---
@@ -31,24 +32,8 @@ const achievements = [
 ];
 // --- END MOCK DATA ---
 
-const StatBox = ({ icon, value, label }: { icon: string; value: string | number; label: string }) => (
-  <View style={styles.statBox}>
-    <Icon name={icon} size="xl" color="#A1A1AA" />
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
-
-const AchievementBadge = ({ icon, title, unlocked }: { icon: string; title: string; unlocked: boolean }) => (
-  <View style={[styles.badgeContainer, { opacity: unlocked ? 1 : 0.4 }]}>
-    <View style={[styles.badgeIconCircle, unlocked && styles.badgeUnlocked]}>
-      <Icon name={icon} size="lg" color={unlocked ? '#FFFFFF' : '#71717A'} />
-    </View>
-    <Text style={styles.badgeTitle}>{title}</Text>
-  </View>
-);
-
 export default function ProfileTab() {
+  const { colors, isDark, toggleTheme } = useTheme();
   const animatedProgress = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -65,20 +50,41 @@ export default function ProfileTab() {
     outputRange: ['0%', '100%'],
   });
 
+  const StatBox = ({ icon, value, label }: { icon: string; value: string | number; label: string }) => (
+    <View style={[styles.statBox, { backgroundColor: colors.surface.secondary }]}>
+      <Icon name={icon} size="xl" color={colors.text.tertiary} />
+      <Text style={[styles.statValue, { color: colors.text.primary }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: colors.text.secondary }]}>{label}</Text>
+    </View>
+  );
+
+  const AchievementBadge = ({ icon, title, unlocked }: { icon: string; title: string; unlocked: boolean }) => (
+    <View style={[styles.badgeContainer, { opacity: unlocked ? 1 : 0.4 }]}>
+      <View style={[
+        styles.badgeIconCircle, 
+        { backgroundColor: colors.surface.secondary },
+        unlocked && { backgroundColor: colors.success[500] }
+      ]}>
+        <Icon name={icon} size="lg" color={unlocked ? '#FFFFFF' : colors.text.tertiary} />
+      </View>
+      <Text style={[styles.badgeTitle, { color: colors.text.tertiary }]}>{title}</Text>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Image source={{ uri: user.avatar }} style={styles.avatar} />
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.level}>{user.level}</Text>
+          <Image source={{ uri: user.avatar }} style={[styles.avatar, { borderColor: colors.border.secondary }]} />
+          <Text style={[styles.name, { color: colors.text.primary }]}>{user.name}</Text>
+          <Text style={[styles.level, { color: colors.text.secondary }]}>{user.level}</Text>
         </View>
 
         <View style={styles.progressSection}>
-          <View style={styles.progressBarContainer}>
-            <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
+          <View style={[styles.progressBarContainer, { backgroundColor: colors.surface.secondary }]}>
+            <Animated.View style={[styles.progressBar, { backgroundColor: colors.success[500], width: progressWidth }]} />
           </View>
-          <Text style={styles.progressLabel}>Next Level: Globetrotter</Text>
+          <Text style={[styles.progressLabel, { color: colors.text.secondary }]}>Next Level: Globetrotter</Text>
         </View>
 
         <View style={styles.statsGrid}>
@@ -89,7 +95,7 @@ export default function ProfileTab() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Achievements</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Achievements</Text>
           <View style={styles.achievementsGrid}>
             {achievements.map((badge) => (
               <AchievementBadge key={badge.id} {...badge} />
@@ -97,10 +103,34 @@ export default function ProfileTab() {
           </View>
         </View>
 
+        {/* Theme Toggle Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Appearance</Text>
+          <View style={[styles.themeToggleContainer, { backgroundColor: colors.surface.secondary }]}>
+            <View style={styles.themeToggleContent}>
+              <Icon name={isDark ? 'moon' : 'sun'} size="lg" color={colors.primary[500]} />
+              <View style={styles.themeToggleText}>
+                <Text style={[styles.themeToggleTitle, { color: colors.text.primary }]}>
+                  {isDark ? 'Dark Mode' : 'Light Mode'}
+                </Text>
+                <Text style={[styles.themeToggleSubtitle, { color: colors.text.secondary }]}>
+                  Switch between light and dark themes
+                </Text>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: colors.border.secondary, true: colors.primary[500] }}
+                thumbColor={isDark ? '#FFFFFF' : '#FFFFFF'}
+              />
+            </View>
+          </View>
+        </View>
+
         <View style={styles.footer}>
-          <Pressable><Text style={styles.footerLink}>Privacy Policy</Text></Pressable>
-          <Text style={styles.footerSeparator}>•</Text>
-          <Pressable><Text style={styles.footerLink}>Terms of Service</Text></Pressable>
+          <Pressable><Text style={[styles.footerLink, { color: colors.text.tertiary }]}>Privacy Policy</Text></Pressable>
+          <Text style={[styles.footerSeparator, { color: colors.text.tertiary }]}>•</Text>
+          <Pressable><Text style={[styles.footerLink, { color: colors.text.tertiary }]}>Terms of Service</Text></Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -108,31 +138,52 @@ export default function ProfileTab() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1 },
   header: { alignItems: 'center', paddingVertical: SPACING.lg, paddingHorizontal: SPACING.lg },
-  avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#3F3F46' },
-  name: { ...TYPOGRAPHY.styles.h2, color: '#FFFFFF', marginTop: SPACING.md },
-  level: { ...TYPOGRAPHY.styles.body, color: '#A1A1AA', marginTop: SPACING.xs },
+  avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 3 },
+  name: { ...TYPOGRAPHY.styles.h2, marginTop: SPACING.md },
+  level: { ...TYPOGRAPHY.styles.body, marginTop: SPACING.xs },
   
   progressSection: { paddingHorizontal: SPACING.xl, marginBottom: SPACING.xl },
-  progressBarContainer: { height: 8, backgroundColor: '#1F1F22', borderRadius: 4, overflow: 'hidden' },
-  progressBar: { height: '100%', backgroundColor: '#34D399' },
-  progressLabel: { ...TYPOGRAPHY.styles.caption, color: '#A1A1AA', alignSelf: 'center', marginTop: SPACING.sm },
+  progressBarContainer: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  progressBar: { height: '100%' },
+  progressLabel: { ...TYPOGRAPHY.styles.caption, alignSelf: 'center', marginTop: SPACING.sm },
 
   statsGrid: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: SPACING.md, marginBottom: SPACING.xl },
-  statBox: { flex: 1, alignItems: 'center', backgroundColor: '#18181B', marginHorizontal: SPACING.xs, paddingVertical: SPACING.md, borderRadius: BORDER_RADIUS.md },
-  statValue: { ...TYPOGRAPHY.styles.h3, color: '#FFFFFF', marginVertical: SPACING.xs },
-  statLabel: { ...TYPOGRAPHY.styles.body, color: '#71717A' },
+  statBox: { flex: 1, alignItems: 'center', marginHorizontal: SPACING.xs, paddingVertical: SPACING.md, borderRadius: BORDER_RADIUS.md },
+  statValue: { ...TYPOGRAPHY.styles.h3, marginVertical: SPACING.xs },
+  statLabel: { ...TYPOGRAPHY.styles.body },
 
   section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.xl },
-  sectionTitle: { ...TYPOGRAPHY.styles.h4, color: '#FFFFFF', marginBottom: SPACING.md },
+  sectionTitle: { ...TYPOGRAPHY.styles.h4, marginBottom: SPACING.md },
   achievementsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16 },
   badgeContainer: { alignItems: 'center', width: '22%' },
-  badgeIconCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#1F1F22', justifyContent: 'center', alignItems: 'center' },
-  badgeUnlocked: { backgroundColor: '#34D399' },
-  badgeTitle: { ...TYPOGRAPHY.styles.caption, color: '#A1A1AA', marginTop: SPACING.sm, textAlign: 'center' },
+  badgeIconCircle: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
+  badgeTitle: { ...TYPOGRAPHY.styles.caption, marginTop: SPACING.sm, textAlign: 'center' },
+  
+  // Theme Toggle Styles
+  themeToggleContainer: {
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+  },
+  themeToggleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  themeToggleText: {
+    flex: 1,
+  },
+  themeToggleTitle: {
+    ...TYPOGRAPHY.styles.body,
+    fontWeight: '600',
+    marginBottom: SPACING.xs,
+  },
+  themeToggleSubtitle: {
+    ...TYPOGRAPHY.styles.bodySmall,
+  },
   
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: SPACING.lg },
-  footerLink: { ...TYPOGRAPHY.styles.body, color: '#71717A' },
-  footerSeparator: { color: '#71717A', marginHorizontal: SPACING.sm },
-}); 
+  footerLink: { ...TYPOGRAPHY.styles.body },
+  footerSeparator: { marginHorizontal: SPACING.sm },
+});

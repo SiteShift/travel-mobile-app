@@ -25,7 +25,7 @@ export default function TabLayout() {
         }}
         resizeMode="contain"
       >
-        <Icon name="camera" size="xxl" color="#000000" />
+        <Icon name="camera" size="xxl" color={colors.text.primary} />
       </ImageBackground>
     </Pressable>
   );
@@ -33,21 +33,22 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#ffffff', // White for dark theme
-        tabBarInactiveTintColor: '#64748b', // Muted gray for inactive
+        tabBarActiveTintColor: colors.primary[500], // Use theme primary color
+        tabBarInactiveTintColor: colors.text.tertiary, // Use theme tertiary text
         tabBarStyle: {
-          backgroundColor: '#0a0a0a', // Softer dark to match home screen
-          borderTopWidth: 0, // Remove top border
+          backgroundColor: colors.surface.primary, // Use theme surface color
+          borderTopWidth: 1,
+          borderTopColor: colors.border.primary, // Use theme border color
           height: Platform.OS === 'ios' ? 100 : 80, // Increased height
           paddingBottom: Platform.OS === 'ios' ? 40 : 20, // Increased padding
           paddingTop: 16, // Increased top padding
           // Add subtle top shadow
-          shadowColor: '#ffffff',
+          shadowColor: isDark ? '#ffffff' : '#000000',
           shadowOffset: {
             width: 0,
             height: -1,
           },
-          shadowOpacity: 0.05,
+          shadowOpacity: isDark ? 0.05 : 0.1,
           shadowRadius: 8,
           elevation: 0,
         },

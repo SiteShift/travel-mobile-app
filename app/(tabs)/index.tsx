@@ -14,6 +14,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { FONT_WEIGHTS, SPACING, BORDER_RADIUS } from '../../src/constants/theme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -60,6 +61,7 @@ const BUTTON_HEIGHT = 54;
 
 export default function HomeTab() {
   const router = useRouter();
+  const { colors, isDark } = useTheme();
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const [data, setData] = useState<any[]>([]);
@@ -76,7 +78,7 @@ export default function HomeTab() {
         animated: false,
       });
     }, 100);
-    StatusBar.setBarStyle('light-content', true);
+    StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content', true);
   }, []);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -131,8 +133,12 @@ export default function HomeTab() {
             </View>
           </Pressable>
           <Animated.View style={[ styles.buttonContainer, { opacity: buttonOpacity, transform: [{ translateY: buttonTranslateY }] } ]}>
-            <Pressable style={({ pressed }) => [ styles.tripButton, pressed && styles.tripButtonPressed, ]} onPress={() => handleTripPress(data[index])}>
-              <Text style={styles.tripButtonText}>{data[index]?.buttonText}</Text>
+            <Pressable style={({ pressed }) => [ 
+              styles.tripButton, 
+              { backgroundColor: colors.surface.primary },
+              pressed && styles.tripButtonPressed, 
+            ]} onPress={() => handleTripPress(data[index])}>
+              <Text style={[styles.tripButtonText, { color: colors.text.primary }]}>{data[index]?.buttonText}</Text>
             </Pressable>
           </Animated.View>
         </Animated.View>
@@ -141,10 +147,10 @@ export default function HomeTab() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background.primary} />
       <View style={styles.headerContainer}>
-        <Text style={styles.countryName}>{activeCountry}</Text>
+        <Text style={[styles.countryName, { color: colors.text.primary }]}>{activeCountry}</Text>
       </View>
       <Animated.FlatList
         ref={flatListRef} data={data} renderItem={TripCard} keyExtractor={(item, index) => `${item?.id}-${index}`}
@@ -163,7 +169,6 @@ export default function HomeTab() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
   },
   headerContainer: {
     position: 'absolute',
@@ -174,7 +179,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   countryName: {
-    color: '#ffffff',
     fontSize: 26,
     fontWeight: FONT_WEIGHTS.medium,
   },
@@ -227,7 +231,7 @@ const styles = StyleSheet.create({
   tripTitle: {
     fontSize: 32,
     fontWeight: '400',
-    fontFamily: Platform.OS === 'ios' ? 'Times New Roman' : 'serif',
+    fontFamily: 'Magnolia Script',
     fontStyle: 'italic',
     letterSpacing: -1,
     color: '#ffffff', 
@@ -248,14 +252,14 @@ const styles = StyleSheet.create({
     elevation: 999,
   },
   tripButton: {
-    backgroundColor: '#FFFFFF', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md, borderRadius: 100,
+    paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md, borderRadius: 100,
     minWidth: 140, height: BUTTON_HEIGHT, justifyContent: 'center', shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10,
   },
   tripButtonPressed: {
-    backgroundColor: '#F0F0F0',
+    opacity: 0.8,
   },
   tripButtonText: {
-    fontSize: 18, fontWeight: FONT_WEIGHTS.bold, color: '#000000', textAlign: 'center',
+    fontSize: 18, fontWeight: FONT_WEIGHTS.bold, textAlign: 'center',
   },
 }); 

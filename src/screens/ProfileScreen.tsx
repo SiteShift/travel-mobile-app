@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Switch,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { SafeAreaWrapper } from '../components/SafeAreaWrapper';
@@ -22,7 +23,7 @@ import {
 } from '../constants/theme';
 
 export const ProfileScreen = () => {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, isDark, toggleTheme, mode } = useTheme();
   const [user, setUser] = useState({
     name: 'Alex Thompson',
     email: 'alex.thompson@example.com',
@@ -111,15 +112,6 @@ export const ProfileScreen = () => {
       id: 'app',
       title: 'App Settings',
       items: [
-        {
-          id: 'theme',
-          title: 'Dark Mode',
-          subtitle: 'Switch between light and dark themes',
-          icon: 'moon',
-          type: 'toggle',
-          value: isDark,
-          onToggle: toggleTheme,
-        },
         {
           id: 'language',
           title: 'Language',
@@ -262,6 +254,92 @@ export const ProfileScreen = () => {
     </Card>
   );
 
+  const renderThemeSettings = () => (
+    <Card style={styles.themeCard}>
+      <View style={styles.themeHeader}>
+        <View style={styles.themeIconContainer}>
+          <Icon 
+            name={isDark ? 'moon' : 'sun'} 
+            size="lg" 
+            color={isDark ? colors.primary[400] : colors.warning[500]} 
+          />
+        </View>
+        <View style={styles.themeInfo}>
+          <Text style={[styles.themeTitle, { color: colors.text.primary }]}>
+            Appearance
+          </Text>
+          <Text style={[styles.themeSubtitle, { color: colors.text.secondary }]}>
+            Choose your preferred theme
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.themeOptions}>
+        <TouchableOpacity
+          style={[
+            styles.themeOption,
+            { backgroundColor: colors.surface.secondary },
+            !isDark && [styles.themeOptionActive, { backgroundColor: colors.primary[100], borderColor: colors.primary[500] }]
+          ]}
+          onPress={() => !isDark || toggleTheme()}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.themePreview, { backgroundColor: '#ffffff' }]}>
+            <View style={[styles.themePreviewHeader, { backgroundColor: '#f8fafc' }]} />
+            <View style={styles.themePreviewContent}>
+              <View style={[styles.themePreviewLine, { backgroundColor: '#1e293b' }]} />
+              <View style={[styles.themePreviewLine, { backgroundColor: '#64748b', width: '60%' }]} />
+            </View>
+          </View>
+          <View style={styles.themeOptionInfo}>
+            <Text style={[styles.themeOptionTitle, { color: colors.text.primary }]}>
+              Light Mode
+            </Text>
+            <Text style={[styles.themeOptionSubtitle, { color: colors.text.secondary }]}>
+              Clean and bright
+            </Text>
+          </View>
+          {!isDark && (
+            <View style={[styles.themeCheckmark, { backgroundColor: colors.primary[500] }]}>
+              <Icon name="checkmark" size="sm" color="white" />
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[
+            styles.themeOption,
+            { backgroundColor: colors.surface.secondary },
+            isDark && [styles.themeOptionActive, { backgroundColor: colors.primary[100], borderColor: colors.primary[500] }]
+          ]}
+          onPress={() => isDark || toggleTheme()}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.themePreview, { backgroundColor: '#0f172a' }]}>
+            <View style={[styles.themePreviewHeader, { backgroundColor: '#1e293b' }]} />
+            <View style={styles.themePreviewContent}>
+              <View style={[styles.themePreviewLine, { backgroundColor: '#f8fafc' }]} />
+              <View style={[styles.themePreviewLine, { backgroundColor: '#cbd5e1', width: '60%' }]} />
+            </View>
+          </View>
+          <View style={styles.themeOptionInfo}>
+            <Text style={[styles.themeOptionTitle, { color: colors.text.primary }]}>
+              Dark Mode
+            </Text>
+            <Text style={[styles.themeOptionSubtitle, { color: colors.text.secondary }]}>
+              Easy on the eyes
+            </Text>
+          </View>
+          {isDark && (
+            <View style={[styles.themeCheckmark, { backgroundColor: colors.primary[500] }]}>
+              <Icon name="checkmark" size="sm" color="white" />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    </Card>
+  );
+
   return (
     <SafeAreaWrapper variant="top">
       <Header
@@ -284,6 +362,8 @@ export const ProfileScreen = () => {
           </Text>
           <UserStatsDashboard stats={stats} compact />
         </View>
+        
+        {renderThemeSettings()}
         
         <SettingsList sections={settingsSections} />
         
@@ -348,5 +428,98 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: SPACING.xl,
+  },
+  // Theme Settings Styles
+  themeCard: {
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    padding: SPACING.lg,
+  },
+  themeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  themeIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.md,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  themeInfo: {
+    flex: 1,
+  },
+  themeTitle: {
+    ...TYPOGRAPHY.styles.h3,
+    fontWeight: '600',
+    marginBottom: SPACING.xs,
+  },
+  themeSubtitle: {
+    ...TYPOGRAPHY.styles.body,
+  },
+  themeOptions: {
+    gap: SPACING.md,
+  },
+  themeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+  },
+  themeOptionActive: {
+    borderWidth: 2,
+  },
+  themePreview: {
+    width: 48,
+    height: 36,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginRight: SPACING.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  themePreviewHeader: {
+    height: 12,
+    width: '100%',
+  },
+  themePreviewContent: {
+    flex: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 2,
+  },
+  themePreviewLine: {
+    height: 2,
+    borderRadius: 1,
+  },
+  themeOptionInfo: {
+    flex: 1,
+  },
+  themeOptionTitle: {
+    ...TYPOGRAPHY.styles.body,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  themeOptionSubtitle: {
+    ...TYPOGRAPHY.styles.bodySmall,
+  },
+  themeCheckmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 }); 
