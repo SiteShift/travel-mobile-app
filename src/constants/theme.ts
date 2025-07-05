@@ -316,12 +316,13 @@ export const getColors = (mode: ThemeMode): ColorPalette => {
 };
 
 export const TYPOGRAPHY = {
-  // Font families (system defaults for React Native)
+  // Font families (custom fonts)
   fonts: {
-    regular: 'System',
-    medium: 'System',
-    bold: 'System',
-    light: 'System',
+    regular: 'PlusJakartaSans',
+    medium: 'PlusJakartaSans',
+    bold: 'PlusJakartaSans',
+    light: 'PlusJakartaSans',
+    display: 'Merienda', // For titles and display text
   },
   
   // Text styles for common use cases

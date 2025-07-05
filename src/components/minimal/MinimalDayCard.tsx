@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   dayLabel: {
     fontSize: 24,
     fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
   },
   
   dayOfWeek: {

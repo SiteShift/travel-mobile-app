@@ -3,6 +3,7 @@ import { Tabs, useRouter } from 'expo-router';
 import { Platform, View, Pressable, ImageBackground } from 'react-native';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { Icon } from '../../src/components/Icon';
+import { FloatingPillNavigation } from '../../src/components/FloatingPillNavigation';
 
 export default function TabLayout() {
   const { colors, isDark } = useTheme();
@@ -16,7 +17,7 @@ export default function TabLayout() {
       }}
     >
       <ImageBackground
-        source={require('../../public/assets/camera-button.webp')}
+        source={require('../../public/assets/Travel App (Max & Sam) (4)-Photoroom-min.png')}
         style={{
           width: 80,
           height: 80,
@@ -25,132 +26,62 @@ export default function TabLayout() {
         }}
         resizeMode="contain"
       >
-        <Icon name="camera" size="xxl" color={colors.text.primary} />
+        {/* Removed camera icon */}
       </ImageBackground>
     </Pressable>
   );
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary[500], // Use theme primary color
-        tabBarInactiveTintColor: colors.text.tertiary, // Use theme tertiary text
-        tabBarStyle: {
-          backgroundColor: colors.surface.primary, // Use theme surface color
-          borderTopWidth: 1,
-          borderTopColor: colors.border.primary, // Use theme border color
-          height: Platform.OS === 'ios' ? 100 : 80, // Increased height
-          paddingBottom: Platform.OS === 'ios' ? 40 : 20, // Increased padding
-          paddingTop: 16, // Increased top padding
-          // Add subtle top shadow
-          shadowColor: isDark ? '#ffffff' : '#000000',
-          shadowOffset: {
-            width: 0,
-            height: -1,
-          },
-          shadowOpacity: isDark ? 0.05 : 0.1,
-          shadowRadius: 8,
-          elevation: 0,
-        },
-        tabBarLabelStyle: {
-          fontSize: 14, // Increased from 12
-          fontWeight: '600',
-          marginTop: 8, // Increased from 6
-          letterSpacing: 0.3, // Reduced from 0.5
-        },
-        tabBarItemStyle: {
-          paddingVertical: 6, // Increased from 4
-        },
-        headerShown: false,
-        tabBarHideOnKeyboard: true,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarLabel: () => null, // Remove label
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{ 
-              paddingTop: 4, // Increased from 2
-              transform: [{ scale: focused ? 1.15 : 1.05 }], // Increased scale
-            }}>
-              <Icon
-                name={focused ? 'book' : 'book-outline'}
-                size="lg" // Increased from "md"
-                color={color}
-              />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="map"
-        options={{
-          title: 'Map',
-          tabBarLabel: () => null, // Remove label
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{ 
-              paddingTop: 4, // Increased from 2
-              transform: [{ scale: focused ? 1.15 : 1.05 }], // Increased scale
-            }}>
-            <Icon
-                name={focused ? 'location' : 'location-outline'}
-                size="lg" // Increased from "md"
-              color={color}
-            />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarLabel: () => null, // Remove label
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{ 
-              paddingTop: 4, // Increased from 2
-              transform: [{ scale: focused ? 1.15 : 1.05 }], // Increased scale
-            }}>
-            <Icon
-                name={focused ? 'person' : 'person-outline'}
-                size="lg" // Increased from "md"
-              color={color}
-            />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="camera"
-        options={{
-          title: '',
-          tabBarStyle: { display: 'none' }, // Hide tab bar for full viewport
+    <>
+      <Tabs
+        screenOptions={{
+          tabBarStyle: { display: 'none' }, // Hide the default tab bar completely
           headerShown: false,
-          tabBarButton: () => (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <CameraTabButton 
-                onPress={() => router.push('/camera')}
-              />
-            </View>
-          ),
+          tabBarHideOnKeyboard: true,
         }}
-      />
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Journal',
+          }}
+        />
+        <Tabs.Screen
+          name="map"
+          options={{
+            title: 'Map',
+          }}
+        />
+        <Tabs.Screen
+          name="camera"
+          options={{
+            title: 'Camera',
+          }}
+        />
+        
+        {/* Hide unused tabs */}
+        <Tabs.Screen
+          name="profile"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="trips"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="journal"
+          options={{
+            href: null,
+          }}
+        />
+      </Tabs>
       
-      {/* Hide unused tabs */}
-      <Tabs.Screen
-        name="trips"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="journal"
-        options={{
-          href: null,
-        }}
-      />
-    </Tabs>
+      {/* Add the floating pill navigation */}
+      <FloatingPillNavigation />
+    </>
   );
 } 

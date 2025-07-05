@@ -261,7 +261,7 @@ const createStyles = (colors: any, isSelected: boolean) => StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: 'white',
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
   },
   
   moodEmoji: {
@@ -288,7 +288,7 @@ const createStyles = (colors: any, isSelected: boolean) => StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
     marginTop: SPACING.sm,
   },
   

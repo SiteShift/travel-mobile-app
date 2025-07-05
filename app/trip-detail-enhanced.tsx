@@ -609,7 +609,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     color: 'white',
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'sans-serif',
+    fontFamily: 'PlusJakartaSans',
   },
   
   storyDescription: {

@@ -8,13 +8,13 @@ import {
   Pressable,
   Animated,
   StatusBar,
-  ViewToken,
   Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { Icon } from '../../src/components/Icon';
 import { FONT_WEIGHTS, SPACING, BORDER_RADIUS } from '../../src/constants/theme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -65,7 +65,6 @@ export default function HomeTab() {
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const [data, setData] = useState<any[]>([]);
-  const [activeCountry, setActiveCountry] = useState('');
 
   useEffect(() => {
     const infiniteData = [...mockTrips, ...mockTrips, ...mockTrips];
@@ -80,15 +79,6 @@ export default function HomeTab() {
     }, 100);
     StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content', true);
   }, []);
-
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const centralItem = viewableItems.find(item => item.isViewable);
-    if (centralItem?.item) {
-      setActiveCountry(centralItem.item.country);
-    }
-  }, []);
-
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
   const handleTripPress = (trip: any) => {
     console.log('Trip pressed:', trip.title);
@@ -146,22 +136,24 @@ export default function HomeTab() {
     );
   };
 
+  const handleProfilePress = () => {
+    router.push('/(tabs)/profile');
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background.primary} />
-      <View style={styles.headerContainer}>
-        <Text style={[styles.countryName, { color: colors.text.primary }]}>{activeCountry}</Text>
-      </View>
-      <Animated.FlatList
-        ref={flatListRef} data={data} renderItem={TripCard} keyExtractor={(item, index) => `${item?.id}-${index}`}
-        horizontal showsHorizontalScrollIndicator={false} snapToInterval={ITEM_SPACING} decelerationRate="fast"
-        contentContainerStyle={{ paddingHorizontal: (screenWidth - ITEM_SPACING) / 2 }}
-        onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
-        scrollEventThrottle={16}
-        getItemLayout={(data, index) => ({ length: ITEM_SPACING, offset: ITEM_SPACING * index, index })}
-      />
+
+              <Animated.FlatList
+          ref={flatListRef} data={data} renderItem={TripCard} keyExtractor={(item, index) => `${item?.id}-${index}`}
+          horizontal showsHorizontalScrollIndicator={false} snapToInterval={ITEM_SPACING} decelerationRate="fast"
+          contentContainerStyle={{ paddingHorizontal: (screenWidth - ITEM_SPACING) / 2 }}
+          onMomentumScrollEnd={onMomentumScrollEnd}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
+          scrollEventThrottle={16}
+          getItemLayout={(data, index) => ({ length: ITEM_SPACING, offset: ITEM_SPACING * index, index })}
+          style={styles.carousel}
+        />
     </View>
   );
 }
@@ -170,18 +162,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerContainer: {
-    position: 'absolute',
-    top: screenHeight * 0.08,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 10,
+  carousel: {
+    marginTop: -screenHeight * 0.05, // Move carousel up
   },
-  countryName: {
-    fontSize: 26,
-    fontWeight: FONT_WEIGHTS.medium,
-  },
+
   itemContainer: {
     width: ITEM_SPACING,
     height: screenHeight,
@@ -231,11 +215,10 @@ const styles = StyleSheet.create({
   tripTitle: {
     fontSize: 32,
     fontWeight: '400',
-    fontFamily: 'Magnolia Script',
-    fontStyle: 'italic',
+    fontFamily: 'Merienda',
     letterSpacing: -1,
-    color: '#ffffff', 
-    textAlign: 'center', 
+    color: 'white',
+    textAlign: 'center',
     marginBottom: SPACING.sm,
   },
   tripDescription: {

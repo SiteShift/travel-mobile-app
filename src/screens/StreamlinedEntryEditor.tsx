@@ -11,6 +11,7 @@ import {
   ScrollView as RNScrollView,
   Animated as RNAnimated,
   Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -120,7 +121,7 @@ const getSortedTrips = (trips: typeof mockTrips) => {
 };
 
 // --- Compact Trip Selector Button ---
-const TripSelectorButton = React.memo(({ selectedTrip, onPress }: { selectedTrip: any, onPress: () => void }) => {
+const TripSelectorButton = React.memo(({ selectedTrip, onPress, styles }: { selectedTrip: any, onPress: () => void, styles: any }) => {
     return (
         <TouchableOpacity style={styles.tripSelectorButton} onPress={onPress}>
             <View style={styles.tripButtonContent}>
@@ -140,12 +141,14 @@ const TripSelectionModal = React.memo(({
     visible, 
     selectedTrip, 
     onSelectTrip, 
-    onClose 
+    onClose,
+    styles
 }: { 
     visible: boolean, 
     selectedTrip: any, 
     onSelectTrip: (trip: any) => void, 
-    onClose: () => void 
+    onClose: () => void,
+    styles: any 
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const sortedTrips = getSortedTrips(mockTrips);
@@ -243,7 +246,7 @@ const TripSelectionModal = React.memo(({
 export default function StreamlinedEntryEditor() {
   const router = useRouter();
   const params = useLocalSearchParams<{ photoUri?: string; isVideo?: string }>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const scrollRef = useRef<RNScrollView>(null);
@@ -251,11 +254,14 @@ export default function StreamlinedEntryEditor() {
   const autoSaveTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const [content, setContent] = useState('');
-  const [selectedTrip, setSelectedTrip] = useState(mockTrips[0]);
+  const [selectedTrip, setSelectedTrip] = useState(getSortedTrips(mockTrips)[0]);
   const [currentTime] = useState(new Date());
   const [isFocused, setIsFocused] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [showTripModal, setShowTripModal] = useState(false);
+  const [searchText, setSearchText] = useState('');
+
+  const styles = createStyles(colors);
 
   // Auto-save functionality
   const autosaveDraft = useCallback((text: string) => {
@@ -337,7 +343,11 @@ export default function StreamlinedEntryEditor() {
       { text: "Done", onPress: () => router.back() },
     ]);
   };
-  
+
+  const filteredTrips = mockTrips.filter(trip =>
+    trip.name.toLowerCase().includes(searchText.toLowerCase())
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
@@ -387,7 +397,7 @@ export default function StreamlinedEntryEditor() {
 
         {/* Content Section */}
         <View style={styles.contentSection}>
-          <TripSelectorButton selectedTrip={selectedTrip} onPress={() => setShowTripModal(true)} />
+          <TripSelectorButton selectedTrip={selectedTrip} onPress={() => setShowTripModal(true)} styles={styles} />
           
           {/* Enhanced Text Input */}
           <View style={styles.textInputContainer}>
@@ -398,7 +408,7 @@ export default function StreamlinedEntryEditor() {
                 isFocused && styles.storyInputFocused
               ]}
               placeholder={placeholder}
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.text.tertiary}
               value={content}
               onChangeText={handleContentChange}
               multiline
@@ -460,13 +470,13 @@ export default function StreamlinedEntryEditor() {
         selectedTrip={selectedTrip}
         onSelectTrip={handleSelectTrip}
         onClose={() => setShowTripModal(false)}
+        styles={styles}
       />
     </View>
   );
 }
 
-// --- Simplified and Re-organized Styles ---
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -559,7 +569,7 @@ const styles = StyleSheet.create({
   writingTip: {
     color: '#666',
     fontSize: 12,
-    fontStyle: 'italic',
+    fontWeight: '500',
   },
   dateLocationContainer: {
     alignItems: 'center',
@@ -726,5 +736,13 @@ const styles = StyleSheet.create({
   storyInputFocused: {
     borderColor: '#333',
     backgroundColor: '#1a1a1a',
+  },
+  placeholderText: {
+    color: colors.text.tertiary,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  characterCount: {
+    position: 'absolute',
   },
 }); 

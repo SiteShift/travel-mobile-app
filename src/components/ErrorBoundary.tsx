@@ -9,7 +9,7 @@ import {
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { SafeAreaWrapper } from './SafeAreaWrapper';
-import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants/theme';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, FONT_SIZES } from '../constants/theme';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -404,10 +404,11 @@ const styles = StyleSheet.create({
     maxHeight: 200,
   },
   debugText: {
-    ...TYPOGRAPHY.styles.caption,
-    color: '#6b7280',
-    fontFamily: 'Courier',
-    marginBottom: SPACING.xs,
+    color: '#374151',
+    marginBottom: SPACING.md,
+    fontSize: FONT_SIZES.sm,
+    fontFamily: 'PlusJakartaSans',
+    lineHeight: 18,
   },
   debugLabel: {
     fontWeight: '600',

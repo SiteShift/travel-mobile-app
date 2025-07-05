@@ -497,10 +497,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   tripTitle: {
     fontSize: 38,
     fontWeight: '400',
-    fontStyle: 'italic',
     color: 'white',
     marginBottom: SPACING.xs * 0.5, // Reduced from SPACING.xs
-    fontFamily: 'Magnolia Script',
+    fontFamily: 'Merienda',
     letterSpacing: -0.5,
   },
   
