@@ -1,13 +1,18 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Tabs, useRouter } from 'expo-router';
+import { useNavigationState } from '@react-navigation/native';
 import { Platform, View, Pressable, ImageBackground } from 'react-native';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { Icon } from '../../src/components/Icon';
 import { FloatingPillNavigation } from '../../src/components/FloatingPillNavigation';
 
-export default function TabLayout() {
+const TabLayout = memo(() => {
   const { colors, isDark } = useTheme();
   const router = useRouter();
+  
+  const state = useNavigationState(state => state);
+  const currentRouteName = state ? state.routes[state.index]?.name : 'index';
+  const showFloatingNav = currentRouteName !== 'camera';
 
   const CameraTabButton = ({ onPress }: { onPress: () => void }) => (
     <Pressable
@@ -80,8 +85,10 @@ export default function TabLayout() {
         />
       </Tabs>
       
-      {/* Add the floating pill navigation */}
-      <FloatingPillNavigation />
+      {/* Add the floating pill navigation only when not on the camera screen */}
+      {showFloatingNav && <FloatingPillNavigation />}
     </>
   );
-} 
+});
+
+export default TabLayout; 

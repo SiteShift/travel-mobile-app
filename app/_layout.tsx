@@ -30,8 +30,8 @@ export default function RootLayout() {
             name="entry-editor" 
             options={{ 
               headerShown: false, 
-              presentation: 'fullScreenModal',
-              animation: 'slide_from_bottom',
+              presentation: 'transparentModal',
+              animation: 'fade',
               gestureEnabled: false,
             }} 
           />

@@ -125,7 +125,7 @@ export {
   StaggeredList,
   SuccessFeedback,
   AnimationUtils,
-} from './AnimationComponents';
+} from './AnimationComponents'; 
 
 // Navigation
 export { FloatingPillNavigation } from './FloatingPillNavigation'; 

@@ -26,11 +26,9 @@ const mapSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmln
 <path d="M9 3.236v15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
-const clapperboardSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="m6.2 5.3 3.1 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="m12.4 3.4 3.1 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+const userSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 const plusSvg = `<svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -64,10 +62,10 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
       isActive: pathname.includes('/map'),
     },
     {
-      id: 'camera',
-      route: '/(tabs)/camera',
-      svg: clapperboardSvg,
-      isActive: pathname.includes('/camera'),
+      id: 'profile',
+      route: '/(tabs)/profile',
+      svg: userSvg,
+      isActive: pathname.includes('/profile'),
     },
     {
       id: 'add',

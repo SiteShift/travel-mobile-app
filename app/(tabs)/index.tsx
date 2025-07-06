@@ -118,7 +118,7 @@ export default function HomeTab() {
             <View style={styles.imageBorder} />
             <LinearGradient colors={data[index]?.gradient || []} style={styles.gradientOverlay} />
             <View style={styles.cardContent}>
-              <Text style={styles.tripTitle}>{data[index]?.title}</Text>
+              <Text style={styles.tripTitle} numberOfLines={1}>{data[index]?.title}</Text>
               <Text style={styles.tripDescription}>{data[index]?.description}</Text>
             </View>
           </Pressable>
@@ -144,16 +144,16 @@ export default function HomeTab() {
     <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background.primary} />
 
-              <Animated.FlatList
-          ref={flatListRef} data={data} renderItem={TripCard} keyExtractor={(item, index) => `${item?.id}-${index}`}
-          horizontal showsHorizontalScrollIndicator={false} snapToInterval={ITEM_SPACING} decelerationRate="fast"
-          contentContainerStyle={{ paddingHorizontal: (screenWidth - ITEM_SPACING) / 2 }}
-          onMomentumScrollEnd={onMomentumScrollEnd}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
-          scrollEventThrottle={16}
-          getItemLayout={(data, index) => ({ length: ITEM_SPACING, offset: ITEM_SPACING * index, index })}
+      <Animated.FlatList
+        ref={flatListRef} data={data} renderItem={TripCard} keyExtractor={(item, index) => `${item?.id}-${index}`}
+        horizontal showsHorizontalScrollIndicator={false} snapToInterval={ITEM_SPACING} decelerationRate="fast"
+        contentContainerStyle={{ paddingHorizontal: (screenWidth - ITEM_SPACING) / 2 }}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
+        scrollEventThrottle={16}
+        getItemLayout={(data, index) => ({ length: ITEM_SPACING, offset: ITEM_SPACING * index, index })}
           style={styles.carousel}
-        />
+      />
     </View>
   );
 }
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '400',
     fontFamily: 'Merienda',
-    letterSpacing: -1,
+    letterSpacing: -0.5,
     color: 'white',
     textAlign: 'center',
     marginBottom: SPACING.sm,
@@ -237,12 +237,12 @@ const styles = StyleSheet.create({
   tripButton: {
     paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md, borderRadius: 100,
     minWidth: 140, height: BUTTON_HEIGHT, justifyContent: 'center', shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10,
+    shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 6,
   },
   tripButtonPressed: {
     opacity: 0.8,
   },
   tripButtonText: {
-    fontSize: 18, fontWeight: FONT_WEIGHTS.bold, textAlign: 'center',
+    fontSize: 18, fontWeight: FONT_WEIGHTS.medium, textAlign: 'center',
   },
 }); 
