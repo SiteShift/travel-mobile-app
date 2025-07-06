@@ -3,9 +3,41 @@
 ## Project Overview
 Building a premium travel diary mobile app with map-centric design and "Airbnb-level polish". This is a React Native + Expo project targeting iOS and Android.
 
-**Current Status**: Phase 8.7 Complete - Light/Dark Mode Enhancement ✅  
+**Current Status**: Phase 8.7 Complete - Navigation Configuration Updated ✅  
 **Next Priority**: Phase 9 - Advanced Features  
 **Last Updated**: 2024-01-21
+
+**Recent Changes**:
+- Fixed app navigation to open on trips 3D carousel page instead of map page
+- Updated main app redirect from `/(tabs)/map` to `/(tabs)` to show trips view by default
+- Cleared Expo cache and restarted development server
+- Verified FloatingPillNavigation properly highlights trips view as active tab
+- Updated Day box outlines in "Your Journey" section from blue to white
+  - Modified DayPreview component (enhanced trip detail) to use white border when selected
+  - Modified MinimalDayCard component (minimal trip detail) to use white border when selected
+- Reduced letter spacing for all Merienda font titles from -0.5 to -1.5
+  - Updated trip titles on main carousel page (California Road Trip, etc.)
+  - Updated trip titles on trip detail pages for consistent typography
+- Moved header text to left side of trip detail page (California Road Trip, dates, memory count)
+- Moved header text down slightly on trip detail page by adjusting bottom positioning
+  - Reduced bottom spacing from SPACING.xl * 2.5 to SPACING.xl * 2
+- **COMPLETELY OVERHAULED GRID LAYOUT** for perfect photo spacing (100x better!)
+  - Removed problematic flex layout that caused uneven column widths
+  - Implemented precise width calculations: `(screenWidth - padding*2 - gap) / 2`
+  - Added `justifyContent: 'space-between'` for perfect column spacing
+  - Created `gridPhotoWrapper` with consistent vertical spacing
+  - Removed internal spacing from MinimalPhotoCard to prevent double-spacing
+  - **REFINED SPACING**: Reduced to SPACING.md outer padding and SPACING.sm gaps
+  - All photos now have perfectly even, smaller gaps both horizontally and vertically
+- **MADE DAY BOXES SMALLER** in Story view for better proportions
+  - Reduced day card dimensions from 140×180px to 110×140px (21% smaller)
+  - Adjusted day label font size from 24px to 20px for better fit
+  - Reduced empty day label font size from 16px to 14px for consistency
+  - Updated info overlay padding from SPACING.md to SPACING.sm for proportional design
+- **ADDED LIGHT GREY OUTLINE** to day boxes for better visual definition
+  - Changed unselected day box border from theme color to light grey (#E5E5E5)
+  - Applied to both full variant (Story view) and compact variant (Grid view)
+  - Maintains white border for selected day boxes for proper contrast
 
 ---
 

@@ -45,7 +45,7 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
           styles.compactContainer,
           {
             backgroundColor: isSelected ? colors.primary[500] : colors.surface.secondary,
-            borderColor: isSelected ? colors.primary[500] : colors.border.secondary,
+            borderColor: isSelected ? 'white' : '#E5E5E5',
           }
         ]}
         onPress={handlePress}
@@ -67,7 +67,7 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
       style={[
         styles.container,
         {
-          borderColor: isSelected ? colors.primary[500] : colors.border.secondary,
+          borderColor: isSelected ? 'white' : '#E5E5E5',
           borderWidth: isSelected ? 2 : 1,
           backgroundColor: hasMemories ? 'white' : colors.surface.secondary,
         }
@@ -116,8 +116,8 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
 const styles = StyleSheet.create({
   // Full card styles
   container: {
-    width: 140,
-    height: 180,
+    width: 110,
+    height: 140,
     marginHorizontal: SPACING.xs,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   },
   
   emptyDayLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: SPACING.md,
+    padding: SPACING.sm,
     gap: SPACING.xs,
     alignItems: 'flex-start',
   },
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   },
   
   dayLabel: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     fontFamily: 'PlusJakartaSans',
   },

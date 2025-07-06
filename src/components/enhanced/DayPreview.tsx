@@ -202,7 +202,7 @@ const createStyles = (colors: any, isSelected: boolean) => StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface.secondary,
     borderWidth: isSelected ? 2 : 1,
-    borderColor: isSelected ? colors.primary[500] : colors.border.primary,
+    borderColor: isSelected ? 'white' : colors.border.primary,
     shadowColor: colors.neutral[900],
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: isSelected ? 0.3 : 0.15,
@@ -219,7 +219,7 @@ const createStyles = (colors: any, isSelected: boolean) => StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: SPACING.xs,
     borderWidth: 1,
-    borderColor: isSelected ? colors.primary[500] : colors.border.primary,
+    borderColor: isSelected ? 'white' : colors.border.primary,
     position: 'relative',
   },
   

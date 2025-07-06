@@ -117,7 +117,7 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
 
 const styles = StyleSheet.create({
   photoWrapper: {
-    marginBottom: SPACING.xs,
+    // marginBottom removed - spacing now handled at grid level
   },
   
   photoWrapperWithCaption: {

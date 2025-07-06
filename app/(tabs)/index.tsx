@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '400',
     fontFamily: 'Merienda',
-    letterSpacing: -0.5,
+    letterSpacing: -1.5,
     color: 'white',
     textAlign: 'center',
     marginBottom: SPACING.sm,

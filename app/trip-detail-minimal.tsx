@@ -311,40 +311,46 @@ export default function TripDetailMinimal() {
       );
     }
     
-    const gridWidth = screenWidth - SPACING.lg * 2;
-    const photoSpacing = SPACING.xs;
-    const photoWidth = (gridWidth - photoSpacing) / 2;
+    // Perfect grid spacing calculations
+    const GRID_PADDING = SPACING.md; // Reduced from SPACING.lg for smaller outer padding
+    const GRID_GAP = SPACING.sm; // Reduced from SPACING.md for smaller gap between columns
+    const availableWidth = screenWidth - (GRID_PADDING * 2); // Total width minus padding
+    const photoWidth = (availableWidth - GRID_GAP) / 2; // Perfect width for each photo
     
     return (
-      <View style={styles.gridContainer}>
+      <View style={[styles.gridContainer, { paddingHorizontal: GRID_PADDING }]}>
         <View style={styles.gridRow}>
-          <View style={styles.gridColumn}>
+          {/* Left Column */}
+          <View style={[styles.gridColumn, { width: photoWidth }]}>
             {allMemories
               .filter((_, index) => index % 2 === 0)
               .map(memory => (
-                <MinimalPhotoCard
-                  key={memory.id}
-                  memory={memory}
-                  onPress={handlePhotoPress}
-                  showCaption={false}
-                  width={photoWidth}
-                  borderRadius={BORDER_RADIUS.sm}
-                />
+                <View key={memory.id} style={styles.gridPhotoWrapper}>
+                  <MinimalPhotoCard
+                    memory={memory}
+                    onPress={handlePhotoPress}
+                    showCaption={false}
+                    width={photoWidth}
+                    borderRadius={BORDER_RADIUS.md}
+                  />
+                </View>
               ))}
           </View>
           
-          <View style={[styles.gridColumn, { marginLeft: photoSpacing }]}>
+          {/* Right Column */}
+          <View style={[styles.gridColumn, { width: photoWidth }]}>
             {allMemories
               .filter((_, index) => index % 2 === 1)
               .map(memory => (
-                <MinimalPhotoCard
-                  key={memory.id}
-                  memory={memory}
-                  onPress={handlePhotoPress}
-                  showCaption={false}
-                  width={photoWidth}
-                  borderRadius={BORDER_RADIUS.sm}
-                />
+                <View key={memory.id} style={styles.gridPhotoWrapper}>
+                  <MinimalPhotoCard
+                    memory={memory}
+                    onPress={handlePhotoPress}
+                    showCaption={false}
+                    width={photoWidth}
+                    borderRadius={BORDER_RADIUS.md}
+                  />
+                </View>
               ))}
           </View>
         </View>
@@ -488,10 +494,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   titleContainer: {
     position: 'absolute',
-    bottom: SPACING.xl * 2.5, // Moved up more from SPACING.xl * 2
+    bottom: SPACING.xl * 2, // Moved down from SPACING.xl * 2.5
     left: SPACING.lg,
     right: SPACING.lg,
-    alignItems: 'center', // Center align the text
+    alignItems: 'flex-start', // Left align the text
   },
   
   tripTitle: {
@@ -500,7 +506,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: 'white',
     marginBottom: SPACING.xs * 0.5, // Reduced from SPACING.xs
     fontFamily: 'Merienda',
-    letterSpacing: -0.5,
+    letterSpacing: -1.5, // Further reduced from -1.2
   },
   
   tripDates: {
@@ -643,15 +649,20 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   // Grid View
   gridContainer: {
-    paddingHorizontal: SPACING.lg,
+    // paddingHorizontal will be set dynamically in the component
   },
   
   gridRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between', // This creates the perfect gap between columns
   },
   
   gridColumn: {
-    flex: 1,
+    // width will be set dynamically in the component
+  },
+  
+  gridPhotoWrapper: {
+    marginBottom: SPACING.sm, // Reduced from SPACING.md to match smaller horizontal gaps
   },
   
   // Empty State
