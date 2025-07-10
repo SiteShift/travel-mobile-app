@@ -31,7 +31,7 @@ const userSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xml
 <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
-const plusSvg = `<svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+const plusSvg = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5 12h14" stroke="#333333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M12 5v14" stroke="#333333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
@@ -88,7 +88,7 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
     <TouchableOpacity
       key={item.id}
       onPress={() => handleNavPress(item.route, item.id)}
-      style={styles.specialButtonContainer}
+      style={{ alignItems: 'center', justifyContent: 'center' }}
       activeOpacity={0.8}
     >
              <LinearGradient
@@ -98,7 +98,7 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
          style={styles.gradientButton}
        >
                  <View style={styles.innerWhiteCircle}>
-           <SvgXml xml={item.svg} width={38} height={38} />
+           <SvgXml xml={item.svg} width={32} height={32} />
          </View>
       </LinearGradient>
     </TouchableOpacity>
@@ -113,8 +113,8 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
     >
       <SvgXml
         xml={item.svg}
-        width={32}
-        height={32}
+        width={26}
+        height={26}
         color={item.isActive ? colors.text.primary : colors.text.tertiary}
       />
     </TouchableOpacity>
@@ -126,15 +126,18 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
   }
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + 20 }]}>
+    <View style={[styles.container, { paddingBottom: insets.bottom + 12 }]}>
       <View style={[styles.pillContainer, { backgroundColor: colors.surface.primary }]}>
-        <View style={styles.regularIconsContainer}>
-          {navigationItems.filter(item => !item.isSpecial).map((item) =>
-            renderRegularButton(item)
-          )}
-        </View>
-        {navigationItems.filter(item => item.isSpecial).map((item) =>
-          renderSpecialButton(item)
+        {navigationItems.map((item) =>
+          item.isSpecial ? (
+            <View key={item.id} style={styles.specialButtonWrapper}>
+              {renderSpecialButton(item)}
+            </View>
+          ) : (
+            <View key={item.id} style={styles.regularButtonWrapper}>
+              {renderRegularButton(item)}
+            </View>
+          )
         )}
       </View>
     </View>
@@ -153,43 +156,43 @@ const styles = StyleSheet.create({
   pillContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 80,
-    marginHorizontal: 28,
+    justifyContent: 'space-around',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 60,
+    marginHorizontal: 32,
     borderWidth: 1,
     borderColor: '#DDDDDD',
-    minWidth: screenWidth - 56,
+    minWidth: screenWidth - 64,
   },
-  regularIconsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
+
+  regularButtonWrapper: {
     flex: 1,
-    marginRight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  specialButtonWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   navButton: {
-    padding: 20,
+    padding: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  specialButtonContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-  },
+
   gradientButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
   },
   innerWhiteCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',

@@ -52,11 +52,11 @@ const mockTrips = [
   },
 ];
 
-const CARD_WIDTH = screenWidth * 0.75;
+const CARD_WIDTH = screenWidth * 0.77; // Slightly larger
 const SPACING_VALUE = SPACING.md;
 const ITEM_SPACING = screenWidth * 0.72; // Increased spacing for better card separation
 const DUPLICATE_COUNT = mockTrips.length;
-const CARD_HEIGHT = screenHeight * 0.6;
+const CARD_HEIGHT = screenHeight * 0.62; // Slightly larger
 const BUTTON_HEIGHT = 54;
 
 export default function HomeTab() {
@@ -69,6 +69,7 @@ export default function HomeTab() {
   useEffect(() => {
     const infiniteData = [...mockTrips, ...mockTrips, ...mockTrips];
     setData(infiniteData);
+    // Start with California Road Trip (first item of middle set)
     const initialOffset = DUPLICATE_COUNT * ITEM_SPACING;
     scrollX.setValue(initialOffset);
     setTimeout(() => {
@@ -136,6 +137,84 @@ export default function HomeTab() {
     );
   };
 
+  const renderDots = () => {
+    // Reorder dots so center dot is active for California Road Trip
+    const dotOrder = [2, 0, 1]; // Polish Mountains, California Road Trip, European Adventure
+    
+    return (
+      <View style={styles.dotsContainer}>
+        <View style={[styles.dotsWrapper, { backgroundColor: colors.surface.tertiary }]}>
+          {dotOrder.map((originalIndex, displayIndex) => {
+            // Create infinite loop effect by handling multiple ranges
+            const createInputRange = (baseIndex: number) => [
+              (baseIndex - 1) * ITEM_SPACING,
+              baseIndex * ITEM_SPACING,
+              (baseIndex + 1) * ITEM_SPACING,
+            ];
+
+            // Create multiple input ranges for infinite loop - use original index for animation
+            const inputRanges = [
+              createInputRange(originalIndex), // First set
+              createInputRange(originalIndex + DUPLICATE_COUNT), // Second set  
+              createInputRange(originalIndex + DUPLICATE_COUNT * 2), // Third set
+            ];
+
+            const dotOpacity = scrollX.interpolate({
+              inputRange: inputRanges.flat(),
+              outputRange: [0.4, 1, 0.4, 0.4, 1, 0.4, 0.4, 1, 0.4],
+              extrapolate: 'clamp',
+            });
+
+            const dotScale = scrollX.interpolate({
+              inputRange: inputRanges.flat(),
+              outputRange: [1, 1.3, 1, 1, 1.3, 1, 1, 1.3, 1],
+              extrapolate: 'clamp',
+            });
+
+            const activeDotOpacity = scrollX.interpolate({
+              inputRange: inputRanges.flat(),
+              outputRange: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+              extrapolate: 'clamp',
+            });
+
+            return (
+              <View key={displayIndex} style={styles.dotContainer}>
+                {/* Background dot */}
+                <Animated.View
+                  style={[
+                    styles.dot,
+                    {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)',
+                      opacity: dotOpacity,
+                      transform: [{ scale: dotScale }],
+                    },
+                  ]}
+                />
+                {/* Active dot with gradient */}
+                <Animated.View
+                  style={[
+                    styles.activeDot,
+                    {
+                      opacity: activeDotOpacity,
+                      transform: [{ scale: dotScale }],
+                    },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={isDark ? ['#ffffff', '#e5e5e5'] : ['#000000', '#333333']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.dotGradient}
+                  />
+                </Animated.View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
   const handleProfilePress = () => {
     router.push('/(tabs)/profile');
   };
@@ -144,15 +223,20 @@ export default function HomeTab() {
     <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background.primary} />
 
+      {/* Dots Indicator */}
+      {renderDots()}
+
       <Animated.FlatList
         ref={flatListRef} data={data} renderItem={TripCard} keyExtractor={(item, index) => `${item?.id}-${index}`}
         horizontal showsHorizontalScrollIndicator={false} snapToInterval={ITEM_SPACING} decelerationRate="fast"
-        contentContainerStyle={{ paddingHorizontal: (screenWidth - ITEM_SPACING) / 2 }}
+        contentContainerStyle={{ 
+          paddingHorizontal: (screenWidth - ITEM_SPACING) / 2,
+        }}
         onMomentumScrollEnd={onMomentumScrollEnd}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
         getItemLayout={(data, index) => ({ length: ITEM_SPACING, offset: ITEM_SPACING * index, index })}
-          style={styles.carousel}
+        style={styles.carousel}
       />
     </View>
   );
@@ -162,8 +246,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  dotsContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: screenHeight * 0.08, // Move dots higher up
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    height: 50,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   carousel: {
-    marginTop: -screenHeight * 0.05, // Move carousel up
+    flex: 1,
+    marginTop: screenHeight * -0.010, // Move carousel down very slightly
   },
 
   itemContainer: {
@@ -244,5 +349,41 @@ const styles = StyleSheet.create({
   },
   tripButtonText: {
     fontSize: 18, fontWeight: FONT_WEIGHTS.medium, textAlign: 'center',
+  },
+  dotsWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  dotContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: SPACING.xs,
+    position: 'relative',
+  },
+  activeDot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  dotGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 5,
   },
 }); 
