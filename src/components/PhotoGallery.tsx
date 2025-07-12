@@ -388,6 +388,7 @@ const styles = StyleSheet.create({
   },
   photoInfoText: {
     ...TYPOGRAPHY.styles.caption,
+    fontSize: 9,
     fontWeight: '600',
     marginBottom: 2,
   },

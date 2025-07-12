@@ -10,20 +10,23 @@ import {
   Platform,
   StatusBar,
   FlatList,
+  Alert,
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 
 // Components
 import { MinimalDayCard } from '../src/components/minimal/MinimalDayCard';
 import { MinimalPhotoCard } from '../src/components/minimal/MinimalPhotoCard';
+import { PhotoLightbox } from '../src/components/PhotoLightbox';
 import { Icon } from '../src/components/Icon';
 
 // Context & Types
 import { useTheme } from '../src/contexts/ThemeContext';
-import { MinimalTrip, MinimalMemory, ViewPreferences } from '../src/types/tripDetailMinimal';
+import { MinimalTrip, MinimalMemory, MinimalDay, ViewPreferences } from '../src/types/tripDetailMinimal';
 
 // Data & Utils
 import { minimalTripData, formatTripDates } from '../src/data/minimalMockData';
@@ -36,11 +39,13 @@ export default function TripDetailMinimal() {
   const { colors, isDark } = useTheme();
   
   // State
-  const [trip] = useState<MinimalTrip>(minimalTripData);
+  const [trip, setTrip] = useState<MinimalTrip>(minimalTripData);
   const [selectedDay, setSelectedDay] = useState(1);
   const [viewMode, setViewMode] = useState<ViewPreferences['mode']>('story');
   const [showCaptions, setShowCaptions] = useState(true);
   const [editingCaptionId, setEditingCaptionId] = useState<string | null>(null);
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxMemory, setLightboxMemory] = useState<MinimalMemory | null>(null);
   
   // Animation Values
   const translateY = useRef(new Animated.Value(0)).current;
@@ -64,11 +69,26 @@ export default function TripDetailMinimal() {
     StatusBar.setBarStyle('light-content', true);
   }, [translateY]);
   
+  // Utility Functions
+  const requestPermissions = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Required',
+        'Sorry, we need camera roll permissions to add photos to your memories.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  }, []);
+
   // Handlers
   const handleGestureStateChange = useCallback((event: PanGestureHandlerGestureEvent) => {
     if (event.nativeEvent.state === State.END) {
       const { translationY: gestureY, velocityY } = event.nativeEvent;
-      if (gestureY > 150 || velocityY > 1200) {
+      // Much more sensitive swipe down gesture - reduced threshold and velocity
+      if (gestureY > 80 || velocityY > 600) {
         Animated.timing(translateY, {
           toValue: screenHeight,
           duration: 250,
@@ -86,8 +106,41 @@ export default function TripDetailMinimal() {
   
   const handleGesture = Animated.event(
     [{ nativeEvent: { translationY: translateY } }],
+    { 
+      useNativeDriver: true,
+      listener: (event: any) => {
+        // Only allow downward gestures (positive translationY)
+        if (event.nativeEvent.translationY > 0) {
+          translateY.setValue(event.nativeEvent.translationY);
+        }
+      }
+    }
+  );
+
+  const handleHeaderGesture = Animated.event(
+    [{ nativeEvent: { translationY: translateY } }],
     { useNativeDriver: true }
   );
+
+  const handleHeaderGestureStateChange = useCallback((event: PanGestureHandlerGestureEvent) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationY: gestureY, velocityY } = event.nativeEvent;
+      // Even more sensitive for header area
+      if (gestureY > 50 || velocityY > 400) {
+        Animated.timing(translateY, {
+          toValue: screenHeight,
+          duration: 250,
+          useNativeDriver: true,
+        }).start(() => router.back());
+      } else {
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  }, [translateY, router]);
   
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -96,16 +149,54 @@ export default function TripDetailMinimal() {
   
   const handleDaySelect = useCallback((day: number) => {
     setSelectedDay(day);
+    // Just select the day, don't auto-open camera as requested
   }, []);
   
   const handlePhotoPress = useCallback((memory: MinimalMemory) => {
-    console.log('Open photo viewer:', memory.id);
-  }, []);
+    if (viewMode === 'grid') {
+      // In grid view, open lightbox
+      setLightboxMemory(memory);
+      setLightboxVisible(true);
+    } else {
+      // In story view, just log for now (could add zoom functionality later)
+      console.log('Open photo viewer:', memory.id);
+    }
+  }, [viewMode]);
   
   const handleCaptionEdit = useCallback((memoryId: string) => {
     setEditingCaptionId(memoryId);
     console.log('Edit caption for:', memoryId);
   }, []);
+
+  const handleCaptionUpdate = useCallback((memoryId: string, newCaption: string) => {
+    setTrip(prevTrip => {
+      const updatedTrip = { ...prevTrip };
+      
+      // Find and update the memory with the new caption
+      for (const day of updatedTrip.days) {
+        const memoryIndex = day.memories.findIndex(m => m.id === memoryId);
+        if (memoryIndex !== -1) {
+          day.memories[memoryIndex] = {
+            ...day.memories[memoryIndex],
+            caption: newCaption
+          };
+          break;
+        }
+      }
+      
+      return updatedTrip;
+    });
+    
+    // Update the lightbox memory if it's the same one
+    if (lightboxMemory?.id === memoryId) {
+      setLightboxMemory(prev => prev ? { ...prev, caption: newCaption } : null);
+    }
+    
+    // Clear editing state after update
+    setEditingCaptionId(null);
+    
+    console.log('Updated caption for:', memoryId, 'to:', newCaption);
+  }, [lightboxMemory]);
   
   const handleAddDay = useCallback((dayNumber: number) => {
     console.log('Add day:', dayNumber);
@@ -115,6 +206,59 @@ export default function TripDetailMinimal() {
   const toggleViewMode = useCallback(() => {
     setViewMode(viewMode === 'story' ? 'grid' : 'story');
   }, [viewMode]);
+
+  const handleAddMemory = useCallback(async (dayNumber?: number) => {
+    const targetDay = dayNumber || selectedDay;
+    
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Using deprecated version for compatibility
+        allowsEditing: false, // No cropping - preserve natural aspect ratio
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const newMemory = {
+          id: `mem_${Date.now()}`,
+          uri: asset.uri,
+          thumbnail: asset.uri,
+          caption: 'Add a caption...', // Default placeholder text to encourage caption writing
+          timestamp: new Date(),
+          aspectRatio: asset.width / asset.height,
+        };
+
+        // Update the trip data
+        setTrip(prevTrip => {
+          const updatedTrip = { ...prevTrip };
+          const dayIndex = updatedTrip.days.findIndex(d => d.day === targetDay);
+          
+          if (dayIndex !== -1) {
+            updatedTrip.days[dayIndex] = {
+              ...updatedTrip.days[dayIndex],
+              memories: [...updatedTrip.days[dayIndex].memories, newMemory]
+            };
+          }
+          
+          // Update total photos count
+          updatedTrip.totalPhotos = updatedTrip.days.reduce((total, day) => total + day.memories.length, 0);
+          
+          return updatedTrip;
+        });
+
+        // Auto-select the day that was just updated
+        setSelectedDay(targetDay);
+        
+        console.log('Added memory to day', targetDay);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to add photo. Please try again.');
+    }
+  }, [selectedDay, requestPermissions]);
   
   const renderAddNextDay = () => {
     // Find the first day that has no memories.
@@ -148,34 +292,59 @@ export default function TripDetailMinimal() {
   };
   
   // Render Methods
-  const renderHeader = () => (
-    <View style={styles.header}>
-             {/* Hero Background */}
-       <Image
-         source={typeof trip.coverImage === 'string' ? { uri: trip.coverImage } : trip.coverImage}
-         style={styles.heroImage}
-         contentFit="cover"
-       />
-      <LinearGradient
-        colors={['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.6)']}
-        style={styles.heroGradient}
-      />
-      
-             {/* No navigation buttons in header anymore */}
-       <View style={styles.headerNav} />
-      
-      {/* Title */}
-      <View style={styles.titleContainer}>
-        <Text style={styles.tripTitle}>{trip.title}</Text>
-        <Text style={styles.tripDates}>
-          {formatTripDates(trip.startDate, trip.endDate)}
-        </Text>
-        <Text style={styles.photoCountTotal}>
-          {trip.totalPhotos} memories
-        </Text>
-      </View>
-    </View>
-  );
+  const renderHeader = () => {
+    // Calculate dynamic font size based on title length
+    const getDynamicFontSize = () => {
+      const titleLength = trip.title.length;
+      if (titleLength <= 15) return 38;
+      if (titleLength <= 20) return 34;
+      if (titleLength <= 25) return 30;
+      if (titleLength <= 30) return 26;
+      return 22;
+    };
+
+    return (
+      <PanGestureHandler 
+        onGestureEvent={handleHeaderGesture}
+        onHandlerStateChange={handleHeaderGestureStateChange}
+        simultaneousHandlers={[]}
+      >
+        <Animated.View style={styles.header}>
+          {/* Hero Background */}
+          <Image
+            source={typeof trip.coverImage === 'string' ? { uri: trip.coverImage } : trip.coverImage}
+            style={styles.heroImage}
+            contentFit="cover"
+          />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.6)']}
+            style={styles.heroGradient}
+          />
+          
+          {/* No navigation buttons in header anymore */}
+          <View style={styles.headerNav} />
+          
+          {/* Title */}
+          <View style={styles.titleContainer}>
+            <Text 
+              style={[styles.tripTitle, { fontSize: getDynamicFontSize() }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.5}
+            >
+              {trip.title}
+            </Text>
+            <Text style={styles.tripDates}>
+              {formatTripDates(trip.startDate, trip.endDate)}
+            </Text>
+            <Text style={styles.photoCountTotal}>
+              {trip.totalPhotos} memories
+            </Text>
+          </View>
+        </Animated.View>
+      </PanGestureHandler>
+    );
+  };
   
   const renderDaySelector = () => (
     <View style={styles.daySelector}>
@@ -224,9 +393,36 @@ export default function TripDetailMinimal() {
     const completedDays = trip.days.filter(d => d.memories.length > 0);
     const nextEmptyDay = trip.days.find(d => d.memories.length === 0);
     
+    // Always show completed days plus the next available day
     if (nextEmptyDay) {
       return [...completedDays, nextEmptyDay];
     }
+    
+    // If all days have memories, create the next day dynamically
+    const nextDayNumber = Math.max(...trip.days.map(d => d.day)) + 1;
+    
+    // Don't exceed 100 days
+    if (nextDayNumber <= 100) {
+      const nextDate = new Date(trip.startDate);
+      nextDate.setDate(nextDate.getDate() + nextDayNumber - 1);
+      
+      const nextDay: MinimalDay = {
+        day: nextDayNumber,
+        date: nextDate,
+        memories: [],
+        location: `Day ${nextDayNumber}`
+      };
+      
+      // Add the new day to the trip data
+      setTrip(prevTrip => ({
+        ...prevTrip,
+        days: [...prevTrip.days, nextDay]
+      }));
+      
+      return [...completedDays, nextDay];
+    }
+    
+    // If we've reached the limit, just show completed days
     return completedDays;
   };
   
@@ -255,7 +451,8 @@ export default function TripDetailMinimal() {
               memory={memory}
               onPress={handlePhotoPress}
               onCaptionEdit={handleCaptionEdit}
-              showCaption={showCaptions}
+              onCaptionUpdate={handleCaptionUpdate}
+              showCaption={true} // Always show captions in story view
               isEditingCaption={editingCaptionId === memory.id}
               borderRadius={BORDER_RADIUS.md}
             />
@@ -267,7 +464,7 @@ export default function TripDetailMinimal() {
               backgroundColor: colors.surface.secondary,
               borderColor: colors.border.secondary,
             }]}
-            onPress={() => console.log('Add memory')}
+            onPress={() => handleAddMemory(selectedDay)}
           >
             <Icon name="plus" size="lg" color={colors.text.tertiary} />
             <Text style={[styles.addMemoryText, { color: colors.text.secondary }]}>
@@ -293,43 +490,59 @@ export default function TripDetailMinimal() {
   };
   
   const renderGridView = () => {
-    const allMemories = trip.days.flatMap(day => 
-      day.memories.map(memory => ({ ...memory, day: day.day }))
-    );
+    // Get memories from selected day only (like story mode)
+    const currentDay = trip.days.find(d => d.day === selectedDay);
+    const currentMemories = currentDay?.memories || [];
     
-    if (allMemories.length === 0) {
+    if (currentMemories.length === 0) {
       return (
-        <View style={styles.emptyState}>
-          <Icon name="grid" size="xxl" color={colors.text.tertiary} />
-          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
-            No photos in your trip
-          </Text>
-          <Text style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
-            Start adding memories to see them here
-          </Text>
+        <View style={styles.gridContainer}>
+          <View style={styles.emptyState}>
+            <Icon name="grid" size="xxl" color={colors.text.tertiary} />
+            <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
+              No photos for Day {selectedDay}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
+              Start adding memories to see them here
+            </Text>
+          </View>
+          
+          {/* Add Memory Button for Grid View */}
+          <TouchableOpacity 
+            style={[styles.addMemoryPlaceholder, { 
+              backgroundColor: colors.surface.secondary,
+              borderColor: colors.border.secondary,
+            }]}
+            onPress={() => handleAddMemory(selectedDay)}
+          >
+            <Icon name="plus" size="lg" color={colors.text.tertiary} />
+            <Text style={[styles.addMemoryText, { color: colors.text.secondary }]}>
+              Add Memory
+            </Text>
+          </TouchableOpacity>
         </View>
       );
     }
     
     // Perfect grid spacing calculations
-    const GRID_PADDING = SPACING.md; // Reduced from SPACING.lg for smaller outer padding
-    const GRID_GAP = SPACING.sm; // Reduced from SPACING.md for smaller gap between columns
-    const availableWidth = screenWidth - (GRID_PADDING * 2); // Total width minus padding
-    const photoWidth = (availableWidth - GRID_GAP) / 2; // Perfect width for each photo
+    const GRID_PADDING = SPACING.md;
+    const GRID_GAP = SPACING.sm;
+    const availableWidth = screenWidth - (GRID_PADDING * 2);
+    const photoWidth = (availableWidth - GRID_GAP) / 2;
     
     return (
       <View style={[styles.gridContainer, { paddingHorizontal: GRID_PADDING }]}>
         <View style={styles.gridRow}>
           {/* Left Column */}
           <View style={[styles.gridColumn, { width: photoWidth }]}>
-            {allMemories
+            {currentMemories
               .filter((_, index) => index % 2 === 0)
               .map(memory => (
                 <View key={memory.id} style={styles.gridPhotoWrapper}>
                   <MinimalPhotoCard
                     memory={memory}
                     onPress={handlePhotoPress}
-                    showCaption={false}
+                    showCaption={false} // Hide captions in grid view
                     width={photoWidth}
                     borderRadius={BORDER_RADIUS.md}
                   />
@@ -339,14 +552,14 @@ export default function TripDetailMinimal() {
           
           {/* Right Column */}
           <View style={[styles.gridColumn, { width: photoWidth }]}>
-            {allMemories
+            {currentMemories
               .filter((_, index) => index % 2 === 1)
               .map(memory => (
                 <View key={memory.id} style={styles.gridPhotoWrapper}>
                   <MinimalPhotoCard
                     memory={memory}
                     onPress={handlePhotoPress}
-                    showCaption={false}
+                    showCaption={false} // Hide captions in grid view
                     width={photoWidth}
                     borderRadius={BORDER_RADIUS.md}
                   />
@@ -354,6 +567,21 @@ export default function TripDetailMinimal() {
               ))}
           </View>
         </View>
+        
+        {/* Add Memory Button for Grid View */}
+        <TouchableOpacity 
+          style={[styles.addMemoryPlaceholder, { 
+            backgroundColor: colors.surface.secondary,
+            borderColor: colors.border.secondary,
+            marginHorizontal: GRID_PADDING,
+          }]}
+          onPress={() => handleAddMemory(selectedDay)}
+        >
+          <Icon name="plus" size="lg" color={colors.text.tertiary} />
+          <Text style={[styles.addMemoryText, { color: colors.text.secondary }]}>
+            Add Memory
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -395,14 +623,26 @@ export default function TripDetailMinimal() {
               {viewMode === 'story' ? renderStoryView() : renderGridView()}
             </View>
             
-            {/* Add Next Day Button */}
-            {viewMode === 'story' && renderAddNextDay()}
+            {/* Add Next Day Button - Removed as requested */}
 
             {/* Bottom Spacing */}
             <View style={styles.bottomSpacing} />
           </Animated.ScrollView>
         </Animated.View>
       </PanGestureHandler>
+      
+      {/* Photo Lightbox */}
+      {lightboxMemory && (
+        <PhotoLightbox
+          memory={lightboxMemory}
+          visible={lightboxVisible}
+          onClose={() => {
+            setLightboxVisible(false);
+            setLightboxMemory(null);
+          }}
+          onCaptionUpdate={handleCaptionUpdate}
+        />
+      )}
     </View>
   );
 }
@@ -415,7 +655,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   modal: {
     flex: 1,
-    backgroundColor: colors.surface.secondary, // Light grey background
+    backgroundColor: colors.background.primary, // White background
     overflow: 'hidden',
   },
   
@@ -506,7 +746,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: 'white',
     marginBottom: SPACING.xs * 0.5, // Reduced from SPACING.xs
     fontFamily: 'Merienda',
-    letterSpacing: -1.5, // Further reduced from -1.2
+    letterSpacing: -2.5, // Much more reduced letter spacing
   },
   
   tripDates: {
@@ -572,11 +812,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderTopRightRadius: BORDER_RADIUS.xxl * 1.5,
     marginTop: -BORDER_RADIUS.xxl * 1.5, // Increased negative margin for more overlap
     paddingTop: SPACING.xl * 1.5, // More padding to compensate
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 20,
+    // Shadow removed as requested
   },
   
   // Story View
@@ -615,6 +851,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: SPACING.md,
+    marginBottom: SPACING.xl, // Added bottom padding
     gap: SPACING.sm,
   },
   

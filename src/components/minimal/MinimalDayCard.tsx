@@ -44,8 +44,8 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
         style={[
           styles.compactContainer,
           {
-            backgroundColor: isSelected ? colors.primary[500] : colors.surface.secondary,
-            borderColor: isSelected ? 'white' : '#E5E5E5',
+            backgroundColor: isSelected ? '#4A4A4A' : colors.surface.secondary, // Dark grey instead of blue
+            borderColor: isSelected ? '#000000' : '#E5E5E5', // Dark black border for selected
           }
         ]}
         onPress={handlePress}
@@ -67,7 +67,7 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
       style={[
         styles.container,
         {
-          borderColor: isSelected ? 'white' : '#E5E5E5',
+          borderColor: isSelected ? '#000000' : '#E5E5E5', // Dark black border for selected
           borderWidth: isSelected ? 2 : 1,
           backgroundColor: hasMemories ? 'white' : colors.surface.secondary,
         }
@@ -85,7 +85,7 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
             transition={200}
           />
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.4)']}
+            colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={styles.gradient}
           />
         </>
@@ -95,6 +95,13 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
           <Text style={[styles.emptyDayLabel, { color: colors.text.secondary }]}>
             Day {day.day}
           </Text>
+        </View>
+      )}
+      
+      {/* Selected indicator - white tick on top right */}
+      {isSelected && hasMemories && (
+        <View style={styles.selectedIndicator}>
+          <Icon name="check" size="sm" color="white" />
         </View>
       )}
       
@@ -181,7 +188,7 @@ const styles = StyleSheet.create({
   },
   
   dayLabel: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     fontFamily: 'PlusJakartaSans',
   },
@@ -202,6 +209,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.8)',
+  },
+  
+  selectedIndicator: {
+    position: 'absolute',
+    top: SPACING.sm,
+    right: SPACING.sm,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   
   // Compact circular day styles

@@ -55,7 +55,6 @@ export { PhotoGallery, TripPhotoGallery, CompactPhotoGallery } from './PhotoGall
 export type { PhotoGalleryProps, PhotoItem } from './PhotoGallery';
 
 export { PhotoLightbox } from './PhotoLightbox';
-export type { PhotoLightboxProps, PhotoLightboxItem } from './PhotoLightbox';
 
 // Phase 5: Entry Editor & Media Components
 export { RichTextEditor } from './RichTextEditor';
@@ -128,4 +127,7 @@ export {
 } from './AnimationComponents'; 
 
 // Navigation
-export { FloatingPillNavigation } from './FloatingPillNavigation'; 
+export { FloatingPillNavigation } from './FloatingPillNavigation';
+
+// Trip Management
+export { TripCreationModal } from './TripCreationModal'; 

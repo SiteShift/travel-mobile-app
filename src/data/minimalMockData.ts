@@ -48,26 +48,8 @@ const createMinimalDays = (): MinimalDay[] => [
   {
     day: 1,
     date: new Date('2024-06-15'),
-    memories: createMinimalMemories(),
+    memories: [], // Start blank as requested
     location: 'Big Sur'
-  },
-  {
-    day: 2,
-    date: new Date('2024-06-16'),
-    memories: [],
-    location: 'Monterey'
-  },
-  {
-    day: 3,
-    date: new Date('2024-06-17'),
-    memories: [],
-    location: 'Carmel'
-  },
-  {
-    day: 4,
-    date: new Date('2024-06-18'),
-    memories: [],
-    location: 'Santa Cruz'
   }
 ];
 
@@ -78,7 +60,7 @@ export const minimalTripData: MinimalTrip = {
   startDate: new Date('2024-06-15'),
   endDate: new Date('2024-06-18'),
   days: createMinimalDays(),
-  totalPhotos: 5
+  totalPhotos: 0 // Start with 0 photos
 };
 
 // Helper to format dates cleanly
