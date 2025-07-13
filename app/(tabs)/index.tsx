@@ -18,6 +18,7 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import { Icon } from '../../src/components/Icon';
 import { TripCreationModal } from '../../src/components/TripCreationModal';
 import { FONT_WEIGHTS, SPACING, BORDER_RADIUS } from '../../src/constants/theme';
+import { getMockDataForUser } from '../../src/data/mockData';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -37,6 +38,10 @@ interface Trip {
     end: string;
   };
   isEditing?: boolean;
+  // Fields needed for trip detail screen
+  coverImage?: string;
+  startDate?: Date;
+  endDate?: Date;
 }
 
 // Start with empty user experience - 3 placeholder cards
@@ -44,20 +49,20 @@ const createPlaceholderTrips = (): Trip[] => [
   {
     id: 'placeholder-1',
     type: 'placeholder',
-    title: 'Add Your First Trip',
-    buttonText: 'Create Trip',
+    title: 'Create Your Book',
+    buttonText: 'Add Trip',
   },
   {
     id: 'placeholder-2', 
     type: 'placeholder',
-    title: 'Plan Another Adventure',
-    buttonText: 'Create Trip',
+    title: 'Log Your Adventures',
+    buttonText: 'Add Trip',
   },
   {
     id: 'placeholder-3',
     type: 'placeholder', 
     title: 'Dream Big & Explore',
-    buttonText: 'Create Trip',
+    buttonText: 'Add Trip',
   },
 ];
 
@@ -75,6 +80,10 @@ export default function HomeTab() {
   const [trips, setTrips] = useState<Trip[]>(createPlaceholderTrips());
   const [data, setData] = useState<Trip[]>([]);
   const [showTripCreationModal, setShowTripCreationModal] = useState(false);
+  
+  // Get user level data
+  const userData = getMockDataForUser('user1');
+  const userLevel = userData.user?.stats.level || 1;
 
   // Dynamic trip management
   const updateTripsData = useCallback((newTrips: Trip[]) => {
@@ -87,8 +96,8 @@ export default function HomeTab() {
       placeholders.push({
         id: `placeholder-${i + 1}`,
         type: 'placeholder',
-        title: i === 0 ? 'Add Your First Trip' : i === 1 ? 'Plan Another Adventure' : 'Dream Big & Explore',
-        buttonText: 'Create Trip',
+        title: i === 0 ? 'Create Your Book' : i === 1 ? 'Log Your Adventures' : 'Dream Big & Explore',
+        buttonText: 'Add Trip',
       });
     }
     
@@ -127,7 +136,7 @@ export default function HomeTab() {
     } else {
       // Navigate to existing trip
       console.log('Trip pressed:', trip.title);
-      router.push('/trip-detail');
+      router.push(`/trip/${trip.id}`);
     }
   }, [router]);
 
@@ -135,15 +144,17 @@ export default function HomeTab() {
     setShowTripCreationModal(true);
   }, []);
 
-  const handleTripCreation = useCallback((tripData: {
+  const handleTripCreation = useCallback(async (tripData: {
     title: string;
     description: string;
     image: string;
     startDate: Date;
     endDate: Date;
   }) => {
+    const tripId = `trip-${Date.now()}`;
+    
     const newTrip: Trip = {
-      id: `trip-${Date.now()}`,
+      id: tripId,
       type: 'real',
       title: tripData.title,
       description: tripData.description,
@@ -156,7 +167,30 @@ export default function HomeTab() {
         start: tripData.startDate.toISOString(),
         end: tripData.endDate.toISOString(),
       },
+      // Add fields needed for trip detail screen
+      coverImage: tripData.image,
+      startDate: tripData.startDate,
+      endDate: tripData.endDate,
     };
+    
+    // Save to storage for trip detail screen (using simple structure)
+    try {
+      // Use AsyncStorage directly for simple key-value storage
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const simpleTrip = {
+        id: tripId,
+        title: tripData.title,
+        description: tripData.description,
+        coverImage: tripData.image,
+        startDate: tripData.startDate.toISOString(),
+        endDate: tripData.endDate.toISOString(),
+        country: 'Adventure',
+      };
+      
+      await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(simpleTrip));
+    } catch (error) {
+      console.error('Failed to save trip to storage:', error);
+    }
     
     const realTrips = trips.filter(t => t.type === 'real');
     updateTripsData([...realTrips, newTrip]);
@@ -232,7 +266,7 @@ export default function HomeTab() {
                   {trip.title}
                 </Text>
                 <Text style={[styles.placeholderSubtitle, { color: colors.text.secondary }]}>
-                  Start documenting your adventures
+                  Save your memories
                 </Text>
               </View>
             </Pressable>
@@ -387,6 +421,24 @@ export default function HomeTab() {
     );
   };
 
+  const renderLevelIndicator = () => (
+    <View style={styles.levelIndicatorContainer}>
+      <View style={[styles.levelIndicatorWrapper, { backgroundColor: colors.surface.tertiary }]}>
+        <View style={styles.levelContent}>
+          <Icon name="adventure" size="sm" color={colors.text.primary} />
+          <View style={styles.levelTextContainer}>
+            <Text style={[styles.levelNumber, { color: colors.text.primary }]}>
+              Level 1
+            </Text>
+            <Text style={[styles.levelText, { color: colors.text.primary }]}>
+              Adventurer
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+
   const handleProfilePress = () => {
     router.push('/(tabs)/profile');
   };
@@ -400,6 +452,9 @@ export default function HomeTab() {
 
       {/* Dots Indicator */}
       {renderDots()}
+
+      {/* Level Indicator */}
+      {renderLevelIndicator()}
 
       <Animated.FlatList
         ref={flatListRef}
@@ -652,5 +707,44 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: FONT_WEIGHTS.medium,
     textAlign: 'center',
+  },
+  levelIndicatorContainer: {
+    position: 'absolute',
+    top: screenHeight * 0.08,
+    right: SPACING.md,
+    zIndex: 10,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  levelIndicatorWrapper: {
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    borderRadius: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  levelContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  levelTextContainer: {
+    alignItems: 'center',
+  },
+  levelNumber: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHTS.medium,
+    fontFamily: 'Merienda',
+    letterSpacing: -0.3,
+  },
+  levelText: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHTS.medium,
+    fontFamily: 'Merienda',
+    letterSpacing: -0.5,
   },
 }); 

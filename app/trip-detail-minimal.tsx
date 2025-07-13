@@ -34,19 +34,77 @@ import { SPACING, BORDER_RADIUS } from '../src/constants/theme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-export default function TripDetailMinimal() {
+interface TripDetailMinimalProps {
+  tripId?: string;
+}
+
+// Helper function to create minimal trip data from trip ID
+const createMinimalTripFromId = (tripId: string, tripData?: any): MinimalTrip => {
+  if (tripData) {
+    return {
+      id: tripData.id,
+      title: tripData.title,
+      coverImage: tripData.coverImage || tripData.image?.uri || require('../assets/images/california-road-trip.jpg'),
+      startDate: tripData.startDate || new Date(),
+      endDate: tripData.endDate || new Date(),
+      days: [
+        {
+          day: 1,
+          date: tripData.startDate || new Date(),
+          memories: [],
+          location: tripData.country || 'Adventure'
+        }
+      ],
+      totalPhotos: 0
+    };
+  }
+  
+  // Fallback to default data
+  return minimalTripData;
+};
+
+export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   
   // State
   const [trip, setTrip] = useState<MinimalTrip>(minimalTripData);
   const [selectedDay, setSelectedDay] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewPreferences['mode']>('story');
   const [showCaptions, setShowCaptions] = useState(true);
   const [editingCaptionId, setEditingCaptionId] = useState<string | null>(null);
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [lightboxMemory, setLightboxMemory] = useState<MinimalMemory | null>(null);
   
+  // Load trip data on mount
+  useEffect(() => {
+    const loadTripData = async () => {
+      if (tripId) {
+        try {
+          // Try to load from AsyncStorage
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const storedTripData = await AsyncStorage.getItem(`trip_${tripId}`);
+          
+          if (storedTripData) {
+            const tripData = JSON.parse(storedTripData);
+            // Convert date strings back to Date objects
+            tripData.startDate = new Date(tripData.startDate);
+            tripData.endDate = new Date(tripData.endDate);
+            
+            const minimalTrip = createMinimalTripFromId(tripId, tripData);
+            setTrip(minimalTrip);
+          }
+        } catch (error) {
+          console.log('Could not load trip from storage:', error);
+        }
+      }
+      setIsLoading(false);
+    };
+    
+    loadTripData();
+  }, [tripId]);
+
   // Animation Values
   const translateY = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;

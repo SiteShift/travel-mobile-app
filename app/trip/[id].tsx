@@ -1,9 +1,9 @@
 import React from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import TripDetailScreen from '../../src/screens/TripDetailScreen';
+import TripDetailMinimal from '../trip-detail-minimal';
 
 export default function TripDetailRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   
-  return <TripDetailScreen tripId={id || 'default-trip'} />;
+  return <TripDetailMinimal tripId={id} />;
 } 
