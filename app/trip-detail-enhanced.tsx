@@ -12,11 +12,14 @@ import {
   Easing,
   Pressable,
   FlatList,
+  Alert,
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+
 
 // Enhanced Components
 import { DayPreview } from '../src/components/enhanced/DayPreview';
@@ -170,6 +173,84 @@ export default function TripDetailEnhanced({ tripId }: TripDetailEnhancedProps) 
   const handleSettings = useCallback(() => {
     console.log('Story settings');
   }, []);
+
+  const requestPermissions = useCallback(async () => {
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status: libraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (cameraStatus !== 'granted' || libraryStatus !== 'granted') {
+      Alert.alert(
+        'Permissions Required',
+        'Please grant camera and photo library permissions to add memories.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  }, []);
+
+  // Optimized helper function to flip image horizontally immediately
+
+
+  const addMemoryFromSource = useCallback(async (source: 'camera' | 'library') => {
+    try {
+      let result;
+      
+      if (source === 'camera') {
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets[0]) {
+        let finalImageUri = result.assets[0].uri;
+
+        const processMemory = (imageUri: string) => {
+          console.log('Added memory from', source, ':', imageUri);
+          // Here you would integrate with your enhanced trip data structure
+          // This would need to match your EnhancedMemory type and trip state management
+        };
+
+        processMemory(finalImageUri);
+      }
+    } catch (error) {
+      console.error('Error adding photo:', error);
+      Alert.alert('Error', 'Failed to add photo. Please try again.');
+    }
+  }, []);
+
+  const handleAddMemory = useCallback(async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    Alert.alert(
+      'Add Memory',
+      'How would you like to add a photo?',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => addMemoryFromSource('camera'),
+        },
+        {
+          text: 'Choose from Library',
+          onPress: () => addMemoryFromSource('library'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
+  }, [requestPermissions, addMemoryFromSource]);
   
   // Render Methods
   const renderStoryHeader = () => (
@@ -460,7 +541,7 @@ export default function TripDetailEnhanced({ tripId }: TripDetailEnhancedProps) 
               <Button
                 title="Add Memory"
                 variant="primary"
-                onPress={() => console.log('Add memory')}
+                onPress={handleAddMemory}
                 style={styles.addMemoryButton}
               />
             </View>

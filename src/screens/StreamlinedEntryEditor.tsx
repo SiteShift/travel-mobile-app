@@ -26,6 +26,8 @@ import Animated, {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../contexts/ThemeContext';
 import { Icon } from '../components/Icon';
+import { TripCreationModal } from '../components/TripCreationModal';
+import { MinimalTrip, MinimalMemory } from '../types/tripDetailMinimal';
 import { Image } from 'expo-image';
 import { Video, ResizeMode } from 'expo-av';
 
@@ -35,27 +37,26 @@ import { BlurView } from 'expo-blur';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Mock trips data
-const mockTrips = [
-  { id: '1', name: 'California Road Trip' },
-  { id: '2', name: 'European Adventure' },
-  { id: '3', name: 'Polish Mountains' },
-  { id: '4', name: 'Japan Discovery' },
-  { id: '5', name: 'Italian Getaway' },
-];
+interface UserTrip {
+  id: string;
+  title: string;
+}
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function StreamlinedEntryEditor() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ photoUri?: string; isVideo?: string }>();
+  const params = useLocalSearchParams<{ photoUri?: string; isVideo?: string; cameraFacing?: string }>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [content, setContent] = useState('');
-  const [selectedTrip, setSelectedTrip] = useState(mockTrips[0]);
+  const [userTrips, setUserTrips] = useState<UserTrip[]>([]);
+  const [selectedTrip, setSelectedTrip] = useState<UserTrip | null>(null);
   const [showTripDropdown, setShowTripDropdown] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [isLoadingTrips, setIsLoadingTrips] = useState(true);
+  const [showTripCreationModal, setShowTripCreationModal] = useState(false);
   
   const inputOpacity = useSharedValue(0);
   const inputTranslateY = useSharedValue(30);
@@ -68,8 +69,101 @@ export default function StreamlinedEntryEditor() {
 
   const isVideo = params.isVideo === 'true';
 
+  // Load user trips from AsyncStorage (only trips created from home page)
   useEffect(() => {
-    'worklet';
+    const loadExistingTrips = async () => {
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const keys: string[] = await AsyncStorage.getAllKeys();
+        
+        // Load trips that were created from the home page (TripCreationModal)
+        // These have the pattern 'trip_' and contain the specific structure from home page
+        const tripKeys = keys.filter((key: string) => key.startsWith('trip_'));
+        
+        if (tripKeys.length > 0) {
+          const tripData = await AsyncStorage.multiGet(tripKeys);
+          const trips: UserTrip[] = tripData
+            .map(([key, value]: [string, string | null]) => {
+              if (!value) return null;
+              try {
+                const parsedTrip: any = JSON.parse(value);
+                // Validate that this is a trip created from home page with expected structure
+                if (parsedTrip.id && parsedTrip.title && parsedTrip.coverImage && parsedTrip.startDate && parsedTrip.endDate) {
+                  return {
+                    id: parsedTrip.id,
+                    title: parsedTrip.title,
+                  };
+                }
+                return null;
+              } catch (error) {
+                console.error('Error parsing trip data:', error);
+                return null;
+              }
+            })
+            .filter((trip: UserTrip | null): trip is UserTrip => trip !== null);
+          
+          setUserTrips(trips);
+        } else {
+          setUserTrips([]);
+        }
+      } catch (error) {
+        console.error('Error loading user trips:', error);
+        setUserTrips([]);
+      } finally {
+        setIsLoadingTrips(false);
+      }
+    };
+
+    loadExistingTrips();
+  }, []);
+
+  // Handle trip creation
+  const handleTripCreation = useCallback(async (tripData: {
+    title: string;
+    description: string;
+    image: string;
+    startDate: Date;
+    endDate: Date;
+  }) => {
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      // Use same ID format as home page
+      const tripId = `trip-${Date.now()}`;
+      
+      // Create the same data structure as home page
+      const simpleTrip = {
+        id: tripId,
+        title: tripData.title,
+        description: tripData.description,
+        coverImage: tripData.image,
+        startDate: tripData.startDate.toISOString(),
+        endDate: tripData.endDate.toISOString(),
+        country: 'Adventure',
+      };
+      
+      // Use same AsyncStorage key format as home page
+      await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(simpleTrip));
+      
+      // Add to current trips list
+      const newTrip: UserTrip = {
+        id: tripId,
+        title: tripData.title,
+      };
+      
+      setUserTrips([...userTrips, newTrip]);
+      setSelectedTrip(newTrip);
+      setShowTripCreationModal(false);
+      
+      console.log('✅ Trip created:', tripData.title);
+      
+    } catch (error) {
+      console.error('❌ StreamlinedEntryEditor: Failed to create trip:', error);
+      Alert.alert('Error', 'Failed to create trip');
+    }
+  }, [userTrips]);
+
+  // Initialize animations
+  useEffect(() => {
     // A slight delay to ensure the screen is fully ready before animating
     setTimeout(() => {
       inputOpacity.value = withTiming(1, { duration: 350, easing: Easing.out(Easing.ease) });
@@ -86,7 +180,7 @@ export default function StreamlinedEntryEditor() {
     }, 50);
   }, []);
 
-  // Keyboard handling
+  // Handle keyboard visibility
   useEffect(() => {
     const showListener = () => {
       setKeyboardVisible(true);
@@ -110,18 +204,114 @@ export default function StreamlinedEntryEditor() {
     router.back();
   }, [router]);
 
-  const handleSave = useCallback(() => {
-    if (!content.trim()) {
-      Alert.alert("✍️ Add your note", "Tell us about this moment!");
+  const handleSave = useCallback(async () => {
+    if (!selectedTrip) {
+      Alert.alert("📚 Select a Trip", "Please select a trip to add this memory to!");
       return;
     }
     
-    Alert.alert(
-      "✨ Memory Saved", 
-      "Your moment has been added to your journal.",
-      [{ text: "Perfect!", onPress: () => router.back() }]
-    );
-  }, [content, router]);
+    if (!params.photoUri) {
+      console.error('❌ No photo URI provided');
+      Alert.alert("Error", "No photo found. Please try taking the photo again.");
+      return;
+    }
+    
+    console.log('🎯 Starting save process with photo:', params.photoUri);
+    
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      
+      console.log('🔍 Saving memory to trip:', selectedTrip.id);
+      
+      // Load the full trip data from storage
+      const storedTripData = await AsyncStorage.getItem(`trip_${selectedTrip.id}`);
+      
+      if (!storedTripData) {
+        console.error('❌ Trip not found in storage:', `trip_${selectedTrip.id}`);
+        Alert.alert("Error", "Could not find trip data. Please try again.");
+        return;
+      }
+      
+      const tripData = JSON.parse(storedTripData);
+      console.log('🎯 Loaded trip:', tripData.title);
+      
+      // Convert to MinimalTrip format if it doesn't exist
+      let minimalTrip: MinimalTrip = {
+        id: tripData.id,
+        title: tripData.title,
+        coverImage: tripData.coverImage,
+        startDate: new Date(tripData.startDate),
+        endDate: new Date(tripData.endDate),
+        days: tripData.days || [
+          {
+            day: 1,
+            date: new Date(tripData.startDate), // Ensure Date object
+            memories: [],
+            location: tripData.country || 'Adventure'
+          }
+        ],
+        totalPhotos: tripData.totalPhotos || 0
+      };
+      
+      // If days exist but dates are strings, convert to Date objects
+      if (tripData.days) {
+        minimalTrip.days = tripData.days.map((day: any) => ({
+          ...day,
+          date: typeof day.date === 'string' ? new Date(day.date) : day.date,
+          memories: day.memories || []
+        }));
+      }
+      
+      // Create new memory
+      const newMemory: MinimalMemory = {
+        id: `mem_${Date.now()}`,
+        uri: params.photoUri!,
+        thumbnail: params.photoUri!,
+        caption: content.trim() || 'A special moment captured',
+        timestamp: new Date(),
+        aspectRatio: 1 // Default aspect ratio, could be calculated from image
+      };
+      
+      // Find the most recent day (highest day number)
+      const mostRecentDay = minimalTrip.days.reduce((latest, current) => {
+        return current.day > latest.day ? current : latest;
+      }, minimalTrip.days[0]);
+      
+      // Add memory to the most recent day
+      const dayIndex = minimalTrip.days.findIndex((d) => d.day === mostRecentDay.day);
+      if (dayIndex !== -1) {
+        minimalTrip.days[dayIndex] = {
+          ...minimalTrip.days[dayIndex],
+          memories: [...minimalTrip.days[dayIndex].memories, newMemory]
+        };
+      }
+      
+      // Update total photos count
+      minimalTrip.totalPhotos = minimalTrip.days.reduce((total, day) => total + day.memories.length, 0);
+      
+      // Save the updated trip data back to storage
+      const updatedTripData = {
+        ...tripData,
+        days: minimalTrip.days,
+        totalPhotos: minimalTrip.totalPhotos,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await AsyncStorage.setItem(`trip_${selectedTrip.id}`, JSON.stringify(updatedTripData));
+      
+      console.log('✅ Memory saved to', selectedTrip.title, 'Day', mostRecentDay.day);
+      
+      Alert.alert(
+        "✨ Memory Saved", 
+        `Your moment has been added to "${selectedTrip.title}" on Day ${mostRecentDay.day}.`,
+        [{ text: "Perfect!", onPress: () => router.back() }]
+      );
+      
+    } catch (error) {
+      console.error('❌ StreamlinedEntryEditor: Failed to save memory:', error);
+      Alert.alert("Error", "Failed to save memory. Please try again.");
+    }
+  }, [content, selectedTrip, params.photoUri, router]);
 
   const toggleTripDropdown = useCallback(() => {
     const newState = !showTripDropdown;
@@ -136,7 +326,7 @@ export default function StreamlinedEntryEditor() {
     }
   }, [showTripDropdown]);
 
-  const selectTrip = useCallback((trip: typeof mockTrips[0]) => {
+  const selectTrip = useCallback((trip: UserTrip) => {
     setSelectedTrip(trip);
     toggleTripDropdown();
   }, [toggleTripDropdown]);
@@ -177,7 +367,10 @@ export default function StreamlinedEntryEditor() {
             ) : (
             <Image 
               source={{ uri: params.photoUri }} 
-              style={styles.media}
+              style={[
+                styles.media,
+                params.cameraFacing === 'front' && styles.frontCameraFlip
+              ]}
               contentFit="cover"
             />
           )}
@@ -205,15 +398,23 @@ export default function StreamlinedEntryEditor() {
             <View style={styles.inputContainer}>
               <BlurView intensity={40} style={styles.inputBlur}>
                 {/* Trip Selector */}
-                <Pressable onPress={toggleTripDropdown} style={styles.tripSelector}>
+                <Pressable 
+                  onPress={userTrips.length > 0 ? toggleTripDropdown : () => setShowTripCreationModal(true)} 
+                  style={[
+                    styles.tripSelector,
+                    { opacity: userTrips.length === 0 ? 0.8 : 1 }
+                  ]}
+                >
                   <Text style={styles.tripText} numberOfLines={1}>
-                    {selectedTrip.name}
+                    {selectedTrip?.title || (isLoadingTrips ? 'Loading trips...' : 'Create new trip')}
                   </Text>
-                  <Icon 
-                    name={showTripDropdown ? "chevron-up" : "chevron-down"} 
-                    size="sm" 
-                    color="white" 
-                  />
+                  {userTrips.length > 0 && (
+                    <Icon 
+                      name={showTripDropdown ? "chevron-up" : "chevron-down"} 
+                      size="sm" 
+                      color="white" 
+                    />
+                  )}
                 </Pressable>
 
                 {/* Note Input */}
@@ -239,27 +440,42 @@ export default function StreamlinedEntryEditor() {
             {showTripDropdown && (
               <Animated.View style={[styles.dropdownContainer, dropdownStyle]}>
                 <BlurView intensity={40} style={styles.dropdownBlur}>
-                  {mockTrips.map((trip, index) => (
-                    <Pressable
-                      key={trip.id}
-                      onPress={() => selectTrip(trip)}
-                      style={[
-                        styles.dropdownItem,
-                        selectedTrip.id === trip.id && styles.dropdownItemSelected,
-                        index === mockTrips.length - 1 && styles.dropdownItemLast
-                      ]}
+                  {userTrips.length > 0 ? (
+                    userTrips.map((trip: UserTrip, index: number) => (
+                      <Pressable
+                        key={trip.id}
+                        onPress={() => selectTrip(trip)}
+                        style={[
+                          styles.dropdownItem,
+                          selectedTrip?.id === trip.id && styles.dropdownItemSelected,
+                          index === userTrips.length - 1 && styles.dropdownItemLast
+                        ]}
+                      >
+                        <Text style={[
+                          styles.dropdownText,
+                          selectedTrip?.id === trip.id && styles.dropdownTextSelected
+                        ]}>
+                          {trip.title}
+                    </Text>
+                        {selectedTrip?.id === trip.id && (
+                          <Icon name="check" size="sm" color="white" />
+                        )}
+                      </Pressable>
+                    ))
+                  ) : (
+                    <Pressable 
+                      style={[styles.dropdownItem, styles.createTripButton]}
+                      onPress={() => {
+                        setShowTripDropdown(false);
+                        setShowTripCreationModal(true);
+                      }}
                     >
-                      <Text style={[
-                        styles.dropdownText,
-                        selectedTrip.id === trip.id && styles.dropdownTextSelected
-                      ]}>
-                        {trip.name}
-                  </Text>
-                      {selectedTrip.id === trip.id && (
-                        <Icon name="check" size="sm" color="white" />
-                      )}
+                      <Icon name="plus" size="sm" color="#007AFF" />
+                      <Text style={[styles.dropdownText, { marginLeft: 8, color: '#007AFF' }]}>
+                        Create new trip
+                      </Text>
                     </Pressable>
-                  ))}
+                  )}
                 </BlurView>
               </Animated.View>
             )}
@@ -270,17 +486,27 @@ export default function StreamlinedEntryEditor() {
         <Animated.View style={[styles.saveButtonContainer, saveButtonStyle]}>
           <AnimatedPressable
           onPress={handleSave} 
+            disabled={!selectedTrip || isLoadingTrips}
             style={({ pressed }) => [
             styles.saveButton,
-              { opacity: pressed ? 0.8 : 1 }
+              { 
+                opacity: (!selectedTrip || isLoadingTrips) ? 0.5 : (pressed ? 0.8 : 1)
+              }
             ]}
           >
             <View style={styles.saveButtonPill}>
-              <Text style={styles.saveButtonText}>Save Memory</Text>
+              <Text style={styles.saveButtonText}>
+                {isLoadingTrips ? 'Loading...' : 'Save Memory'}
+              </Text>
       </View>
           </AnimatedPressable>
         </Animated.View>
       </KeyboardAvoidingView>
+      <TripCreationModal
+        visible={showTripCreationModal}
+        onClose={() => setShowTripCreationModal(false)}
+        onCreateTrip={handleTripCreation}
+      />
     </Pressable>
   );
 }
@@ -301,6 +527,9 @@ const styles = StyleSheet.create({
   media: {
     width: '100%',
     height: '100%',
+  },
+  frontCameraFlip: {
+    transform: [{ scaleX: -1 }],
   },
   headerContainer: {
     position: 'absolute',
@@ -457,5 +686,14 @@ const styles = StyleSheet.create({
   },
   dropdownTextSelected: {
     fontWeight: '600',
+  },
+  createTripButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    marginTop: 8,
   },
 }); 

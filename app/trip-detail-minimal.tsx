@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+
 
 // Components
 import { MinimalDayCard } from '../src/components/minimal/MinimalDayCard';
@@ -41,21 +43,39 @@ interface TripDetailMinimalProps {
 // Helper function to create minimal trip data from trip ID
 const createMinimalTripFromId = (tripId: string, tripData?: any): MinimalTrip => {
   if (tripData) {
+    // Ensure dates are Date objects
+    const startDate = tripData.startDate ? new Date(tripData.startDate) : new Date();
+    const endDate = tripData.endDate ? new Date(tripData.endDate) : new Date();
+    
+    // Process days data to ensure date objects
+    let processedDays = tripData.days;
+    if (processedDays && Array.isArray(processedDays)) {
+      processedDays = processedDays.map((day: any) => ({
+        ...day,
+        date: day.date ? new Date(day.date) : startDate,
+        memories: day.memories || []
+      }));
+    } else {
+      // Create default day if no days exist
+      processedDays = [
+        {
+          day: 1,
+          date: startDate,
+          memories: [],
+          location: tripData.country || 'Adventure'
+        }
+      ];
+    }
+    
     return {
       id: tripData.id,
       title: tripData.title,
       coverImage: tripData.coverImage || tripData.image?.uri || require('../assets/images/california-road-trip.jpg'),
-      startDate: tripData.startDate || new Date(),
-      endDate: tripData.endDate || new Date(),
-      days: [
-        {
-          day: 1,
-          date: tripData.startDate || new Date(),
-          memories: [],
-          location: tripData.country || 'Adventure'
-        }
-      ],
-      totalPhotos: 0
+      startDate: startDate,
+      endDate: endDate,
+      days: processedDays,
+      totalPhotos: tripData.totalPhotos || (processedDays ? 
+        processedDays.reduce((total: number, day: any) => total + (day.memories?.length || 0), 0) : 0)
     };
   }
   
@@ -77,33 +97,48 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [lightboxMemory, setLightboxMemory] = useState<MinimalMemory | null>(null);
   
-  // Load trip data on mount
-  useEffect(() => {
-    const loadTripData = async () => {
-      if (tripId) {
-        try {
-          // Try to load from AsyncStorage
-          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-          const storedTripData = await AsyncStorage.getItem(`trip_${tripId}`);
-          
-          if (storedTripData) {
-            const tripData = JSON.parse(storedTripData);
-            // Convert date strings back to Date objects
-            tripData.startDate = new Date(tripData.startDate);
-            tripData.endDate = new Date(tripData.endDate);
+  // Load trip data on mount and when returning to screen
+  useFocusEffect(
+    useCallback(() => {
+      const loadTripData = async () => {
+        if (tripId) {
+          try {
+            console.log('🔄 Loading trip detail for ID:', tripId);
             
-            const minimalTrip = createMinimalTripFromId(tripId, tripData);
-            setTrip(minimalTrip);
+            // Try to load from AsyncStorage
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            const storedTripData = await AsyncStorage.getItem(`trip_${tripId}`);
+            
+            if (storedTripData) {
+              console.log('📦 Found trip data in storage');
+              
+              const tripData = JSON.parse(storedTripData);
+              console.log('📋 Trip data parsed:', tripData.title);
+              
+              // Convert date strings back to Date objects
+              if (tripData.startDate && typeof tripData.startDate === 'string') {
+                tripData.startDate = new Date(tripData.startDate);
+              }
+              if (tripData.endDate && typeof tripData.endDate === 'string') {
+                tripData.endDate = new Date(tripData.endDate);
+              }
+              
+              const minimalTrip = createMinimalTripFromId(tripId, tripData);
+              setTrip(minimalTrip);
+              console.log('✅ Trip detail reloaded:', tripData.title, 'with', minimalTrip.totalPhotos, 'photos');
+            } else {
+              console.warn('⚠️ No trip data found in storage for:', `trip_${tripId}`);
+            }
+          } catch (error) {
+            console.error('❌ Error loading trip from storage:', error);
           }
-        } catch (error) {
-          console.log('Could not load trip from storage:', error);
         }
-      }
-      setIsLoading(false);
-    };
-    
-    loadTripData();
-  }, [tripId]);
+        setIsLoading(false);
+      };
+      
+      loadTripData();
+    }, [tripId])
+  );
 
   // Animation Values
   const translateY = useRef(new Animated.Value(0)).current;
@@ -265,58 +300,98 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     setViewMode(viewMode === 'story' ? 'grid' : 'story');
   }, [viewMode]);
 
+  // Optimized helper function to flip image horizontally immediately
+
+
+  const addMemoryFromSource = useCallback(async (targetDay: number, source: 'camera' | 'library') => {
+    try {
+      let result;
+      
+      if (source === 'camera') {
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const originalUri = asset.uri;
+
+        const createMemoryAndUpdate = (imageUri: string) => {
+          const newMemory = {
+            id: `mem_${Date.now()}`,
+            uri: imageUri,
+            thumbnail: imageUri,
+            caption: 'Add a caption...',
+            timestamp: new Date(),
+            aspectRatio: asset.width / asset.height,
+          };
+
+          // Update the trip data
+          setTrip(prevTrip => {
+            const updatedTrip = { ...prevTrip };
+            const dayIndex = updatedTrip.days.findIndex(d => d.day === targetDay);
+            
+            if (dayIndex !== -1) {
+              updatedTrip.days[dayIndex] = {
+                ...updatedTrip.days[dayIndex],
+                memories: [...updatedTrip.days[dayIndex].memories, newMemory]
+              };
+            }
+            
+            // Update total photos count
+            updatedTrip.totalPhotos = updatedTrip.days.reduce((total, day) => total + day.memories.length, 0);
+            
+            return updatedTrip;
+          });
+
+          // Auto-select the day that was just updated
+          setSelectedDay(targetDay);
+          console.log('Added memory to day', targetDay, 'from', source);
+        };
+
+        createMemoryAndUpdate(originalUri);
+      }
+    } catch (error) {
+      console.error('Error adding photo:', error);
+      Alert.alert('Error', 'Failed to add photo. Please try again.');
+    }
+  }, [setSelectedDay]);
+
   const handleAddMemory = useCallback(async (dayNumber?: number) => {
     const targetDay = dayNumber || selectedDay;
     
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Using deprecated version for compatibility
-        allowsEditing: false, // No cropping - preserve natural aspect ratio
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        const newMemory = {
-          id: `mem_${Date.now()}`,
-          uri: asset.uri,
-          thumbnail: asset.uri,
-          caption: 'Add a caption...', // Default placeholder text to encourage caption writing
-          timestamp: new Date(),
-          aspectRatio: asset.width / asset.height,
-        };
-
-        // Update the trip data
-        setTrip(prevTrip => {
-          const updatedTrip = { ...prevTrip };
-          const dayIndex = updatedTrip.days.findIndex(d => d.day === targetDay);
-          
-          if (dayIndex !== -1) {
-            updatedTrip.days[dayIndex] = {
-              ...updatedTrip.days[dayIndex],
-              memories: [...updatedTrip.days[dayIndex].memories, newMemory]
-            };
-          }
-          
-          // Update total photos count
-          updatedTrip.totalPhotos = updatedTrip.days.reduce((total, day) => total + day.memories.length, 0);
-          
-          return updatedTrip;
-        });
-
-        // Auto-select the day that was just updated
-        setSelectedDay(targetDay);
-        
-        console.log('Added memory to day', targetDay);
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to add photo. Please try again.');
-    }
-  }, [selectedDay, requestPermissions]);
+    Alert.alert(
+      'Add Memory',
+      'How would you like to add a photo?',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => addMemoryFromSource(targetDay, 'camera'),
+        },
+        {
+          text: 'Choose from Library',
+          onPress: () => addMemoryFromSource(targetDay, 'library'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
+  }, [selectedDay, requestPermissions, addMemoryFromSource]);
   
   const renderAddNextDay = () => {
     // Find the first day that has no memories.
@@ -531,18 +606,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           </TouchableOpacity>
         </View>
         
-        {/* Empty state if no photos at all and no more days */}
-        {!hasPhotos && !nextDayToAdd && (
-          <View style={styles.emptyState}>
-            <Icon name="camera" size="xxl" color={colors.text.tertiary} />
-            <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
-              No photos yet
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
-              Add your first memory from {currentDay.location || 'this day'}
-            </Text>
-          </View>
-        )}
+
       </View>
     );
   };
@@ -555,16 +619,6 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     if (currentMemories.length === 0) {
       return (
         <View style={styles.gridContainer}>
-          <View style={styles.emptyState}>
-            <Icon name="grid" size="xxl" color={colors.text.tertiary} />
-            <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
-              No photos for Day {selectedDay}
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
-              Start adding memories to see them here
-            </Text>
-          </View>
-          
           {/* Add Memory Button for Grid View */}
           <TouchableOpacity 
             style={[styles.addMemoryPlaceholder, { 

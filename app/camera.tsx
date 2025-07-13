@@ -38,12 +38,19 @@ export default function CameraScreen() {
 
   const takePicture = async () => {
     if (cameraRef.current) {
-      const photo = await cameraRef.current.takePictureAsync();
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        skipProcessing: false,
+        mirror: false,
+      });
       if (photo) {
         console.log('Photo taken:', photo.uri);
         router.push({
           pathname: '/entry-editor',
-          params: { photoUri: photo.uri },
+          params: { 
+            photoUri: photo.uri,
+            cameraFacing: facing
+          },
         });
       }
     }

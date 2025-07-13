@@ -94,7 +94,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
     setIsLoading(true);
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: includeVideos ? ImagePicker.MediaTypeOptions.All : ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: includeVideos ? ['images', 'videos'] : ['images'],
         allowsEditing,
         aspect: [4, 3],
         quality,
@@ -130,7 +130,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
     setIsLoading(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: includeVideos ? ImagePicker.MediaTypeOptions.All : ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: includeVideos ? ['images', 'videos'] : ['images'],
         allowsMultipleSelection: maxSelection > 1,
         selectionLimit: maxSelection,
         allowsEditing: maxSelection === 1 && allowsEditing,

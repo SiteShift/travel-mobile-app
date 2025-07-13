@@ -10,10 +10,13 @@ import {
   StatusBar,
   Platform,
   TouchableOpacity,
+  Alert,
+  Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { Icon } from '../../src/components/Icon';
 import { TripCreationModal } from '../../src/components/TripCreationModal';
@@ -80,6 +83,8 @@ export default function HomeTab() {
   const [trips, setTrips] = useState<Trip[]>(createPlaceholderTrips());
   const [data, setData] = useState<Trip[]>([]);
   const [showTripCreationModal, setShowTripCreationModal] = useState(false);
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+  const [showTripOptionsModal, setShowTripOptionsModal] = useState(false);
   
   // Get user level data
   const userData = getMockDataForUser('user1');
@@ -115,6 +120,60 @@ export default function HomeTab() {
     updateTripsData(trips);
   }, []);
 
+  // Load existing trips from AsyncStorage on mount and when returning to screen
+  useFocusEffect(
+    useCallback(() => {
+      const loadExistingTrips = async () => {
+        try {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const keys: string[] = await AsyncStorage.getAllKeys();
+          const tripKeys = keys.filter((key: string) => key.startsWith('trip_'));
+          
+          if (tripKeys.length > 0) {
+            const tripData = await AsyncStorage.multiGet(tripKeys);
+            const existingTrips: Trip[] = tripData
+              .map(([key, value]: [string, string | null]) => {
+                if (!value) return null;
+                try {
+                  const parsedTrip: any = JSON.parse(value);
+                  
+                  if (parsedTrip.id && parsedTrip.title && parsedTrip.coverImage) {
+                    const trip = {
+                      id: parsedTrip.id,
+                      type: 'real' as const,
+                      title: parsedTrip.title,
+                      description: parsedTrip.description || '',
+                      image: parsedTrip.coverImage,
+                      buttonText: 'View Trip',
+                      country: parsedTrip.country || 'Adventure',
+                      coverImage: parsedTrip.coverImage,
+                      startDate: new Date(parsedTrip.startDate),
+                      endDate: new Date(parsedTrip.endDate),
+                    };
+                    return trip;
+                  }
+                  return null;
+                } catch (error) {
+                  console.error('❌ HomePage: Error parsing trip data:', error);
+                  return null;
+                }
+              })
+              .filter((trip: Trip | null): trip is Trip => trip !== null);
+            
+            if (existingTrips.length > 0) {
+              // Update trips with existing data
+              updateTripsData(existingTrips);
+            }
+          }
+        } catch (error) {
+          console.error('❌ HomePage: Error loading existing trips:', error);
+        }
+      };
+
+      loadExistingTrips();
+    }, [updateTripsData])
+  );
+
   useEffect(() => {
     if (data.length > 0) {
       const initialOffset = trips.length * ITEM_SPACING;
@@ -142,6 +201,55 @@ export default function HomeTab() {
 
   const handleCreateTrip = useCallback(() => {
     setShowTripCreationModal(true);
+  }, []);
+
+  const handleTripOptions = useCallback((tripId: string) => {
+    setSelectedTripId(tripId);
+    setShowTripOptionsModal(true);
+  }, []);
+
+  const handleDeleteTrip = useCallback(async () => {
+    if (!selectedTripId) return;
+    
+    Alert.alert(
+      'Delete Trip',
+      'Are you sure you want to delete this trip? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+              await AsyncStorage.removeItem(`trip_${selectedTripId}`);
+              
+              // Remove from trips array
+              const updatedTrips = trips.filter(trip => trip.id !== selectedTripId);
+              updateTripsData(updatedTrips.filter(t => t.type === 'real'));
+              
+              setShowTripOptionsModal(false);
+              setSelectedTripId(null);
+              
+              console.log('✅ Trip deleted successfully:', selectedTripId);
+            } catch (error) {
+              console.error('❌ Error deleting trip:', error);
+              Alert.alert('Error', 'Failed to delete trip. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  }, [selectedTripId, trips, updateTripsData]);
+
+  const handleEditCover = useCallback(() => {
+    setShowTripOptionsModal(false);
+    setSelectedTripId(null);
+    // TODO: Implement edit cover functionality
+    Alert.alert('Coming Soon', 'Edit cover functionality will be available soon!');
   }, []);
 
   const handleTripCreation = useCallback(async (tripData: {
@@ -189,12 +297,13 @@ export default function HomeTab() {
       
       await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(simpleTrip));
     } catch (error) {
-      console.error('Failed to save trip to storage:', error);
+      console.error('❌ HomePage: Failed to save trip to storage:', error);
     }
     
     const realTrips = trips.filter(t => t.type === 'real');
     updateTripsData([...realTrips, newTrip]);
     setShowTripCreationModal(false);
+    console.log('✅ Trip created:', tripData.title);
   }, [trips, updateTripsData]);
   
   const onMomentumScrollEnd = useCallback((event: any) => {
@@ -247,6 +356,13 @@ export default function HomeTab() {
       return (
         <View style={styles.itemContainer}>
           <Animated.View style={[styles.unifiedWrapper, unifiedTransform]}>
+            {/* Book pages - positioned behind the card */}
+            <View style={styles.bookPagesContainer}>
+              <View style={[styles.bookPage, styles.bookPage3, { backgroundColor: colors.surface.tertiary }]} />
+              <View style={[styles.bookPage, styles.bookPage2, { backgroundColor: colors.surface.secondary }]} />
+              <View style={[styles.bookPage, styles.bookPage1, { backgroundColor: colors.surface.primary }]} />
+            </View>
+            
             <Pressable 
               style={[styles.tripCard, styles.placeholderCard, { 
                 backgroundColor: colors.surface.secondary,
@@ -300,6 +416,13 @@ export default function HomeTab() {
     return (
       <View style={styles.itemContainer}>
         <Animated.View style={[styles.unifiedWrapper, unifiedTransform]}>
+          {/* Book pages - positioned behind the card */}
+          <View style={styles.bookPagesContainer}>
+            <View style={[styles.bookPage, styles.bookPage3, { backgroundColor: colors.surface.tertiary }]} />
+            <View style={[styles.bookPage, styles.bookPage2, { backgroundColor: colors.surface.secondary }]} />
+            <View style={[styles.bookPage, styles.bookPage1, { backgroundColor: colors.surface.primary }]} />
+          </View>
+          
           <Pressable style={styles.tripCard} onPress={() => handleTripPress(trip)}>
             <Image 
               source={trip.image} 
@@ -313,6 +436,18 @@ export default function HomeTab() {
               colors={trip.gradient as any || ['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']} 
               style={styles.gradientOverlay} 
             />
+            
+            {/* Three-dot menu button */}
+            <TouchableOpacity 
+              style={styles.tripOptionsButton}
+              onPress={() => handleTripOptions(trip.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <View style={[styles.tripOptionsButtonBackground, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+                <Icon name="ellipsis-horizontal" size="sm" color="white" />
+              </View>
+            </TouchableOpacity>
+            
             <View style={styles.cardContent}>
               <Text style={styles.tripTitle} numberOfLines={1}>
                 {trip.title}
@@ -499,6 +634,41 @@ export default function HomeTab() {
         onClose={() => setShowTripCreationModal(false)}
         onCreateTrip={handleTripCreation}
       />
+      
+      {/* Trip Options Modal */}
+      <Modal
+        visible={showTripOptionsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTripOptionsModal(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setShowTripOptionsModal(false)}
+        >
+          <View style={[styles.tripOptionsModal, { backgroundColor: colors.surface.primary }]}>
+            <TouchableOpacity 
+              style={[styles.tripOptionItem, { borderBottomColor: colors.border.primary }]}
+              onPress={handleEditCover}
+            >
+              <Icon name="image" size="md" color={colors.text.primary} />
+              <Text style={[styles.tripOptionText, { color: colors.text.primary }]}>
+                Edit Cover
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.tripOptionItem, { borderBottomWidth: 0 }]}
+              onPress={handleDeleteTrip}
+            >
+              <Icon name="trash-outline" size="md" color={colors.error[500]} />
+              <Text style={[styles.tripOptionText, { color: colors.error[500] }]}>
+                Delete Trip
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -565,7 +735,7 @@ const styles = StyleSheet.create({
   },
   carousel: {
     flex: 1,
-    marginTop: screenHeight * -0.010,
+    marginTop: screenHeight * -0.002,
   },
   itemContainer: {
     width: ITEM_SPACING,
@@ -666,6 +836,19 @@ const styles = StyleSheet.create({
     height: '60%',
     borderRadius: 32,
     zIndex: 2,
+  },
+  tripOptionsButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 4,
+  },
+  tripOptionsButtonBackground: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cardContent: {
     position: 'absolute',
@@ -772,5 +955,72 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.semibold,
     fontFamily: 'Merienda',
     letterSpacing: -0.5,
+  },
+  bookPagesContainer: {
+    position: 'absolute',
+    top: 0,
+    right: -8, // Slightly less extension
+    width: CARD_WIDTH * 0.12, // Narrower for more subtlety
+    height: CARD_HEIGHT,
+    zIndex: 0, // Behind the main card
+  },
+  bookPage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: 32,
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    opacity: 0.5,
+  },
+  bookPage1: {
+    right: 0,
+    transform: [{ translateX: 0 }],
+    zIndex: 3,
+  },
+  bookPage2: {
+    right: -3,
+    transform: [{ translateX: 0 }],
+    zIndex: 2,
+    opacity: 0.4,
+  },
+  bookPage3: {
+    right: -6,
+    transform: [{ translateX: 0 }],
+    zIndex: 1,
+    opacity: 0.3,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tripOptionsModal: {
+    marginHorizontal: SPACING.xl,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: SPACING.xs,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  tripOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+  },
+  tripOptionText: {
+    fontSize: 16,
+    fontWeight: FONT_WEIGHTS.medium,
+    marginLeft: SPACING.md,
   },
 }); 

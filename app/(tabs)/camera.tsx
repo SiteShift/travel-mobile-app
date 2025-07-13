@@ -90,14 +90,22 @@ export default function CameraScreen() {
   const navigateToEditor = useCallback((uri: string, isVideo: boolean = false) => {
     router.push({
       pathname: '/entry-editor',
-      params: { photoUri: uri, ...(isVideo && { isVideo: 'true' }) },
+      params: { 
+        photoUri: uri, 
+        ...(isVideo && { isVideo: 'true' }),
+        cameraFacing: facing
+      },
     });
-  }, [router]);
+  }, [router, facing]);
 
   const takePicture = useCallback(async () => {
     if (!cameraRef.current) return;
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      const photo = await cameraRef.current.takePictureAsync({ 
+        quality: 0.8,
+        skipProcessing: false,
+        mirror: false,
+      });
       if (photo?.uri) {
         navigateToEditor(photo.uri, false);
       }

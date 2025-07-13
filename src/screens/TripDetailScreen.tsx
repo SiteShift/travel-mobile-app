@@ -6,7 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+
 import { SafeAreaWrapper } from '../components/SafeAreaWrapper';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -302,8 +305,82 @@ export default function TripDetailScreen({ tripId }: TripDetailScreenProps) {
     setSharingVisible(false);
   };
 
-  const handleAddEntry = () => {
-    console.log('Navigate to entry creation');
+  const requestPermissions = async () => {
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status: libraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (cameraStatus !== 'granted' || libraryStatus !== 'granted') {
+      Alert.alert(
+        'Permissions Required',
+        'Please grant camera and photo library permissions to add memories.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  // Optimized helper function to flip image horizontally immediately
+
+
+  const addMemoryFromSource = async (source: 'camera' | 'library') => {
+    try {
+      let result;
+      
+      if (source === 'camera') {
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets[0]) {
+        let finalImageUri = result.assets[0].uri;
+
+        const processMemory = (imageUri: string) => {
+          console.log('Added memory from', source, ':', imageUri);
+          // Here you would integrate with your trip data structure
+          // Navigate to entry editor or update trip state
+        };
+
+        processMemory(finalImageUri);
+      }
+    } catch (error) {
+      console.error('Error adding photo:', error);
+      Alert.alert('Error', 'Failed to add photo. Please try again.');
+    }
+  };
+
+  const handleAddEntry = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    Alert.alert(
+      'Add Memory',
+      'How would you like to add a photo?',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => addMemoryFromSource('camera'),
+        },
+        {
+          text: 'Choose from Library',
+          onPress: () => addMemoryFromSource('library'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handleEntryPress = (entry: TripEntry) => {

@@ -12,10 +12,12 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+
 import { useTheme } from '../contexts/ThemeContext';
 import { Icon } from './Icon';
 import { SPACING, BORDER_RADIUS, FONT_WEIGHTS } from '../constants/theme';
@@ -155,33 +157,80 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
     return Object.keys(newErrors).length === 0;
   }, [formData]);
   
-  // Image picker
-  const handleImagePicker = useCallback(async () => {
+  // Permission handling
+  const requestPermissions = async () => {
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status: libraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (cameraStatus !== 'granted' || libraryStatus !== 'granted') {
+      Alert.alert(
+        'Permissions Required',
+        'Please grant camera and photo library permissions to add cover photos.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  };
+
+
+
+  const addCoverPhotoFromSource = useCallback(async (source: 'camera' | 'library') => {
     try {
       setIsImageLoading(true);
+      let result;
       
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        setErrors(prev => ({ ...prev, image: 'Photo access permission is required' }));
-        return;
+      if (source === 'camera') {
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [16, 9],
+          quality: 0.8,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [16, 9],
+          quality: 0.8,
+        });
       }
-      
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 0.8,
-      });
-      
+
       if (!result.canceled && result.assets[0]) {
-        updateFormData('image', result.assets[0].uri);
+        const originalUri = result.assets[0].uri;
+        updateFormData('image', originalUri);
       }
     } catch (error) {
-      setErrors(prev => ({ ...prev, image: 'Failed to select image' }));
+      setErrors(prev => ({ ...prev, image: 'Failed to add cover photo. Please try again.' }));
     } finally {
       setIsImageLoading(false);
     }
   }, [updateFormData]);
+
+  // Cover photo selection with action sheet
+  const handleAddCoverPhoto = useCallback(async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    Alert.alert(
+      'Select Cover Photo',
+      'Choose how you want to add your cover photo',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => addCoverPhotoFromSource('camera'),
+        },
+        {
+          text: 'Choose from Library',
+          onPress: () => addCoverPhotoFromSource('library'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  }, [addCoverPhotoFromSource]);
   
   // Handle date selection
   const handleDateSelect = useCallback((field: 'startDate' | 'endDate', increment: number) => {
@@ -268,7 +317,9 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
   
   // Create trip
   const handleCreateTrip = useCallback(async () => {
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
     
     setIsLoading(true);
     
@@ -276,16 +327,20 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      onCreateTrip({
+      const tripDataToSend = {
         title: formData.title.trim(),
         description: formData.description.trim() || 'An amazing adventure awaits!',
         image: formData.image!,
         startDate: formData.startDate,
         endDate: formData.endDate,
-      });
+      };
+      
+      onCreateTrip(tripDataToSend);
       
       onClose();
+      console.log('✅ Trip created:', tripDataToSend.title);
     } catch (error) {
+      console.error('❌ TripCreationModal: Error in handleCreateTrip:', error);
       setErrors({ title: 'Failed to create trip. Please try again.' });
     } finally {
       setIsLoading(false);
@@ -363,10 +418,14 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.imageContainer,
-                    { backgroundColor: colors.surface.secondary },
+                    { 
+                      backgroundColor: colors.surface.secondary,
+                      borderColor: errors.image ? colors.error[500] : colors.border.secondary,
+                      borderWidth: 1,
+                    },
                     errors.image && styles.imageContainerError
                   ]}
-                  onPress={handleImagePicker}
+                  onPress={handleAddCoverPhoto}
                   disabled={isImageLoading}
                   accessibilityLabel="Select cover photo"
                 >
@@ -424,7 +483,7 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
                     { 
                       backgroundColor: colors.surface.secondary,
                       color: colors.text.primary,
-                      borderColor: errors.title ? colors.error[500] : 'transparent',
+                      borderColor: errors.title ? colors.error[500] : colors.border.secondary,
                     }
                   ]}
                   value={formData.title}
@@ -455,6 +514,7 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
                     { 
                       backgroundColor: colors.surface.secondary,
                       color: colors.text.primary,
+                      borderColor: colors.border.secondary,
                     }
                   ]}
                   value={formData.description}
@@ -489,7 +549,11 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
                       </TouchableOpacity>
                       
                       <TouchableOpacity 
-                        style={[styles.dateDisplay, { backgroundColor: colors.surface.secondary }]}
+                        style={[styles.dateDisplay, { 
+                          backgroundColor: colors.surface.secondary,
+                          borderColor: colors.border.secondary,
+                          borderWidth: 1,
+                        }]}
                         onPress={() => openDatePicker('startDate')}
                         accessibilityLabel="Select start date"
                       >
@@ -525,7 +589,11 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
                       </TouchableOpacity>
                       
                       <TouchableOpacity 
-                        style={[styles.dateDisplay, { backgroundColor: colors.surface.secondary }]}
+                        style={[styles.dateDisplay, { 
+                          backgroundColor: colors.surface.secondary,
+                          borderColor: colors.border.secondary,
+                          borderWidth: 1,
+                        }]}
                         onPress={() => openDatePicker('endDate')}
                         accessibilityLabel="Select end date"
                       >
