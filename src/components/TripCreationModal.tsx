@@ -188,11 +188,6 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
     const currentDate = formData[field];
     const newDate = new Date(currentDate.getTime() + increment * 24 * 60 * 60 * 1000);
     
-    // Ensure start date is not before today
-    if (field === 'startDate' && newDate < new Date()) {
-      return;
-    }
-    
     updateFormData(field, newDate);
     
     // Auto-adjust end date if needed

@@ -421,6 +421,14 @@ export default function HomeTab() {
     );
   };
 
+  const renderTripMemo = () => (
+    <View style={styles.tripMemoContainer}>
+      <Text style={[styles.tripMemoText, { color: colors.text.primary }]}>
+        TripMemo
+      </Text>
+    </View>
+  );
+
   const renderLevelIndicator = () => (
     <View style={styles.levelIndicatorContainer}>
       <View style={[styles.levelIndicatorWrapper, { backgroundColor: colors.surface.tertiary }]}>
@@ -449,6 +457,9 @@ export default function HomeTab() {
         barStyle={isDark ? 'light-content' : 'dark-content'} 
         backgroundColor={colors.background.primary} 
       />
+
+      {/* TripMemo Brand */}
+      {renderTripMemo()}
 
       {/* Dots Indicator */}
       {renderDots()}
@@ -744,6 +755,21 @@ const styles = StyleSheet.create({
   levelText: {
     fontSize: 12,
     fontWeight: FONT_WEIGHTS.medium,
+    fontFamily: 'Merienda',
+    letterSpacing: -0.5,
+  },
+  tripMemoContainer: {
+    position: 'absolute',
+    top: screenHeight * 0.08,
+    left: SPACING.md,
+    zIndex: 10,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tripMemoText: {
+    fontSize: 24,
+    fontWeight: FONT_WEIGHTS.semibold,
     fontFamily: 'Merienda',
     letterSpacing: -0.5,
   },
