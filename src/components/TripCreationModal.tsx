@@ -17,6 +17,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { Icon } from './Icon';
@@ -169,7 +170,7 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
         [{ text: 'OK' }]
       );
       return false;
-    }
+      }
     return true;
   };
 
@@ -183,10 +184,10 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
       if (source === 'camera') {
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [16, 9],
-          quality: 0.8,
-        });
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
@@ -195,7 +196,7 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
           quality: 0.8,
         });
       }
-
+      
       if (!result.canceled && result.assets[0]) {
         const originalUri = result.assets[0].uri;
         updateFormData('image', originalUri);
@@ -209,6 +210,9 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
 
   // Cover photo selection with action sheet
   const handleAddCoverPhoto = useCallback(async () => {
+    // Add gentle haptic feedback for emotional connection
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
@@ -329,7 +333,7 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
       
       const tripDataToSend = {
         title: formData.title.trim(),
-        description: formData.description.trim() || 'An amazing adventure awaits!',
+        description: formData.description.trim(),
         image: formData.image!,
         startDate: formData.startDate,
         endDate: formData.endDate,

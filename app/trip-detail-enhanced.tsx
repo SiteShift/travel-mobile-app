@@ -303,7 +303,7 @@ export default function TripDetailEnhanced({ tripId }: TripDetailEnhancedProps) 
               style={styles.headerButton}
               onPress={handleSettings}
             >
-              <Icon name="more-horizontal" size="md" color="white" />
+              <Icon name="more" size="md" color="white" />
             </TouchableOpacity>
           </View>
         </View>

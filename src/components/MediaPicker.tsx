@@ -1,27 +1,20 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  Modal,
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
-  Alert,
+  StyleSheet,
   Dimensions,
-  FlatList,
-  Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { Icon } from './Icon';
-import { Button } from './Button';
-import { BottomSheet } from './BottomSheet';
 import { LoadingSpinner } from './LoadingSpinner';
-import {
-  SPACING,
-  TYPOGRAPHY,
-  BORDER_RADIUS,
-} from '../constants/theme';
+import { SPACING, BORDER_RADIUS, FONT_WEIGHTS } from '../constants/theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export interface MediaItem {
   id: string;
@@ -65,8 +58,6 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
 }) => {
   const { colors } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
-  const [recentMedia, setRecentMedia] = useState<MediaItem[]>([]);
-  const [currentSelection, setCurrentSelection] = useState<MediaItem[]>(selectedMedia);
 
   const requestPermissions = async () => {
     const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
@@ -160,280 +151,163 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
     }
   };
 
-  const handleRecentMediaPress = (media: MediaItem) => {
-    const isSelected = currentSelection.some(item => item.id === media.id);
-    
-    if (isSelected) {
-      const newSelection = currentSelection.filter(item => item.id !== media.id);
-      setCurrentSelection(newSelection);
-    } else {
-      if (currentSelection.length < maxSelection) {
-        setCurrentSelection([...currentSelection, media]);
-      } else {
-        Alert.alert(
-          'Selection Limit',
-          `You can only select up to ${maxSelection} items.`
-        );
-      }
-    }
-  };
-
   const handleMediaSelection = (media: MediaItem[]) => {
-    if (maxSelection === 1) {
-      onMediaSelect(media);
-      onClose();
-    } else {
-      const newSelection = [...currentSelection];
-      
-      for (const item of media) {
-        if (newSelection.length < maxSelection) {
-          newSelection.push(item);
-        }
-      }
-      
-      setCurrentSelection(newSelection);
-    }
-  };
-
-  const handleConfirmSelection = () => {
-    onMediaSelect(currentSelection);
+    onMediaSelect(media);
     onClose();
   };
 
-  const renderMediaItem = ({ item }: { item: MediaItem }) => {
-    const isSelected = currentSelection.some(selected => selected.id === item.id);
-    const selectionIndex = currentSelection.findIndex(selected => selected.id === item.id);
-    const itemSize = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.sm * 2) / 3;
+
+
+
 
     return (
-      <TouchableOpacity
-        style={[
-          styles.mediaItem,
-          {
-            width: itemSize,
-            height: itemSize,
-            borderColor: isSelected ? colors.primary[500] : 'transparent',
-          },
-        ]}
-        onPress={() => handleRecentMediaPress(item)}
-        activeOpacity={0.8}
-      >
-        <Image
-          source={{ uri: item.uri }}
-          style={styles.mediaImage}
-          resizeMode="cover"
-        />
-        
-        {item.type === 'video' && (
-          <View style={styles.videoIndicator}>
-            <Icon name="play" size="sm" color={colors.text.inverse} />
-            {item.duration && (
-              <Text style={[styles.videoDuration, { color: colors.text.inverse }]}>
-                {Math.round(item.duration / 1000)}s
-              </Text>
-            )}
-          </View>
-        )}
-
-        {maxSelection > 1 && (
-          <View style={[
-            styles.selectionIndicator,
-            {
-              backgroundColor: isSelected ? colors.primary[500] : 'rgba(0,0,0,0.3)',
-              borderColor: colors.text.inverse,
-            }
-          ]}>
-            {isSelected && (
-              <Text style={[styles.selectionNumber, { color: colors.text.inverse }]}>
-                {selectionIndex + 1}
-              </Text>
-            )}
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
-  const renderQuickActions = () => (
-    <View style={styles.quickActions}>
-      {showCamera && (
-        <TouchableOpacity
-          style={[styles.quickAction, { backgroundColor: colors.primary[500] }]}
-          onPress={handleCameraPress}
-          disabled={isLoading}
-        >
-          <Icon name="camera" size="lg" color={colors.text.inverse} />
-          <Text style={[styles.quickActionText, { color: colors.text.inverse }]}>
-            Camera
-          </Text>
-        </TouchableOpacity>
-      )}
-      
-      {showLibrary && (
-        <TouchableOpacity
-          style={[styles.quickAction, { backgroundColor: colors.secondary[500] }]}
-          onPress={handleLibraryPress}
-          disabled={isLoading}
-        >
-          <Icon name="images" size="lg" color={colors.text.inverse} />
-          <Text style={[styles.quickActionText, { color: colors.text.inverse }]}>
-            Library
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  const renderRecentMedia = () => {
-    if (recentMedia.length === 0) return null;
-
-    return (
-      <View style={styles.recentSection}>
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-          Recent Media
-        </Text>
-        
-        <FlatList
-          data={recentMedia}
-          renderItem={renderMediaItem}
-          keyExtractor={(item) => item.id}
-          numColumns={3}
-          contentContainerStyle={styles.mediaGrid}
-          columnWrapperStyle={styles.mediaRow}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={true}
-          style={styles.mediaList}
-        />
-      </View>
-    );
-  };
-
-  const renderFooter = () => {
-    if (maxSelection === 1 || currentSelection.length === 0) return null;
-
-    return (
-      <View style={[styles.footer, { borderTopColor: colors.border.primary }]}>
-        <Text style={[styles.selectionCount, { color: colors.text.secondary }]}>
-          {currentSelection.length} of {maxSelection} selected
-        </Text>
-        
-        <Button
-          title={`Add ${currentSelection.length} ${currentSelection.length === 1 ? 'item' : 'items'}`}
-          onPress={handleConfirmSelection}
-          disabled={currentSelection.length === 0}
-        />
-      </View>
-    );
-  };
-
-  return (
-    <BottomSheet
+    <Modal
       visible={visible}
-      onClose={onClose}
-      size="large"
-      title="Add Media"
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
     >
+      <TouchableOpacity 
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity 
+          style={styles.modalContainer}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>
+              Select Cover Photo
+            </Text>
+            <Text style={styles.subtitle}>
+              Choose how you want to add your cover photo
+            </Text>
+          </View>
+          
+          <TouchableOpacity
+            style={styles.firstActionButton}
+            onPress={handleCameraPress}
+            disabled={isLoading}
+          >
+            <Text style={styles.actionButtonText}>
+              Take Photo
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleLibraryPress}
+            disabled={isLoading}
+          >
+            <Text style={styles.actionButtonText}>
+              Choose from Library
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={onClose}
+            disabled={isLoading}
+          >
+            <Text style={styles.cancelButtonText}>
+              Cancel
+            </Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+      
       {isLoading && (
         <LoadingSpinner
           variant="overlay"
           message="Processing media..."
         />
       )}
-      
-      {renderQuickActions()}
-      {renderRecentMedia()}
-      {renderFooter()}
-    </BottomSheet>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  quickActions: {
-    flexDirection: 'row',
-    padding: SPACING.lg,
-    gap: SPACING.md,
-  },
-  quickAction: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
-    gap: SPACING.sm,
-  },
-  quickActionText: {
-    ...TYPOGRAPHY.styles.bodySmall,
-    fontWeight: '600',
-  },
-  recentSection: {
-    flex: 1,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.lg,
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.styles.h4,
-    marginBottom: SPACING.md,
-  },
-  mediaList: {
-    flex: 1,
-    maxHeight: 400,
-  },
-  mediaGrid: {
-    paddingBottom: SPACING.lg,
-  },
-  mediaRow: {
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-  },
-  mediaItem: {
-    borderRadius: BORDER_RADIUS.md,
-    overflow: 'hidden',
-    borderWidth: 2,
-    position: 'relative',
-  },
-  mediaImage: {
-    width: '100%',
-    height: '100%',
-  },
-  videoIndicator: {
+  overlay: {
     position: 'absolute',
-    bottom: SPACING.xs,
-    left: SPACING.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: BORDER_RADIUS.sm,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 2,
-    gap: SPACING.xs,
-  },
-  videoDuration: {
-    ...TYPOGRAPHY.styles.caption,
-    fontSize: 10,
-  },
-  selectionIndicator: {
-    position: 'absolute',
-    top: SPACING.xs,
-    right: SPACING.xs,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    alignItems: 'center',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
-  },
-  selectionNumber: {
-    ...TYPOGRAPHY.styles.caption,
-    fontWeight: '600',
-    fontSize: 11,
-  },
-  footer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: SPACING.lg,
-    borderTopWidth: 1,
+    paddingHorizontal: SPACING.xl,
+    zIndex: 9999,
   },
-  selectionCount: {
-    ...TYPOGRAPHY.styles.body,
+  modalContainer: {
+    borderRadius: 14,
+    width: screenWidth * 0.65,
+    maxWidth: 270,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.35,
+    shadowRadius: 35,
+    elevation: 25,
   },
-}); 
+  header: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: FONT_WEIGHTS.semibold,
+    marginBottom: SPACING.xs,
+    textAlign: 'center',
+    color: '#000000',
+  },
+  subtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    color: '#666666',
+  },
+  actionButton: {
+    paddingVertical: SPACING.md + 2,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E0E0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 44,
+  },
+  firstActionButton: {
+    paddingVertical: SPACING.md + 2,
+    borderTopWidth: 0.5,
+    borderTopColor: '#E0E0E0',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E0E0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 44,
+  },
+  actionButtonText: {
+    fontSize: 17,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: '#007AFF',
+  },
+  cancelButton: {
+    paddingVertical: SPACING.md + 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 44,
+    borderTopWidth: 0.5,
+    borderTopColor: '#E0E0E0',
+  },
+  cancelButtonText: {
+    fontSize: 17,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: '#007AFF',
+  },
+});
+
+   

@@ -104,6 +104,7 @@ export type TravelIconName =
   | 'download'
   | 'upload'
   | 'sync'
+  | 'trash'
   
   // User & Social
   | 'user'
@@ -145,7 +146,9 @@ export type TravelIconName =
   | 'help-circle'
   | 'log-out'
   | 'plus'
-  | 'grid';
+  | 'grid'
+  | 'trash-outline'
+  | 'ellipsis-horizontal';
 
 // Icon mapping for travel-themed presets
 const TRAVEL_ICON_MAP: Record<TravelIconName, { library: IconLibrary; name: string }> = {
@@ -252,9 +255,12 @@ const TRAVEL_ICON_MAP: Record<TravelIconName, { library: IconLibrary; name: stri
   eyeOff: { library: 'Ionicons', name: 'eye-off-outline' },
   star: { library: 'Ionicons', name: 'star-outline' },
   flag: { library: 'Ionicons', name: 'flag-outline' },
+  trash: { library: 'Ionicons', name: 'trash-outline' },
   
   // Missing icons that were causing warnings
   'chevron-right': { library: 'Ionicons', name: 'chevron-forward-outline' },
+  'trash-outline': { library: 'Ionicons', name: 'trash-outline' },
+  'ellipsis-horizontal': { library: 'Ionicons', name: 'ellipsis-horizontal' },
   'verified': { library: 'Ionicons', name: 'checkmark-circle' },
   'award': { library: 'Ionicons', name: 'trophy-outline' },
   'notebook': { library: 'Ionicons', name: 'book-outline' },

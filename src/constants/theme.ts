@@ -73,18 +73,18 @@ export const SHADOWS = {
 
 // Light theme colors
 export const LIGHT_COLORS = {
-  // Primary colors - Travel-inspired blues and earth tones
+  // Primary colors - Warmer, more emotional blues with sunset touches
   primary: {
-    50: '#f0f9ff',
-    100: '#e0f2fe',
-    200: '#bae6fd',
-    300: '#7dd3fc',
-    400: '#38bdf8',
-    500: '#0ea5e9', // Main primary
-    600: '#0284c7',
-    700: '#0369a1',
-    800: '#075985',
-    900: '#0c4a6e',
+    50: '#fef7ed',
+    100: '#fef2e0',
+    200: '#fce1c2',
+    300: '#f9c597',
+    400: '#f5a66b',
+    500: '#f4845f', // Main primary - warm coral
+    600: '#ef6144',
+    700: '#dc5532',
+    800: '#b8482c',
+    900: '#953f29',
   },
   
   // Secondary colors - Warm earth tones
@@ -427,4 +427,13 @@ export const COMPONENTS = {
     height: 80,
     paddingBottom: SPACING.md,
   },
+} as const;
+
+// Emotional gradients for enhanced feeling
+export const EMOTIONAL_GRADIENTS = {
+  warmSunset: ['#f4845f', '#f5a66b'],
+  dreamyPink: ['#f8d7da', '#f5c2c7', '#f5a66b'],
+  goldenHour: ['#fef7ed', '#fce1c2', '#f4845f'],
+  heartwarming: ['#fff0f3', '#fce7f3', '#f8d7da'],
+  adventureSpirit: ['#fff7ed', '#fef2e0', '#f4845f'],
 } as const; 

@@ -72,6 +72,9 @@ export const formatTripDates = (start: Date, end: Date): string => {
 };
 
 // Helper to get day of week
-export const getDayOfWeek = (date: Date): string => {
+export const getDayOfWeek = (date: Date | undefined): string => {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+    return 'N/A';
+  }
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 }; 

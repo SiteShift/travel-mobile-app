@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
+  InteractionManager,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,7 +21,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { Icon } from '../../src/components/Icon';
 import { TripCreationModal } from '../../src/components/TripCreationModal';
-import { FONT_WEIGHTS, SPACING, BORDER_RADIUS } from '../../src/constants/theme';
+import { MediaPicker, MediaItem } from '../../src/components/MediaPicker';
+import { FONT_WEIGHTS, SPACING, BORDER_RADIUS, EMOTIONAL_GRADIENTS } from '../../src/constants/theme';
+import * as Haptics from 'expo-haptics';
 import { getMockDataForUser } from '../../src/data/mockData';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -52,19 +55,19 @@ const createPlaceholderTrips = (): Trip[] => [
   {
     id: 'placeholder-1',
     type: 'placeholder',
-    title: 'Create Your Book',
+    title: 'Create Book',
     buttonText: 'Add Trip',
   },
   {
     id: 'placeholder-2', 
     type: 'placeholder',
-    title: 'Log Your Adventures',
+    title: 'Create Book',
     buttonText: 'Add Trip',
   },
   {
     id: 'placeholder-3',
     type: 'placeholder', 
-    title: 'Dream Big & Explore',
+    title: 'Create Book',
     buttonText: 'Add Trip',
   },
 ];
@@ -85,6 +88,7 @@ export default function HomeTab() {
   const [showTripCreationModal, setShowTripCreationModal] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [showTripOptionsModal, setShowTripOptionsModal] = useState(false);
+  const [showEditCoverModal, setShowEditCoverModal] = useState(false);
   
   // Get user level data
   const userData = getMockDataForUser('user1');
@@ -101,7 +105,7 @@ export default function HomeTab() {
       placeholders.push({
         id: `placeholder-${i + 1}`,
         type: 'placeholder',
-        title: i === 0 ? 'Create Your Book' : i === 1 ? 'Log Your Adventures' : 'Dream Big & Explore',
+        title: 'Create Book',
         buttonText: 'Add Trip',
       });
     }
@@ -189,6 +193,9 @@ export default function HomeTab() {
   }, [data, trips.length, isDark]);
 
   const handleTripPress = useCallback((trip: Trip) => {
+    // Add gentle haptic feedback for emotional connection
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
     if (trip.type === 'placeholder') {
       // Show trip creation modal
       handleCreateTrip();
@@ -204,6 +211,8 @@ export default function HomeTab() {
   }, []);
 
   const handleTripOptions = useCallback((tripId: string) => {
+    // Add subtle haptic feedback for menu interaction
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedTripId(tripId);
     setShowTripOptionsModal(true);
   }, []);
@@ -247,10 +256,65 @@ export default function HomeTab() {
 
   const handleEditCover = useCallback(() => {
     setShowTripOptionsModal(false);
-    setSelectedTripId(null);
-    // TODO: Implement edit cover functionality
-    Alert.alert('Coming Soon', 'Edit cover functionality will be available soon!');
+    // Keep selectedTripId for updating the cover later
+    setShowEditCoverModal(true);
   }, []);
+
+  const handleCoverImageSelect = useCallback(async (media: MediaItem[]) => {
+    if (!selectedTripId || media.length === 0) return;
+
+    const newCoverImage = media[0].uri;
+    
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Update AsyncStorage
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const existingData = await AsyncStorage.getItem(`trip_${selectedTripId}`);
+      
+      if (existingData) {
+        const tripData = JSON.parse(existingData);
+        tripData.coverImage = newCoverImage;
+        await AsyncStorage.setItem(`trip_${selectedTripId}`, JSON.stringify(tripData));
+        
+        // Update local state
+        setTrips(prevTrips => 
+          prevTrips.map(trip => {
+            if (trip.id === selectedTripId) {
+              return {
+                ...trip,
+                image: { uri: newCoverImage },
+                coverImage: newCoverImage,
+              };
+            }
+            return trip;
+          })
+        );
+
+        setData(prevData => 
+          prevData.map(trip => {
+            if (trip.id === selectedTripId) {
+              return {
+                ...trip,
+                image: { uri: newCoverImage },
+                coverImage: newCoverImage,
+              };
+            }
+            return trip;
+          })
+        );
+
+        console.log('✅ Cover image updated successfully for trip:', selectedTripId);
+        Alert.alert('Success', 'Cover image updated successfully!');
+      }
+    } catch (error) {
+      console.error('❌ Error updating cover image:', error);
+      Alert.alert('Error', 'Failed to update cover image. Please try again.');
+    } finally {
+      setShowEditCoverModal(false);
+      setSelectedTripId(null);
+    }
+  }, [selectedTripId]);
 
   const handleTripCreation = useCallback(async (tripData: {
     title: string;
@@ -314,7 +378,7 @@ export default function HomeTab() {
     }
   }, [data.length, trips.length]);
 
-  const TripCard = ({ index }: { index: number }) => {
+  const TripCard = React.memo(({ index }: { index: number }) => {
     const trip = data[index];
     if (!trip) return null;
 
@@ -373,11 +437,14 @@ export default function HomeTab() {
               {/* Dotted border overlay */}
               <View style={[styles.dottedBorder, { borderColor: colors.border.primary }]} />
               
-              {/* Plus icon in circle */}
+              {/* Plus icon in circle with emotional gradient */}
               <View style={styles.placeholderContent}>
-                <View style={[styles.plusIconContainer, { backgroundColor: colors.primary[100] }]}>
+                <LinearGradient
+                  colors={['#fff0f3', '#fce7f3']}
+                  style={styles.plusIconContainer}
+                >
                   <Icon name="plus" size="xl" color={colors.primary[600]} />
-                </View>
+                </LinearGradient>
                 <Text style={[styles.placeholderTitle, { color: colors.text.primary }]}>
                   {trip.title}
                 </Text>
@@ -397,14 +464,18 @@ export default function HomeTab() {
               <Pressable 
                 style={({ pressed }) => [
                   styles.tripButton,
-                  { backgroundColor: colors.primary[500] },
                   pressed && styles.tripButtonPressed,
                 ]} 
                 onPress={() => handleTripPress(trip)}
               >
-                <Text style={[styles.tripButtonText, { color: 'white' }]}>
-                  {trip.buttonText}
-                </Text>
+                <LinearGradient
+                  colors={['#f4845f', '#ef6144']}
+                  style={styles.tripButtonGradient}
+                >
+                  <Text style={[styles.tripButtonText, { color: 'white' }]}>
+                    {trip.buttonText}
+                  </Text>
+                </LinearGradient>
               </Pressable>
             </Animated.View>
           </Animated.View>
@@ -443,8 +514,8 @@ export default function HomeTab() {
               onPress={() => handleTripOptions(trip.id)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <View style={[styles.tripOptionsButtonBackground, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-                <Icon name="ellipsis-horizontal" size="sm" color="white" />
+              <View style={[styles.tripOptionsButtonBackground, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+                <Icon name="ellipsis-horizontal" size="sm" color="rgba(255,255,255,0.8)" />
               </View>
             </TouchableOpacity>
             
@@ -467,21 +538,25 @@ export default function HomeTab() {
           ]}>
             <Pressable 
               style={({ pressed }) => [
-                styles.tripButton, 
-                { backgroundColor: colors.surface.primary },
+                styles.tripButton,
                 pressed && styles.tripButtonPressed, 
               ]} 
               onPress={() => handleTripPress(trip)}
             >
-              <Text style={[styles.tripButtonText, { color: colors.text.primary }]}>
-                {trip.buttonText}
-              </Text>
+              <LinearGradient
+                colors={['rgba(255,255,255,1)', 'rgba(248,250,252,1)']}
+                style={styles.tripButtonGradient}
+              >
+                <Text style={[styles.tripButtonText, { color: colors.text.primary }]}>
+                  {trip.buttonText}
+                </Text>
+              </LinearGradient>
             </Pressable>
           </Animated.View>
         </Animated.View>
       </View>
     );
-  };
+  });
 
   const renderDots = () => {
     if (trips.length === 0) return null;
@@ -626,6 +701,16 @@ export default function HomeTab() {
           index 
         })}
         style={styles.carousel}
+        // Performance optimizations
+        initialNumToRender={3}
+        maxToRenderPerBatch={1}
+        windowSize={5}
+        removeClippedSubviews={false}
+        updateCellsBatchingPeriod={100}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10,
+        }}
       />
       
       {/* Trip Creation Modal */}
@@ -669,6 +754,21 @@ export default function HomeTab() {
           </View>
         </Pressable>
       </Modal>
+      
+      {/* Edit Cover Media Picker */}
+      <MediaPicker
+        visible={showEditCoverModal}
+        onClose={() => {
+          setShowEditCoverModal(false);
+          setSelectedTripId(null);
+        }}
+        onMediaSelect={handleCoverImageSelect}
+        maxSelection={1}
+        allowsEditing={true}
+        includeVideos={false}
+        showCamera={true}
+        showLibrary={true}
+      />
     </View>
   );
 }
@@ -766,6 +866,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderStyle: 'dashed',
+    // Enhanced 3D effect for placeholder cards
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
   },
   dottedBorder: {
     position: 'absolute',
@@ -792,10 +898,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.xl,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+    // Add subtle border for 3D effect
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   placeholderTitle: {
     fontSize: 28,
@@ -882,25 +991,45 @@ const styles = StyleSheet.create({
     elevation: 999,
   },
   tripButton: {
+    borderRadius: 100,
+    minWidth: 140,
+    height: BUTTON_HEIGHT,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 12,
+    // Add subtle border for 3D effect
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  tripButtonGradient: {
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
     borderRadius: 100,
     minWidth: 140,
     height: BUTTON_HEIGHT,
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 6,
+    alignItems: 'center',
+    // Add inner 3D effect
+    shadowColor: 'rgba(0,0,0,0.1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   tripButtonPressed: {
-    opacity: 0.8,
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }, { translateY: 2 }],
   },
   tripButtonText: {
     fontSize: 18,
     fontWeight: FONT_WEIGHTS.medium,
     textAlign: 'center',
+    // Add subtle text shadow for 3D effect
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   levelIndicatorContainer: {
     position: 'absolute',
