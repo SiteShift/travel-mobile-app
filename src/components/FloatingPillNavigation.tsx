@@ -51,6 +51,10 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
   
   // Single scale animation ref for active tab
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  // Animation values for special button (always declare at top level)
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const shadowOpacity = useRef(new Animated.Value(1)).current;
 
   const navigationItems = [
     {
@@ -107,25 +111,79 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
     }
   };
 
-  const renderSpecialButton = (item: any) => (
-    <TouchableOpacity
-      key={item.id}
-      onPress={() => handleNavPress(item.route, item.id)}
-      style={{ alignItems: 'center', justifyContent: 'center' }}
-      activeOpacity={0.8}
-    >
-      <LinearGradient
-        colors={['#FF4444', '#FF8800', '#0099FF', '#00CC44']}
-        start={{ x: 0, y: 1 }}
-        end={{ x: 0, y: 0 }}
-        style={styles.gradientButton}
+    const renderSpecialButton = (item: any) => {
+    const handlePressIn = () => {
+      // Quick haptic feedback
+      Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Super fast press animation
+      Animated.parallel([
+        Animated.timing(buttonScale, {
+          toValue: 0.94,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shadowOpacity, {
+          toValue: 0.4,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    };
+
+    const handlePressOut = () => {
+      // Quick bounce-back
+      Animated.parallel([
+        Animated.spring(buttonScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 400,
+          friction: 8,
+        }),
+        Animated.timing(shadowOpacity, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    };
+
+    const handlePress = () => {
+      // Single strong haptic on press
+      Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Heavy);
+      handleNavPress(item.route, item.id);
+    };
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={styles.specialButtonContainer}
+        activeOpacity={1} // Disable default opacity change
       >
-        <View style={styles.innerWhiteCircle}>
-          <SvgXml xml={item.svg} width={32} height={32} />
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
+        {/* Animated button without gradient background */}
+        <Animated.View 
+          style={[
+            styles.outerShadow,
+            {
+              opacity: shadowOpacity,
+              transform: [{ scale: buttonScale }],
+            },
+          ]}
+        >
+          <View style={styles.simpleButton}>
+            <View style={styles.innerWhiteCircle}>
+              <View style={styles.iconContainer}>
+                <SvgXml xml={item.svg} width={32} height={32} />
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderRegularButton = (item: any) => {
     // Keep icons black when active, use sunset color for background/indicator
@@ -172,8 +230,10 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
     );
   };
 
-  // Hide navigation on camera screen
-  if (pathname.includes('/camera')) {
+  // Hide navigation on camera screen (check after all hooks)
+  const shouldHideNavigation = pathname.includes('/camera');
+
+  if (shouldHideNavigation) {
     return null;
   }
 
@@ -229,7 +289,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 50,
     marginHorizontal: 32,
-    borderWidth: 1,
+    borderWidth: 0.1,
     minWidth: screenWidth - 64,
   },
   regularButtonWrapper: {
@@ -262,20 +322,48 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
   },
-  gradientButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+  specialButtonContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    // Removed static transform - now handled by animations
+  },
+  outerShadow: {
+    // Enhanced outer shadow for more vibrant depth
+    shadowColor: '#FF5555',
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+    borderRadius: 32,
+  },
+  simpleButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FF6B6B', // Solid coral color for the main button
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Clean shadow for the button
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 7,
   },
   innerWhiteCircle: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'white',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    // Enhanced shadow for better definition
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -284,6 +372,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 6,
+  },
+  iconContainer: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // More defined inset effect for better contrast
+    backgroundColor: 'rgba(0, 0, 0, 0.025)',
+    borderWidth: 0.2,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
 });
 

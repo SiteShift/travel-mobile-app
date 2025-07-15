@@ -646,7 +646,16 @@ export default function HomeTab() {
     <View style={styles.levelIndicatorContainer}>
       <View style={[styles.levelIndicatorWrapper, { backgroundColor: colors.surface.tertiary }]}>
         <View style={styles.levelContent}>
-          <Icon name="adventure" size="sm" color={colors.text.primary} />
+          <View style={styles.adventureIconContainer}>
+            <LinearGradient
+              colors={['#FF6B85', '#FF8A6B', '#FF6B6B']} // Beautiful sunset gradient
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.adventureIconGradient}
+            >
+              <Icon name="adventure" size="sm" color="#FFFFFF" />
+            </LinearGradient>
+          </View>
           <View style={styles.levelTextContainer}>
             <Text style={[styles.levelNumber, { color: colors.text.primary }]}>
               Level 1
@@ -1029,8 +1038,8 @@ const styles = StyleSheet.create({
   },
   levelIndicatorContainer: {
     position: 'absolute',
-    top: screenHeight * 0.08,
-    right: SPACING.md,
+    top: screenHeight * 0.073,
+    right: SPACING.md - 4,
     zIndex: 10,
     height: 50,
     justifyContent: 'center',
@@ -1051,6 +1060,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.xs,
   },
+  adventureIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF6B85',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+    // Add a subtle outer glow effect
+    borderWidth: 2,
+    borderColor: 'rgba(255, 107, 133, 0.3)',
+  },
+  adventureIconGradient: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   levelTextContainer: {
     alignItems: 'center',
   },
@@ -1068,8 +1104,8 @@ const styles = StyleSheet.create({
   },
   tripMemoContainer: {
     position: 'absolute',
-    top: screenHeight * 0.08,
-    left: SPACING.md,
+    top: screenHeight * 0.073,
+    left: SPACING.md - 8, // Moved further to the left
     zIndex: 10,
     height: 50,
     flexDirection: 'row', // Add flexDirection row
@@ -1077,15 +1113,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start', // Align to the left
   },
   tripMemoText: {
-    fontSize: 20, // Reduced from 22 to 20 for slightly smaller text
+    fontSize: 22, // Increased from 20 to 22 for slightly bigger text
     fontWeight: FONT_WEIGHTS.semibold,
     fontFamily: 'Merienda',
-    letterSpacing: -1, // Reduced from -0.5 to -1 for tighter letter spacing
+    letterSpacing: -1, // Kept tight letter spacing
   },
   tripMemoLogo: {
-    width: 40, // Increased from 36 to 40 for slightly bigger logo
-    height: 40, // Increased from 36 to 40 for slightly bigger logo
-    marginRight: -2, // Negative margin to make elements slightly overlap
+    width: 44, // Increased from 40 to 44 for slightly bigger logo
+    height: 44, // Increased from 40 to 44 for slightly bigger logo
+    marginRight: -6, // Increased negative margin to reduce space between logo and text
   },
   bookPagesContainer: {
     position: 'absolute',
