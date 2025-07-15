@@ -1,18 +1,16 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
+  Pressable,
   StyleSheet,
   Dimensions,
-  FlatList,
-  Pressable,
-  Animated,
   StatusBar,
-  Platform,
   TouchableOpacity,
-  Alert,
+  Animated,
+  FlatList,
   Modal,
-  InteractionManager,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -563,7 +561,7 @@ export default function HomeTab() {
     
     return (
       <View style={styles.dotsContainer}>
-        <View style={[styles.dotsWrapper, { backgroundColor: colors.surface.tertiary }]}>
+        <View style={[styles.dotsWrapper]}>
           {trips.map((_, index) => {
             const createInputRange = (baseIndex: number) => [
               (baseIndex - 1) * ITEM_SPACING,
@@ -633,6 +631,11 @@ export default function HomeTab() {
 
   const renderTripMemo = () => (
     <View style={styles.tripMemoContainer}>
+      <Image
+        source={require('../../public/assets/TripMemo-parrot-logo-Photoroom_compressed.webp')}
+        style={styles.tripMemoLogo}
+        resizeMode="contain"
+      />
       <Text style={[styles.tripMemoText, { color: colors.text.primary }]}>
         TripMemo
       </Text>
@@ -781,24 +784,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
-    top: screenHeight * 0.08,
+    top: screenHeight * 0.125, // Moved very slightly down from 0.12 to 0.125
     left: 0,
     right: 0,
     zIndex: 10,
-    height: 50,
+    height: 40, // Reduced from 50 to 40 for smaller container
   },
   dotsWrapper: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    // Removed all container styling - no padding, background, shadows, etc.
   },
   dotContainer: {
     flexDirection: 'row',
@@ -807,31 +803,31 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 6, // Reduced from 8 to 6 for more subtle appearance
+    height: 6, // Reduced from 8 to 6
+    borderRadius: 3, // Reduced from 4 to 3
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 1 }, // Reduced shadow for subtlety
+    shadowOpacity: 0.15, // Reduced from 0.25 to 0.15
+    shadowRadius: 2, // Reduced from 4 to 2
+    elevation: 2, // Reduced from 4 to 2
   },
   activeDot: {
     position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 6, // Reduced from 8 to 6
+    height: 6, // Reduced from 8 to 6
+    borderRadius: 3, // Reduced from 4 to 3
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 }, // Slightly reduced shadow
+    shadowOpacity: 0.3, // Reduced from 0.4 to 0.3
+    shadowRadius: 4, // Reduced from 6 to 4
+    elevation: 4, // Reduced from 6 to 4
   },
   dotGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 5,
+    borderRadius: 3, // Reduced from 4 to 3
   },
   carousel: {
     flex: 1,
@@ -1076,14 +1072,20 @@ const styles = StyleSheet.create({
     left: SPACING.md,
     zIndex: 10,
     height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: 'row', // Add flexDirection row
+    alignItems: 'center', // Center align items vertically
+    justifyContent: 'flex-start', // Align to the left
   },
   tripMemoText: {
-    fontSize: 24,
+    fontSize: 20, // Reduced from 22 to 20 for slightly smaller text
     fontWeight: FONT_WEIGHTS.semibold,
     fontFamily: 'Merienda',
-    letterSpacing: -0.5,
+    letterSpacing: -1, // Reduced from -0.5 to -1 for tighter letter spacing
+  },
+  tripMemoLogo: {
+    width: 40, // Increased from 36 to 40 for slightly bigger logo
+    height: 40, // Increased from 36 to 40 for slightly bigger logo
+    marginRight: -2, // Negative margin to make elements slightly overlap
   },
   bookPagesContainer: {
     position: 'absolute',
