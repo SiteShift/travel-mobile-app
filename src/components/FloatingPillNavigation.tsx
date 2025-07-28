@@ -56,6 +56,13 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
   const buttonScale = useRef(new Animated.Value(1)).current;
   const shadowOpacity = useRef(new Animated.Value(1)).current;
 
+  // Reset animations when component becomes visible (after returning from camera)
+  useEffect(() => {
+    // Reset button animations to ensure clean state
+    buttonScale.setValue(1);
+    shadowOpacity.setValue(1);
+  }, [pathname, buttonScale, shadowOpacity]);
+
   const navigationItems = [
     {
       id: 'journal',

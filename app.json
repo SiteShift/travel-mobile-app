@@ -29,6 +29,9 @@
     "assetBundlePatterns": [
       "assets/**/*",
       "public/**/*"
+    ],
+    "plugins": [
+      "expo-router"
     ]
   }
 }
