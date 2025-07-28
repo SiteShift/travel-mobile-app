@@ -19,6 +19,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { Icon } from '../../src/components/Icon';
 import { TripCreationModal } from '../../src/components/TripCreationModal';
+import { AnimatedBookCreation } from '../../src/components/AnimatedBookCreation';
 import { MediaPicker, MediaItem } from '../../src/components/MediaPicker';
 import { FONT_WEIGHTS, SPACING, BORDER_RADIUS, EMOTIONAL_GRADIENTS } from '../../src/constants/theme';
 import * as Haptics from 'expo-haptics';
@@ -726,7 +727,7 @@ export default function HomeTab() {
       />
       
       {/* Trip Creation Modal */}
-      <TripCreationModal
+      <AnimatedBookCreation
         visible={showTripCreationModal}
         onClose={() => setShowTripCreationModal(false)}
         onCreateTrip={handleTripCreation}

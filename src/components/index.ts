@@ -130,4 +130,5 @@ export {
 export { FloatingPillNavigation } from './FloatingPillNavigation';
 
 // Trip Management
-export { TripCreationModal } from './TripCreationModal'; 
+export { TripCreationModal } from './TripCreationModal';
+export { AnimatedBookCreation } from './AnimatedBookCreation'; 
