@@ -82,16 +82,33 @@ export default function HomeTab() {
   const { colors, isDark } = useTheme();
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  
+  // Animation refs for level pill
+  const levelPillScale = useRef(new Animated.Value(1)).current;
+  const levelPillShadow = useRef(new Animated.Value(1)).current;
   const [trips, setTrips] = useState<Trip[]>(createPlaceholderTrips());
   const [data, setData] = useState<Trip[]>([]);
   const [showTripCreationModal, setShowTripCreationModal] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [showTripOptionsModal, setShowTripOptionsModal] = useState(false);
   const [showEditCoverModal, setShowEditCoverModal] = useState(false);
+  const [showLevelsModal, setShowLevelsModal] = useState(false);
   
   // Get user level data
   const userData = getMockDataForUser('user1');
   const userLevel = userData.user?.stats.level || 1;
+
+  // Levels system data
+  const levelsData = [
+    { level: 1, name: 'Wanderer', character: '🚶‍♂️', unlocked: userLevel >= 1, description: 'Starting your journey', color: '#FF6B6B' },
+    { level: 2, name: 'Explorer', character: '🧭', unlocked: userLevel >= 2, description: 'Finding new paths', color: '#FF8A65' },
+    { level: 3, name: 'Adventurer', character: '🎒', unlocked: userLevel >= 3, description: 'Ready for anything', color: '#FFB74D' },
+    { level: 4, name: 'Voyager', character: '⛵', unlocked: userLevel >= 4, description: 'Sailing to new horizons', color: '#81C784' },
+    { level: 5, name: 'Nomad', character: '🏕️', unlocked: userLevel >= 5, description: 'Home is where you are', color: '#64B5F6' },
+    { level: 6, name: 'Globetrotter', character: '🌍', unlocked: userLevel >= 6, description: 'Conquering continents', color: '#BA68C8' },
+    { level: 7, name: 'Legend', character: '👑', unlocked: userLevel >= 7, description: 'Master of all journeys', color: '#FFD54F' },
+    { level: 8, name: 'Mythic', character: '🌟', unlocked: userLevel >= 8, description: 'Beyond ordinary travel', color: '#F48FB1' },
+  ];
 
   // Dynamic trip management
   const updateTripsData = useCallback((newTrips: Trip[]) => {
@@ -643,36 +660,201 @@ export default function HomeTab() {
     </View>
   );
 
+  const handleLevelPillPressIn = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    Animated.parallel([
+      Animated.timing(levelPillScale, {
+        toValue: 0.94,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(levelPillShadow, {
+        toValue: 0.4,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleLevelPillPressOut = () => {
+    Animated.parallel([
+      Animated.spring(levelPillScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 400,
+        friction: 8,
+      }),
+      Animated.timing(levelPillShadow, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleLevelPillPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    
+    // Ensure button returns to normal state after press
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.spring(levelPillScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 400,
+          friction: 8,
+        }),
+        Animated.timing(levelPillShadow, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 50);
+    
+    setShowLevelsModal(true);
+  };
+
   const renderLevelIndicator = () => (
     <View style={styles.levelIndicatorContainer}>
-      <View style={[styles.levelIndicatorWrapper, { backgroundColor: colors.surface.tertiary }]}>
-        <View style={styles.levelContent}>
-          <View style={styles.adventureIconContainer}>
-            <LinearGradient
-              colors={['#FF6B85', '#FF8A6B', '#FF6B6B']} // Beautiful sunset gradient
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.adventureIconGradient}
-            >
-              <Icon name="adventure" size="sm" color="#FFFFFF" />
-            </LinearGradient>
+      <Animated.View 
+        style={[
+          styles.levelIndicatorAnimatedWrapper,
+          {
+            opacity: levelPillShadow,
+            transform: [{ scale: levelPillScale }],
+          },
+        ]}
+      >
+        <TouchableOpacity 
+          style={[styles.levelIndicatorWrapper, { backgroundColor: colors.surface.tertiary }]}
+          onPress={handleLevelPillPress}
+          onPressIn={handleLevelPillPressIn}
+          onPressOut={handleLevelPillPressOut}
+          activeOpacity={1}
+        >
+          <View style={styles.levelContent}>
+            <View style={styles.adventureIconContainer}>
+              <LinearGradient
+                colors={['#FF6B85', '#FF8A6B', '#FF6B6B']} // Beautiful sunset gradient
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.adventureIconGradient}
+              >
+                <Icon name="adventure" size="sm" color="#FFFFFF" />
+              </LinearGradient>
+            </View>
+            <View style={styles.levelTextContainer}>
+              <Text style={[styles.levelNumber, { color: colors.text.primary }]}>
+                Level 1
+              </Text>
+              <Text style={[styles.levelText, { color: colors.text.primary }]}>
+                Adventurer
+              </Text>
+            </View>
           </View>
-          <View style={styles.levelTextContainer}>
-            <Text style={[styles.levelNumber, { color: colors.text.primary }]}>
-              Level 1
-            </Text>
-            <Text style={[styles.levelText, { color: colors.text.primary }]}>
-              Adventurer
-            </Text>
-          </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </Animated.View>
     </View>
   );
 
   const handleProfilePress = () => {
     router.push('/(tabs)/profile');
   };
+
+  const renderLevelsModal = () => (
+    <Modal
+      visible={showLevelsModal}
+      animationType="fade"
+      transparent={true}
+      statusBarTranslucent={true}
+    >
+      <View style={styles.levelsModalOverlay}>
+        <View style={[styles.levelsModalContainer, { backgroundColor: colors.background.primary }]}>
+          {/* Header */}
+          <View style={styles.levelsModalHeader}>
+            <Text style={[styles.levelsModalTitle, { color: colors.text.primary }]}>
+              Character Collection
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowLevelsModal(false)}
+              style={styles.levelsModalCloseButton}
+            >
+              <Icon name="close" size="md" color="text" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={styles.levelsProgressContainer}>
+            <Text style={[styles.levelsProgressText, { color: colors.text.secondary }]}>
+              Level {userLevel} • {Math.round((userLevel / 8) * 100)}% Complete
+            </Text>
+            <View style={[styles.levelsProgressBarContainer, { backgroundColor: colors.surface.secondary }]}>
+              <Animated.View 
+                style={[
+                  styles.levelsProgressBar, 
+                  { 
+                    backgroundColor: '#FF6B6B',
+                    width: `${(userLevel / 8) * 100}%`
+                  }
+                ]} 
+              />
+            </View>
+          </View>
+
+          {/* Characters Grid */}
+          <FlatList
+            data={levelsData}
+            numColumns={2}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.levelsGrid}
+            renderItem={({ item }) => (
+              <View style={styles.levelCard}>
+                <LinearGradient
+                  colors={item.unlocked ? [item.color, `${item.color}90`] : ['#E0E0E0', '#F5F5F5']}
+                  style={[
+                    styles.levelCardGradient,
+                    !item.unlocked && styles.levelCardLocked
+                  ]}
+                >
+                  <View style={styles.levelCardContent}>
+                    <Text style={styles.levelCardCharacter}>
+                      {item.unlocked ? item.character : '🔒'}
+                    </Text>
+                    <Text style={[
+                      styles.levelCardLevel,
+                      { color: item.unlocked ? '#FFFFFF' : '#999999' }
+                    ]}>
+                      Level {item.level}
+                    </Text>
+                    <Text style={[
+                      styles.levelCardName,
+                      { color: item.unlocked ? '#FFFFFF' : '#999999' }
+                    ]}>
+                      {item.name}
+                    </Text>
+                    <Text style={[
+                      styles.levelCardDescription,
+                      { color: item.unlocked ? 'rgba(255,255,255,0.8)' : '#CCCCCC' }
+                    ]}>
+                      {item.description}
+                    </Text>
+                    {item.unlocked && (
+                      <View style={styles.levelCardUnlockedBadge}>
+                        <Text style={styles.levelCardUnlockedText}>UNLOCKED</Text>
+                      </View>
+                    )}
+                  </View>
+                </LinearGradient>
+              </View>
+            )}
+            keyExtractor={(item) => item.level.toString()}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
@@ -782,6 +964,9 @@ export default function HomeTab() {
         showCamera={true}
         showLibrary={true}
       />
+      
+      {/* Levels Modal */}
+      {renderLevelsModal()}
     </View>
   );
 }
@@ -1046,15 +1231,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  levelIndicatorAnimatedWrapper: {
+    // Subtle 3D shadow for animated wrapper
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    borderRadius: 100,
+  },
   levelIndicatorWrapper: {
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.md,
     borderRadius: 100,
+    // Very subtle 3D effects
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    // Very subtle border for minimal depth
+    borderWidth: 0.3,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
   },
   levelContent: {
     flexDirection: 'row',
@@ -1067,14 +1268,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FF6B85',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
-    // Add a subtle outer glow effect
-    borderWidth: 2,
-    borderColor: 'rgba(255, 107, 133, 0.3)',
+    // Very subtle 3D shadow effects
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    // Very subtle border
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   adventureIconGradient: {
     width: 28,
@@ -1082,11 +1284,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    // Very subtle inner shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    // Very subtle inner border
+    borderWidth: 0.3,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   levelTextContainer: {
     alignItems: 'center',
@@ -1190,5 +1396,119 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: FONT_WEIGHTS.medium,
     marginLeft: SPACING.md,
+  },
+  // Levels Modal Styles
+  levelsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+  },
+  levelsModalContainer: {
+    width: '100%',
+    maxHeight: '85%',
+    borderRadius: BORDER_RADIUS.xl,
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 15,
+  },
+  levelsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  levelsModalTitle: {
+    fontSize: 28,
+    fontWeight: FONT_WEIGHTS.bold,
+    fontFamily: 'Merienda',
+  },
+  levelsModalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  levelsProgressContainer: {
+    marginBottom: SPACING.xl,
+  },
+  levelsProgressText: {
+    fontSize: 16,
+    fontWeight: FONT_WEIGHTS.medium,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  levelsProgressBarContainer: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  levelsProgressBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  levelsGrid: {
+    paddingHorizontal: SPACING.xs,
+  },
+  levelCard: {
+    flex: 0.5,
+    margin: SPACING.xs,
+  },
+  levelCardGradient: {
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    minHeight: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  levelCardLocked: {
+    opacity: 0.6,
+  },
+  levelCardContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelCardCharacter: {
+    fontSize: 40,
+    marginBottom: SPACING.sm,
+  },
+  levelCardLevel: {
+    fontSize: 14,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginBottom: SPACING.xs,
+  },
+  levelCardName: {
+    fontSize: 16,
+    fontWeight: FONT_WEIGHTS.bold,
+    textAlign: 'center',
+    marginBottom: SPACING.xs,
+  },
+  levelCardDescription: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  levelCardUnlockedBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  levelCardUnlockedText: {
+    fontSize: 10,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 }); 

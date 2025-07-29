@@ -158,6 +158,24 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
     const handlePress = () => {
       // Single strong haptic on press
       Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Heavy);
+      
+      // Ensure button returns to normal state after press
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.spring(buttonScale, {
+            toValue: 1,
+            useNativeDriver: true,
+            tension: 400,
+            friction: 8,
+          }),
+          Animated.timing(shadowOpacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }, 50);
+      
       handleNavPress(item.route, item.id);
     };
 
@@ -180,13 +198,18 @@ export const FloatingPillNavigation: React.FC<FloatingPillNavigationProps> = ({
             },
           ]}
         >
-          <View style={styles.simpleButton}>
+          <LinearGradient
+            colors={['#FF8A65', '#FF6B6B', '#FF5252']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradientButton}
+          >
             <View style={styles.innerWhiteCircle}>
               <View style={styles.iconContainer}>
                 <SvgXml xml={item.svg} width={32} height={32} />
               </View>
             </View>
-          </View>
+          </LinearGradient>
         </Animated.View>
       </TouchableOpacity>
     );
@@ -346,11 +369,10 @@ const styles = StyleSheet.create({
     elevation: 8,
     borderRadius: 32,
   },
-  simpleButton: {
+  gradientButton: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#FF6B6B', // Solid coral color for the main button
     alignItems: 'center',
     justifyContent: 'center',
     // Clean shadow for the button
@@ -364,9 +386,9 @@ const styles = StyleSheet.create({
     elevation: 7,
   },
   innerWhiteCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -381,9 +403,9 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   iconContainer: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     // More defined inset effect for better contrast
