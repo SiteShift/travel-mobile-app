@@ -39,9 +39,10 @@ export default function CameraScreen() {
   const takePicture = async () => {
     if (cameraRef.current) {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 1.0, // Maximum quality for ultra-sharp photos
         skipProcessing: false,
         mirror: false,
+        exif: true, // Keep EXIF data for best quality
       });
       if (photo) {
         console.log('Photo taken:', photo.uri);

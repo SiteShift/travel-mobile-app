@@ -260,7 +260,8 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [3, 4], // Book-like ratio
-        quality: 0.8,
+        quality: 1.0, // Maximum quality for ultra-sharp images
+        exif: true, // Preserve image metadata
       });
 
       if (!result.canceled && result.assets[0]) {

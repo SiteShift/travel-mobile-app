@@ -311,13 +311,15 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ['images'],
           allowsEditing: false,
-          quality: 0.8,
+          quality: 1.0, // Maximum quality for ultra-sharp images
+          exif: true, // Preserve image metadata
         });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
           allowsEditing: false,
-          quality: 0.8,
+          quality: 1.0, // Maximum quality for ultra-sharp images
+          exif: true, // Preserve image metadata
         });
       }
 
@@ -426,16 +428,6 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
   
   // Render Methods
   const renderHeader = () => {
-    // Calculate dynamic font size based on title length
-    const getDynamicFontSize = () => {
-      const titleLength = trip.title.length;
-      if (titleLength <= 15) return 38;
-      if (titleLength <= 20) return 34;
-      if (titleLength <= 25) return 30;
-      if (titleLength <= 30) return 26;
-      return 22;
-    };
-
     return (
       <PanGestureHandler 
         onGestureEvent={handleHeaderGesture}
@@ -448,78 +440,101 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
             source={typeof trip.coverImage === 'string' ? { uri: trip.coverImage } : trip.coverImage}
             style={styles.heroImage}
             contentFit="cover"
+            priority="high"
+            cachePolicy="memory-disk"
+            transition={200}
+            recyclingKey={trip.id}
+            allowDownscaling={false}
+            autoplay={false}
           />
           <LinearGradient
-            colors={['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.6)']}
+            colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.1)']}
             style={styles.heroGradient}
           />
           
-          {/* No navigation buttons in header anymore */}
-          <View style={styles.headerNav} />
-          
-          {/* Title */}
-          <View style={styles.titleContainer}>
-            <Text 
-              style={[styles.tripTitle, { fontSize: getDynamicFontSize() }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit={true}
-              minimumFontScale={0.5}
+          {/* Back Button */}
+          <View style={styles.headerNav}>
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => router.back()}
             >
-              {trip.title}
-            </Text>
-            <Text style={styles.tripDates}>
-              {formatTripDates(trip.startDate, trip.endDate)}
-            </Text>
-            <Text style={styles.photoCountTotal}>
-              {trip.totalPhotos} memories
-            </Text>
+              <Icon name="arrow-left" size="md" color="white" />
+            </TouchableOpacity>
           </View>
         </Animated.View>
       </PanGestureHandler>
     );
   };
   
-  const renderDaySelector = () => (
-    <View style={styles.daySelector}>
-      {/* View Mode Toggle */}
-      <View style={styles.daySelectorHeader}>
-        <Text style={[styles.daySelectorTitle, { color: colors.text.primary }]}>
-          Your Journey
-        </Text>
+  const renderDaySelector = () => {
+    // Calculate dynamic font size based on title length
+    const getDynamicFontSize = () => {
+      const titleLength = trip.title.length;
+      if (titleLength <= 15) return 28;
+      if (titleLength <= 20) return 26;
+      if (titleLength <= 25) return 24;
+      if (titleLength <= 30) return 22;
+      return 20;
+    };
+
+    return (
+      <View style={styles.daySelector}>
+        {/* Trip Info Header */}
+        <View style={styles.daySelectorHeader}>
+          <View style={styles.tripInfoContainer}>
+            <Text 
+              style={[styles.tripTitleInContent, { 
+                fontSize: getDynamicFontSize(),
+                color: colors.text.primary 
+              }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.8}
+            >
+              {trip.title}
+            </Text>
+            <Text style={[styles.tripDatesInContent, { color: colors.text.secondary }]}>
+              {formatTripDates(trip.startDate, trip.endDate)}
+            </Text>
+            <Text style={[styles.photoCountInContent, { color: colors.text.tertiary }]}>
+              {trip.totalPhotos} memories
+            </Text>
+          </View>
+          
+          <TouchableOpacity
+            style={[styles.viewModeToggle, { borderColor: colors.border.secondary }]}
+            onPress={toggleViewMode}
+          >
+            <Icon 
+              name={viewMode === 'story' ? 'grid' : 'journal'} 
+              size="sm" 
+              color={colors.text.primary} 
+            />
+            <Text style={[styles.viewModeText, { color: colors.text.primary }]}>
+              {viewMode === 'story' ? 'Grid View' : 'Story View'}
+            </Text>
+          </TouchableOpacity>
+        </View>
         
-        <TouchableOpacity
-          style={[styles.viewModeToggle, { borderColor: colors.border.secondary }]}
-          onPress={toggleViewMode}
-        >
-          <Icon 
-            name={viewMode === 'story' ? 'grid' : 'journal'} 
-            size="sm" 
-            color={colors.text.primary} 
-          />
-          <Text style={[styles.viewModeText, { color: colors.text.primary }]}>
-            {viewMode === 'story' ? 'Grid View' : 'Story View'}
-          </Text>
-        </TouchableOpacity>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={getProgressiveDays()}
+          keyExtractor={item => `day-${item.day}`}
+          renderItem={({ item }) => (
+            <MinimalDayCard
+              day={item}
+              isSelected={item.day === selectedDay}
+              onPress={handleDaySelect}
+              variant={viewMode === 'grid' ? 'compact' : 'full'}
+            />
+          )}
+          contentContainerStyle={styles.daySelectorContent}
+          bounces={false}
+        />
       </View>
-      
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={getProgressiveDays()}
-        keyExtractor={item => `day-${item.day}`}
-        renderItem={({ item }) => (
-          <MinimalDayCard
-            day={item}
-            isSelected={item.day === selectedDay}
-            onPress={handleDaySelect}
-            variant={viewMode === 'grid' ? 'compact' : 'full'}
-          />
-        )}
-        contentContainerStyle={styles.daySelectorContent}
-        bounces={false}
-      />
-    </View>
-  );
+    );
+  };
   
   const getProgressiveDays = () => {
     // Show days progressively: completed days + the next empty day
@@ -762,12 +777,12 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
 const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF', // White background for entire screen
   },
   
   modal: {
     flex: 1,
-    backgroundColor: colors.background.primary, // White background
+    backgroundColor: '#FFFFFF', // Explicitly white background
     overflow: 'hidden',
   },
   
@@ -794,7 +809,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   // Header
   header: {
-    height: 350, // Increased from 300
+    height: 380, // Fine-tuned for optimal balance
     position: 'relative',
     overflow: 'hidden',
   },
@@ -819,20 +834,25 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   headerNav: {
     position: 'absolute',
-    top: SPACING.lg,
+    top: SPACING.lg + 20, // Account for status bar
     left: SPACING.lg,
     right: SPACING.lg,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   
   viewToggle: {
@@ -884,9 +904,32 @@ const createStyles = (colors: any) => StyleSheet.create({
   daySelectorHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Changed to align to top
     paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.lg, // Increased from SPACING.md for bigger gap
+  },
+  
+  tripInfoContainer: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  
+  tripTitleInContent: {
+    fontWeight: '600',
+    marginBottom: SPACING.xs * 0.5,
+    fontFamily: 'Merienda',
+    letterSpacing: -1,
+  },
+  
+  tripDatesInContent: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: SPACING.xs * 0.5,
+  },
+  
+  photoCountInContent: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   
   daySelectorTitle: {
@@ -916,10 +959,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   // Scroll View
   scrollView: {
     flex: 1,
+    backgroundColor: '#FFFFFF', // Ensure white background throughout
   },
   
   contentArea: {
-    backgroundColor: colors.background.primary,
+    backgroundColor: '#FFFFFF', // Explicitly white for clean overlap
     borderTopLeftRadius: BORDER_RADIUS.xxl * 1.5, // Much more rounded
     borderTopRightRadius: BORDER_RADIUS.xxl * 1.5,
     marginTop: -BORDER_RADIUS.xxl * 1.5, // Increased negative margin for more overlap
@@ -930,6 +974,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   // Story View
   storyContainer: {
     paddingHorizontal: SPACING.lg,
+    backgroundColor: '#FFFFFF', // Consistent white background
   },
   
   dayHeader: {
@@ -998,6 +1043,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   // Grid View
   gridContainer: {
+    backgroundColor: '#FFFFFF', // Consistent white background
     // paddingHorizontal will be set dynamically in the component
   },
   

@@ -200,13 +200,15 @@ export default function TripDetailEnhanced({ tripId }: TripDetailEnhancedProps) 
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ['images'],
           allowsEditing: false,
-          quality: 0.8,
+          quality: 1.0, // Maximum quality for ultra-sharp images
+          exif: true, // Preserve image metadata
         });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
           allowsEditing: false,
-          quality: 0.8,
+          quality: 1.0, // Maximum quality for ultra-sharp images
+          exif: true, // Preserve image metadata
         });
       }
 

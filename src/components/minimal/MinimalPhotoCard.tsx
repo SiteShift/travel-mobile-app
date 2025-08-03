@@ -114,6 +114,11 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
           style={[styles.photo, { borderRadius }]}
           contentFit="cover"
           transition={300}
+          priority="high"
+          cachePolicy="memory-disk"
+          recyclingKey={memory.id}
+          allowDownscaling={false}
+          autoplay={false}
           onLoad={() => setImageLoaded(true)}
         />
       </TouchableOpacity>

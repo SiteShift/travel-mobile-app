@@ -595,13 +595,13 @@ export default function HomeTab() {
 
             const dotOpacity = scrollX.interpolate({
               inputRange: inputRanges.flat(),
-              outputRange: [0.4, 1, 0.4, 0.4, 1, 0.4, 0.4, 1, 0.4],
+              outputRange: [0.5, 1, 0.5, 0.5, 1, 0.5, 0.5, 1, 0.5],
               extrapolate: 'clamp',
             });
 
             const dotScale = scrollX.interpolate({
               inputRange: inputRanges.flat(),
-              outputRange: [1, 1.3, 1, 1, 1.3, 1, 1, 1.3, 1],
+              outputRange: [1, 1.4, 1, 1, 1.4, 1, 1, 1.4, 1],
               extrapolate: 'clamp',
             });
 
@@ -617,7 +617,7 @@ export default function HomeTab() {
                   style={[
                     styles.dot,
                     {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
                       opacity: dotOpacity,
                       transform: [{ scale: dotScale }],
                     },
@@ -994,35 +994,35 @@ const styles = StyleSheet.create({
   dotContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: SPACING.xs,
+    marginHorizontal: SPACING.sm, // Increased from SPACING.xs to sm for better spacing
     position: 'relative',
   },
   dot: {
-    width: 6, // Reduced from 8 to 6 for more subtle appearance
-    height: 6, // Reduced from 8 to 6
-    borderRadius: 3, // Reduced from 4 to 3
+    width: 10, // Increased from 6 to 10 for better visibility
+    height: 10, // Increased from 6 to 10
+    borderRadius: 5, // Increased from 3 to 5
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 }, // Reduced shadow for subtlety
-    shadowOpacity: 0.15, // Reduced from 0.25 to 0.15
-    shadowRadius: 2, // Reduced from 4 to 2
-    elevation: 2, // Reduced from 4 to 2
+    shadowOffset: { width: 0, height: 2 }, // Increased shadow for better visibility
+    shadowOpacity: 0.25, // Increased from 0.15 to 0.25
+    shadowRadius: 3, // Increased from 2 to 3
+    elevation: 3, // Increased from 2 to 3
   },
   activeDot: {
     position: 'absolute',
-    width: 6, // Reduced from 8 to 6
-    height: 6, // Reduced from 8 to 6
-    borderRadius: 3, // Reduced from 4 to 3
+    width: 10, // Increased from 6 to 10
+    height: 10, // Increased from 6 to 10
+    borderRadius: 5, // Increased from 3 to 5
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 }, // Slightly reduced shadow
-    shadowOpacity: 0.3, // Reduced from 0.4 to 0.3
-    shadowRadius: 4, // Reduced from 6 to 4
-    elevation: 4, // Reduced from 6 to 4
+    shadowOffset: { width: 0, height: 3 }, // Increased shadow for active state
+    shadowOpacity: 0.4, // Increased from 0.3 to 0.4
+    shadowRadius: 5, // Increased from 4 to 5
+    elevation: 5, // Increased from 4 to 5
   },
   dotGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 3, // Reduced from 4 to 3
+    borderRadius: 5, // Increased from 3 to 5
   },
   carousel: {
     flex: 1,

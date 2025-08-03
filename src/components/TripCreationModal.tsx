@@ -186,14 +186,16 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
           mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [16, 9],
-        quality: 0.8,
+        quality: 1.0, // Maximum quality for ultra-sharp images
+        exif: true, // Preserve image metadata
       });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
           allowsEditing: true,
           aspect: [16, 9],
-          quality: 0.8,
+          quality: 1.0, // Maximum quality for ultra-sharp images
+          exif: true, // Preserve image metadata
         });
       }
       
