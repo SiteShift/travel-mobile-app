@@ -14,7 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
-import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
+import SortableList from 'react-native-sortable-list';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -100,6 +100,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
   const [lightboxMemory, setLightboxMemory] = useState<MinimalMemory | null>(null);
   const [showChangePhotoModal, setShowChangePhotoModal] = useState(false);
   const [changingPhotoId, setChangingPhotoId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
   
   // Load trip data on mount and when returning to screen
   useFocusEffect(
@@ -441,24 +443,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     }
   }, [changingPhotoId, lightboxMemory?.id]);
 
-  const handleReorderPhotos = useCallback((data: MinimalMemory[]) => {
-    setTrip(prevTrip => {
-      const updatedTrip = { ...prevTrip };
-      
-      // Find the current day and update its memories with the new order
-      const dayIndex = updatedTrip.days.findIndex(d => d.day === selectedDay);
-      if (dayIndex !== -1) {
-        updatedTrip.days[dayIndex] = {
-          ...updatedTrip.days[dayIndex],
-          memories: data,
-        };
-      }
-      
-      return updatedTrip;
-    });
-    
-    console.log('✅ Photos reordered for day:', selectedDay);
-  }, [selectedDay]);
+
   
   const handleAddDay = useCallback((dayNumber: number) => {
     console.log('Add day:', dayNumber);
@@ -744,9 +729,33 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     return completedDays;
   };
   
-  const renderDraggablePhotoItem = ({ item: memory, drag, isActive }: RenderItemParams<MinimalMemory>) => {
+  const handleReorderPhotos = useCallback((nextOrder: number[]) => {
+    const currentDay = trip.days.find(d => d.day === selectedDay);
+    if (!currentDay) return;
+
+    // Create new ordered memories array based on the order
+    const reorderedMemories = nextOrder.map(index => currentDay.memories[index]);
+    
+    setTrip(prevTrip => {
+      const updatedTrip = { ...prevTrip };
+      const dayIndex = updatedTrip.days.findIndex(d => d.day === selectedDay);
+      
+      if (dayIndex !== -1) {
+        updatedTrip.days[dayIndex] = {
+          ...updatedTrip.days[dayIndex],
+          memories: reorderedMemories,
+        };
+      }
+      
+      return updatedTrip;
+    });
+    
+    console.log('✅ Photos reordered for day:', selectedDay);
+  }, [selectedDay, trip.days]);
+
+  const renderSortablePhotoItem = useCallback(({ data: memory, active }: { data: MinimalMemory, active: boolean }) => {
     return (
-      <View style={[styles.draggableItem, isActive && styles.draggableItemActive]}>
+      <View style={[styles.sortableItem, active && styles.sortableItemActive]}>
         <MinimalPhotoCard
           memory={memory}
           onPress={handlePhotoPress}
@@ -754,15 +763,30 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           onCaptionUpdate={handleCaptionUpdate}
           onDeletePhoto={handleDeletePhoto}
           onChangePhoto={handleChangePhoto}
-          showCaption={true} // Always show captions in story view
+          showCaption={true}
           isEditingCaption={editingCaptionId === memory.id}
           borderRadius={BORDER_RADIUS.md}
-          onLongPress={drag}
-          isDragging={isActive}
         />
       </View>
     );
-  };
+  }, [handlePhotoPress, handleCaptionEdit, handleCaptionUpdate, handleDeletePhoto, handleChangePhoto, editingCaptionId]);
+
+  const renderSortableGridItem = useCallback(({ data: memory, active }: { data: MinimalMemory, active: boolean }) => {
+    return (
+      <View style={[styles.sortableGridItem, active && styles.sortableItemActive]}>
+        <MinimalPhotoCard
+          memory={memory}
+          onPress={handlePhotoPress}
+          onDeletePhoto={handleDeletePhoto}
+          onChangePhoto={handleChangePhoto}
+          showCaption={false}
+          isEditingCaption={false}
+          borderRadius={BORDER_RADIUS.md}
+          width={screenWidth * 0.4}
+        />
+      </View>
+    );
+  }, [handlePhotoPress, handleDeletePhoto, handleChangePhoto, screenWidth]);
 
   const renderStoryView = () => {
     if (!currentDay) return null;
@@ -778,16 +802,20 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           </View>
         </View>
         
-        {/* Draggable Photos */}
+        {/* Photos */}
         <View style={styles.photosContainer}>
           {currentDay.memories.length > 0 && (
-            <DraggableFlatList
-              data={currentDay.memories}
-              onDragEnd={({ data }) => handleReorderPhotos(data)}
-              keyExtractor={(item) => item.id}
-              renderItem={renderDraggablePhotoItem}
-              scrollEnabled={false} // Disable scroll since we're inside a ScrollView
-              style={styles.draggableList}
+            <SortableList
+              style={styles.sortableList}
+              data={currentDay.memories.reduce((acc, memory, index) => {
+                acc[index] = memory;
+                return acc;
+              }, {} as Record<number, MinimalMemory>)}
+              renderRow={renderSortablePhotoItem}
+              onChangeOrder={handleReorderPhotos}
+              onActivateRow={() => setIsDragging(true)}
+              onReleaseRow={() => setIsDragging(false)}
+              scrollEnabled={!isDragging}
             />
           )}
           
@@ -810,28 +838,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     );
   };
   
-  const renderGridDraggableItem = ({ item: memory, drag, isActive }: RenderItemParams<MinimalMemory>) => {
-    const GRID_PADDING = SPACING.md;
-    const GRID_GAP = SPACING.sm;
-    const availableWidth = screenWidth - (GRID_PADDING * 2);
-    const photoWidth = (availableWidth - GRID_GAP) / 2;
-    
-    return (
-      <View style={[styles.gridPhotoWrapper, isActive && styles.draggableItemActive]}>
-        <MinimalPhotoCard
-          memory={memory}
-          onPress={handlePhotoPress}
-          onDeletePhoto={handleDeletePhoto}
-          onChangePhoto={handleChangePhoto}
-          onLongPress={drag}
-          isDragging={isActive}
-          showCaption={false} // Hide captions in grid view
-          width={photoWidth}
-          borderRadius={BORDER_RADIUS.md}
-        />
-      </View>
-    );
-  };
+
 
   const renderGridView = () => {
     // Get memories from selected day only (like story mode)
@@ -864,19 +871,23 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     
     return (
       <View style={[styles.gridContainer, { paddingHorizontal: GRID_PADDING }]}>
-        {/* Draggable Grid */}
-        {currentMemories.length > 0 && (
-          <DraggableFlatList
-            data={currentMemories}
-            onDragEnd={({ data }) => handleReorderPhotos(data)}
-            keyExtractor={(item) => item.id}
-            renderItem={renderGridDraggableItem}
-            numColumns={2}
-            scrollEnabled={false} // Disable scroll since we're inside a ScrollView
-            style={styles.draggableGridList}
-            contentContainerStyle={styles.draggableGridContent}
-          />
-        )}
+        {/* Grid Photos */}
+        <View style={styles.gridPhotosWrapper}>
+          {currentMemories.length > 0 && (
+            <SortableList
+              style={styles.sortableList}
+              data={currentMemories.reduce((acc, memory, index) => {
+                acc[index] = memory;
+                return acc;
+              }, {} as Record<number, MinimalMemory>)}
+              renderRow={renderSortableGridItem}
+              onChangeOrder={handleReorderPhotos}
+              onActivateRow={() => setIsDragging(true)}
+              onReleaseRow={() => setIsDragging(false)}
+              scrollEnabled={!isDragging}
+            />
+          )}
+        </View>
         
         {/* Add Memory Button for Grid View */}
         <TouchableOpacity 
@@ -918,10 +929,14 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           
           {/* Scrollable Content */}
           <Animated.ScrollView
+            ref={scrollViewRef}
             style={styles.scrollView}
             onScroll={handleScroll}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+            scrollEnabled={!isDragging}
           >
             {/* Header */}
             {renderHeader()}
@@ -1246,24 +1261,33 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: SPACING.lg,
   },
   
-  // Draggable styles
-  draggableList: {
-    flexGrow: 0,
-  },
-  
-  draggableGridList: {
-    flexGrow: 0,
-  },
-  
-  draggableGridContent: {
-    paddingBottom: SPACING.lg,
-  },
-  
-  draggableItem: {
+  // Photo styles
+  photoItem: {
     marginBottom: SPACING.lg,
   },
   
-  draggableItemActive: {
+  gridPhotosWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  
+  // Sortable styles
+  sortableList: {
+    flex: 1,
+  },
+  
+  sortableItem: {
+    marginBottom: SPACING.lg,
+  },
+  
+  sortableGridItem: {
+    marginBottom: SPACING.sm,
+    alignItems: 'center',
+    width: '50%',
+  },
+  
+  sortableItemActive: {
     opacity: 0.9,
     transform: [{ scale: 1.02 }],
     shadowColor: '#000',
@@ -1271,6 +1295,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+    zIndex: 1000,
   },
   
   addMemoryPlaceholder: {
@@ -1330,8 +1355,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   gridPhotoWrapper: {
     marginBottom: SPACING.sm,
-    flex: 0.5,
-    paddingHorizontal: SPACING.xs / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   
   // Empty State

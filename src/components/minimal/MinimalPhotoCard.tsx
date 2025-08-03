@@ -26,8 +26,6 @@ interface MinimalPhotoCardProps {
   onCaptionUpdate?: (memoryId: string, caption: string) => void;
   onDeletePhoto?: (memoryId: string) => void;
   onChangePhoto?: (memoryId: string) => void;
-  onLongPress?: () => void;
-  isDragging?: boolean;
   showCaption?: boolean;
   isEditingCaption?: boolean;
   width?: number;
@@ -43,8 +41,6 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
   onCaptionUpdate,
   onDeletePhoto,
   onChangePhoto,
-  onLongPress,
-  isDragging = false,
   showCaption = true,
   isEditingCaption = false,
   width = screenWidth - SPACING.lg * 2,
@@ -141,13 +137,10 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
       <TouchableOpacity
         style={[
           styles.container, 
-          { width, height, borderRadius },
-          isDragging && styles.draggingContainer
+          { width, height, borderRadius }
         ]}
         onPress={handlePress}
-        onLongPress={onLongPress}
         activeOpacity={0.95}
-        delayLongPress={300}
       >
         {/* Loading state */}
         {!imageLoaded && (
