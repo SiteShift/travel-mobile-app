@@ -12,6 +12,9 @@ import {
   Platform,
   Alert,
   Pressable,
+  TouchableWithoutFeedback,
+  Keyboard,
+  ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,13 +45,13 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Constants for better maintainability
 const ANIMATION_CONFIG = {
-  ENTRANCE_DURATION: 600,
-  COVER_FADE_DURATION: 1200,
-  PAGE_FLIP_DURATION: 1000,
-  FORM_FADE_DURATION: 600,
-  SPARKLE_DURATION: 800,
-  GLOW_DURATION: 800,
-  PULSE_DURATION: 1200,
+  ENTRANCE_DURATION: 500,
+  COVER_FADE_DURATION: 800,
+  PAGE_FLIP_DURATION: 700, // Faster, smoother page flip
+  FORM_FADE_DURATION: 400,
+  SPARKLE_DURATION: 600,
+  GLOW_DURATION: 600,
+  PULSE_DURATION: 1000,
 } as const;
 
 const BOOK_CONFIG = {
@@ -140,7 +143,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
   const bookTranslateY = useSharedValue(0);
   const coverOpacity = useSharedValue(0);
   const coverScale = useSharedValue(0.8);
-  const pageRotationY = useSharedValue(-90); // Start page hidden on the left
+  const pageRotationY = useSharedValue(90); // Start page hidden on the right
   const pageOpacity = useSharedValue(0);
   const formOpacity = useSharedValue(0);
   const backdropOpacity = useSharedValue(0);
@@ -182,7 +185,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
     bookRotationX.value = 0;
     coverOpacity.value = 0;
     coverScale.value = 0.8;
-    pageRotationY.value = -90; // Start page hidden on the left
+    pageRotationY.value = 90; // Start page hidden on the right
     pageOpacity.value = 0;
     formOpacity.value = 0;
     backdropOpacity.value = 0;
@@ -211,13 +214,13 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
       // Dramatic book entrance - zoom in with bounce and rotation
       bookOpacity.value = withTiming(1, { duration: 300 });
       
-      // Multi-stage dramatic entrance
+      // Smooth, polished entrance animation
       bookScale.value = withSequence(
         withTiming(BOOK_CONFIG.ENTRANCE_OVERSHOOT, { 
           duration: ANIMATION_CONFIG.ENTRANCE_DURATION, 
-          easing: Easing.out(Easing.back(1.2)) 
+          easing: Easing.bezier(0.2, 0.0, 0.13, 1.0) // Smoother easing curve
         }),
-        withSpring(1, { damping: 8, stiffness: 100, mass: 0.8 })
+        withSpring(1, { damping: 12, stiffness: 120, mass: 0.7 })
       );
       
       // Subtle 3D rotation for depth
@@ -338,13 +341,13 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
         duration: ANIMATION_CONFIG.PAGE_FLIP_DURATION - 200 
       });
       
-      // FIXED: Correct page flip animation (left to right like a real book)
-      // Start the page visible and rotate from -90 (hidden left) to 0 (flat/visible)
+      // FIXED: Natural page flip animation (right to left like turning a book page)
+      // Start the page hidden on the right and flip to flat/visible
       pageOpacity.value = withTiming(1, { duration: 200 });
       pageRotationY.value = withSequence(
-        withDelay(400, withTiming(0, { 
+        withDelay(300, withTiming(0, { 
           duration: ANIMATION_CONFIG.PAGE_FLIP_DURATION,
-          easing: Easing.bezier(0.25, 0.46, 0.45, 0.94)
+          easing: Easing.bezier(0.2, 0.0, 0.1, 1.0) // Smoother, more natural easing
         }))
       );
       
@@ -354,11 +357,11 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
         withDelay(ANIMATION_CONFIG.SPARKLE_DURATION, withTiming(0, { duration: 400 }))
       );
       
-      // Show form with proper timing
+      // Show form with better timing after page flip
       setTimeout(() => {
         setCurrentState(BookState.FORM_ENTRY);
         formOpacity.value = withDelay(
-          200, 
+          100, 
           withTiming(1, { 
             duration: ANIMATION_CONFIG.FORM_FADE_DURATION, 
             easing: Easing.out(Easing.quad) 
@@ -499,17 +502,18 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
       statusBarTranslucent={true}
       onRequestClose={onClose}
     >
-      <Animated.View style={[styles.backdrop, backdropStyle]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        
-        {/* Close button */}
-        <TouchableOpacity 
-          style={styles.closeButton} 
-          onPress={handleClose}
-          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-        >
-          <Icon name="x" size="xl" color="white" />
-        </TouchableOpacity>
+      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+          
+          {/* Close button */}
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={handleClose}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          >
+            <Icon name="x" size="xl" color="white" />
+          </TouchableOpacity>
         
                 <View style={styles.container}>
           {/* Magical sparkles background */}
@@ -595,56 +599,70 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
                     <View style={styles.pageLines} />
                     
                     <Animated.View style={[styles.formContainer, formStyle]}>
-                      <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                        style={styles.keyboardView}
-                      >
-                        <Text style={styles.pageTitle}>✨ Create Your Story</Text>
-                        
-                        <View style={styles.inputGroup}>
-                          <Text style={styles.inputLabel}>📖 Title</Text>
-                          <TextInput
-                            style={styles.titleInput}
-                            placeholder="My Amazing Adventure"
-                            placeholderTextColor="#999"
-                            value={formData.title}
-                            onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
-                            maxLength={50}
-                          />
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                          <Text style={styles.inputLabel}>📝 Description</Text>
-                          <TextInput
-                            style={styles.descriptionInput}
-                            placeholder="Tell your story..."
-                            placeholderTextColor="#999"
-                            value={formData.description}
-                            onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
-                            multiline
-                            numberOfLines={3}
-                            maxLength={200}
-                          />
-                        </View>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.createButton,
-                            !formData.title.trim() && styles.createButtonDisabled
-                          ]}
-                          onPress={handleCreateTrip}
-                          disabled={!formData.title.trim() || isLoading}
+                      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+                        <KeyboardAvoidingView
+                          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                          style={styles.keyboardView}
                         >
-                          <LinearGradient
-                            colors={!formData.title.trim() ? ['#ccc', '#aaa'] : ['#FF6B6B', '#FF5252']}
-                            style={styles.createButtonGradient}
+                          <ScrollView 
+                            contentContainerStyle={styles.scrollContent}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
                           >
-                            <Text style={styles.createButtonText}>
-                              {isLoading ? '✨ Creating...' : '🚀 Create Book'}
-                            </Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
-                      </KeyboardAvoidingView>
+                            <Text style={styles.pageTitle}>Create Your Story</Text>
+                            
+                            <View style={styles.inputGroup}>
+                              <Text style={styles.inputLabel}>Title</Text>
+                              <TextInput
+                                style={styles.titleInput}
+                                placeholder="My Amazing Adventure"
+                                placeholderTextColor="#999"
+                                value={formData.title}
+                                onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
+                                maxLength={50}
+                                returnKeyType="next"
+                                blurOnSubmit={false}
+                                onBlur={() => Keyboard.dismiss()}
+                              />
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                              <Text style={styles.inputLabel}>Description</Text>
+                              <TextInput
+                                style={styles.descriptionInput}
+                                placeholder="Tell your story..."
+                                placeholderTextColor="#999"
+                                value={formData.description}
+                                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+                                multiline
+                                numberOfLines={3}
+                                maxLength={200}
+                                returnKeyType="done"
+                                onSubmitEditing={() => Keyboard.dismiss()}
+                                onBlur={() => Keyboard.dismiss()}
+                              />
+                            </View>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.createButton,
+                                !formData.title.trim() && styles.createButtonDisabled
+                              ]}
+                              onPress={handleCreateTrip}
+                              disabled={!formData.title.trim() || isLoading}
+                            >
+                              <LinearGradient
+                                colors={!formData.title.trim() ? ['#ccc', '#aaa'] : ['#FF6B6B', '#FF5252']}
+                                style={styles.createButtonGradient}
+                              >
+                                <Text style={styles.createButtonText}>
+                                  {isLoading ? 'Creating...' : 'Create Trip'}
+                                </Text>
+                              </LinearGradient>
+                            </TouchableOpacity>
+                          </ScrollView>
+                        </KeyboardAvoidingView>
+                      </TouchableWithoutFeedback>
                     </Animated.View>
                   </View>
                 </Animated.View>
@@ -653,6 +671,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
           </Animated.View>
         </View>
       </Animated.View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -928,6 +947,11 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
+  },
+  
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   
   pageTitle: {

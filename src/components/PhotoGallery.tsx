@@ -156,7 +156,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({
       >
         {/* Photo Image */}
         <Image
-          source={{ uri: photo.thumbnail || photo.uri }}
+          source={{ uri: photo.uri }} // ALWAYS use full quality image for crystal clarity
           style={styles.photoImage}
           resizeMode="cover"
         />

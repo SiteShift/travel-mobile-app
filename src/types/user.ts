@@ -176,7 +176,7 @@ export interface UserSettings {
   // Export Settings
   exportFormat: 'json' | 'pdf' | 'html';
   includeMedia: boolean;
-  imageQuality: 'high' | 'medium' | 'low';
+  imageQuality: 'original' | 'high'; // Only original and high quality allowed - no compromises
 }
 
 export interface UserProfile {

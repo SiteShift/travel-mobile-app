@@ -8,18 +8,24 @@ import {
   TextInput,
   Keyboard,
   Platform,
+  Modal,
+  Pressable,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../contexts/ThemeContext';
 import { MinimalMemory } from '../../types/tripDetailMinimal';
 import { SPACING, BORDER_RADIUS } from '../../constants/theme';
+import { Icon } from '../Icon';
 
 interface MinimalPhotoCardProps {
   memory: MinimalMemory;
   onPress: (memory: MinimalMemory) => void;
   onCaptionEdit?: (memoryId: string) => void;
   onCaptionUpdate?: (memoryId: string, caption: string) => void;
+  onDeletePhoto?: (memoryId: string) => void;
+  onChangePhoto?: (memoryId: string) => void;
   showCaption?: boolean;
   isEditingCaption?: boolean;
   width?: number;
@@ -33,6 +39,8 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
   onPress,
   onCaptionEdit,
   onCaptionUpdate,
+  onDeletePhoto,
+  onChangePhoto,
   showCaption = true,
   isEditingCaption = false,
   width = screenWidth - SPACING.lg * 2,
@@ -42,6 +50,7 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [captionText, setCaptionText] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
   const captionInputRef = useRef<TextInput>(null);
   
   // Initialize caption text properly
@@ -82,6 +91,33 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
       onCaptionUpdate(memory.id, finalCaption);
     }
   };
+
+  const handleOptionsPress = () => {
+    setShowOptionsModal(true);
+  };
+
+  const handleDeletePhoto = () => {
+    Alert.alert(
+      'Delete Photo',
+      'Are you sure you want to delete this photo?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: () => {
+            onDeletePhoto?.(memory.id);
+            setShowOptionsModal(false);
+          }
+        },
+      ]
+    );
+  };
+
+  const handleChangePhoto = () => {
+    onChangePhoto?.(memory.id);
+    setShowOptionsModal(false);
+  };
   
   // Calculate height based on aspect ratio
   const aspectRatio = memory.aspectRatio || 1;
@@ -113,14 +149,28 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
           source={{ uri: memory.uri }}
           style={[styles.photo, { borderRadius }]}
           contentFit="cover"
-          transition={300}
+          transition={50}
           priority="high"
           cachePolicy="memory-disk"
-          recyclingKey={memory.id}
-          allowDownscaling={false}
-          autoplay={false}
+          decodeFormat="rgb"
+          placeholderContentFit="cover"
+          enableLiveTextInteraction={false}
+          accessible={false}
           onLoad={() => setImageLoaded(true)}
         />
+        
+        {/* Three-dot options menu */}
+        {(onDeletePhoto || onChangePhoto) && (
+          <TouchableOpacity 
+            style={styles.optionsButton}
+            onPress={handleOptionsPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <View style={styles.optionsButtonBackground}>
+              <Icon name="ellipsis-horizontal" size="sm" color="rgba(255,255,255,0.9)" />
+            </View>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
       
       {/* Caption below image */}
@@ -164,6 +214,45 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
           )}
         </TouchableOpacity>
       )}
+      
+      {/* Options Modal */}
+      <Modal
+        visible={showOptionsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsModal(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setShowOptionsModal(false)}
+        >
+          <View style={[styles.optionsModal, { backgroundColor: colors.surface.primary }]}>
+            {onChangePhoto && (
+              <TouchableOpacity 
+                style={[styles.optionItem, { borderBottomColor: colors.border.primary }]}
+                onPress={handleChangePhoto}
+              >
+                <Icon name="image" size="md" color={colors.text.primary} />
+                <Text style={[styles.optionText, { color: colors.text.primary }]}>
+                  Change Photo
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            {onDeletePhoto && (
+              <TouchableOpacity 
+                style={[styles.optionItem, { borderBottomWidth: 0 }]}
+                onPress={handleDeletePhoto}
+              >
+                <Icon name="trash-outline" size="md" color={colors.error[500]} />
+                <Text style={[styles.optionText, { color: colors.error[500] }]}>
+                  Delete Photo
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 });
@@ -253,6 +342,54 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'white',
     lineHeight: 20,
+  },
+  
+  // Options button styles
+  optionsButton: {
+    position: 'absolute',
+    top: SPACING.sm,
+    right: SPACING.sm,
+    zIndex: 10,
+  },
+  
+  optionsButtonBackground: {
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  optionsModal: {
+    borderRadius: BORDER_RADIUS.lg,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    gap: SPACING.sm,
+  },
+  
+  optionText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

@@ -994,35 +994,35 @@ const styles = StyleSheet.create({
   dotContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: SPACING.sm, // Increased from SPACING.xs to sm for better spacing
+    marginHorizontal: SPACING.xs, // Small spacing for subtle dots
     position: 'relative',
   },
   dot: {
-    width: 10, // Increased from 6 to 10 for better visibility
-    height: 10, // Increased from 6 to 10
-    borderRadius: 5, // Increased from 3 to 5
+    width: 6, // Small, subtle dots
+    height: 6,
+    borderRadius: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 }, // Increased shadow for better visibility
-    shadowOpacity: 0.25, // Increased from 0.15 to 0.25
-    shadowRadius: 3, // Increased from 2 to 3
-    elevation: 3, // Increased from 2 to 3
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
   activeDot: {
     position: 'absolute',
-    width: 10, // Increased from 6 to 10
-    height: 10, // Increased from 6 to 10
-    borderRadius: 5, // Increased from 3 to 5
+    width: 6, // Small, subtle dots
+    height: 6,
+    borderRadius: 3,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 }, // Increased shadow for active state
-    shadowOpacity: 0.4, // Increased from 0.3 to 0.4
-    shadowRadius: 5, // Increased from 4 to 5
-    elevation: 5, // Increased from 4 to 5
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   dotGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 5, // Increased from 3 to 5
+    borderRadius: 3,
   },
   carousel: {
     flex: 1,

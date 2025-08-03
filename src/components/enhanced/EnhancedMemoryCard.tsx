@@ -222,12 +222,17 @@ const EnhancedMemoryCard: React.FC<MemoryCardProps> = memo(({
       onPressOut={() => setIsPressed(false)}
     >
       {/* Main Image */}
-      <Image
-        source={{ uri: memory.thumbnail || memory.uri }}
-        style={dynamicStyles.image}
-        contentFit="cover"
-        transition={200}
-      />
+              <Image
+          source={{ uri: memory.uri }} // ALWAYS use full-quality image, never thumbnails
+          style={dynamicStyles.image}
+          contentFit="cover"
+          priority="high"
+          cachePolicy="memory-disk"
+          decodeFormat="rgb"
+          transition={50}
+          enableLiveTextInteraction={false}
+          accessible={false}
+        />
       
       {/* Video Overlay */}
       {renderVideoOverlay()}

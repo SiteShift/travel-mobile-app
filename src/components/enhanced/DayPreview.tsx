@@ -76,10 +76,16 @@ const DayPreview: React.FC<DayPreviewProps> = memo(({
     >
       {/* Hero Image Background */}
       {bestMemory && (
-        <Image
-          source={{ uri: bestMemory.thumbnail || bestMemory.uri }}
-          style={styles.backgroundImage}
-          contentFit="cover"
+                  <Image
+            source={{ uri: bestMemory.uri }} // ALWAYS use full-quality image, never thumbnails
+            style={styles.backgroundImage}
+            contentFit="cover"
+            priority="high"
+            cachePolicy="memory-disk"
+            decodeFormat="rgb"
+            transition={50}
+            enableLiveTextInteraction={false}
+            accessible={false}
         />
       )}
       

@@ -67,8 +67,8 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
       style={[
         styles.container,
         {
-          borderColor: isSelected ? '#000000' : '#E5E5E5', // Dark black border for selected
-          borderWidth: isSelected ? 2 : 1,
+          borderColor: colors.border.secondary,
+          borderWidth: 1,
           backgroundColor: hasMemories ? 'white' : colors.surface.secondary,
         }
       ]}
@@ -78,12 +78,17 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
       {/* Hero Image or Empty State */}
       {hasMemories && heroImage ? (
         <>
-          <Image
-            source={{ uri: heroImage.thumbnail || heroImage.uri }}
-            style={styles.heroImage}
-            contentFit="cover"
-            transition={200}
-          />
+                      <Image
+              source={{ uri: heroImage.uri }} // ALWAYS use full-quality image, never thumbnails
+              style={styles.heroImage}
+              contentFit="cover"
+              priority="high"
+              cachePolicy="memory-disk"
+              decodeFormat="rgb"
+              transition={50}
+              enableLiveTextInteraction={false}
+              accessible={false}
+            />
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={styles.gradient}
@@ -123,8 +128,8 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
 const styles = StyleSheet.create({
   // Full card styles
   container: {
-    width: 110,
-    height: 140,
+    width: 95, // Slightly smaller for better proportions
+    height: 120, // Slightly smaller for better proportions
     marginHorizontal: SPACING.xs,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',

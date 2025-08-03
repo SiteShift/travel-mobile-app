@@ -11,6 +11,7 @@ import {
   StatusBar,
   FlatList,
   Alert,
+  Modal,
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
@@ -96,6 +97,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
   const [editingCaptionId, setEditingCaptionId] = useState<string | null>(null);
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [lightboxMemory, setLightboxMemory] = useState<MinimalMemory | null>(null);
+  const [showChangePhotoModal, setShowChangePhotoModal] = useState(false);
+  const [changingPhotoId, setChangingPhotoId] = useState<string | null>(null);
   
   // Load trip data on mount and when returning to screen
   useFocusEffect(
@@ -290,6 +293,152 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     
     console.log('Updated caption for:', memoryId, 'to:', newCaption);
   }, [lightboxMemory]);
+
+  const handleDeletePhoto = useCallback(async (memoryId: string) => {
+    try {
+      setTrip(prevTrip => {
+        const updatedTrip = { ...prevTrip };
+        
+        // Find and remove the memory
+        for (const day of updatedTrip.days) {
+          const memoryIndex = day.memories.findIndex(m => m.id === memoryId);
+          if (memoryIndex !== -1) {
+            day.memories.splice(memoryIndex, 1);
+            break;
+          }
+        }
+        
+        return updatedTrip;
+      });
+      
+      // Close lightbox if this photo was being viewed
+      if (lightboxMemory?.id === memoryId) {
+        setLightboxVisible(false);
+        setLightboxMemory(null);
+      }
+      
+      console.log('✅ Photo deleted:', memoryId);
+    } catch (error) {
+      console.error('❌ Error deleting photo:', error);
+    }
+  }, [lightboxMemory?.id]);
+
+  const handleChangePhoto = useCallback(async (memoryId: string) => {
+    setChangingPhotoId(memoryId);
+    setShowChangePhotoModal(true);
+  }, []);
+
+  const handleChangePhotoFromCamera = useCallback(async () => {
+    if (!changingPhotoId) return;
+    
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 1.0, // Maximum quality for ultra-sharp images
+        exif: true, // Preserve image metadata
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        
+        // Update the existing memory with the new photo
+        setTrip(prevTrip => {
+          const updatedTrip = { ...prevTrip };
+          
+          // Find and update the memory
+          for (const day of updatedTrip.days) {
+            const memoryIndex = day.memories.findIndex(m => m.id === changingPhotoId);
+            if (memoryIndex !== -1) {
+              day.memories[memoryIndex] = {
+                ...day.memories[memoryIndex],
+                uri: asset.uri,
+                thumbnail: asset.uri,
+                aspectRatio: asset.width / asset.height,
+                timestamp: new Date(), // Update timestamp
+              };
+              break;
+            }
+          }
+          
+          return updatedTrip;
+        });
+        
+        // Update lightbox memory if it's the same one
+        if (lightboxMemory?.id === changingPhotoId) {
+          setLightboxMemory(prev => prev ? { 
+            ...prev, 
+            uri: asset.uri,
+            thumbnail: asset.uri,
+            aspectRatio: asset.width / asset.height,
+          } : null);
+        }
+        
+        console.log('✅ Photo changed from camera:', changingPhotoId);
+      }
+    } catch (error) {
+      console.error('❌ Error changing photo from camera:', error);
+    } finally {
+      setShowChangePhotoModal(false);
+      setChangingPhotoId(null);
+    }
+  }, [changingPhotoId, lightboxMemory?.id]);
+
+  const handleChangePhotoFromLibrary = useCallback(async () => {
+    if (!changingPhotoId) return;
+    
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 1.0, // Maximum quality for ultra-sharp images
+        exif: true, // Preserve image metadata
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        
+        // Update the existing memory with the new photo
+        setTrip(prevTrip => {
+          const updatedTrip = { ...prevTrip };
+          
+          // Find and update the memory
+          for (const day of updatedTrip.days) {
+            const memoryIndex = day.memories.findIndex(m => m.id === changingPhotoId);
+            if (memoryIndex !== -1) {
+              day.memories[memoryIndex] = {
+                ...day.memories[memoryIndex],
+                uri: asset.uri,
+                thumbnail: asset.uri,
+                aspectRatio: asset.width / asset.height,
+                timestamp: new Date(), // Update timestamp
+              };
+              break;
+            }
+          }
+          
+          return updatedTrip;
+        });
+        
+        // Update lightbox memory if it's the same one
+        if (lightboxMemory?.id === changingPhotoId) {
+          setLightboxMemory(prev => prev ? { 
+            ...prev, 
+            uri: asset.uri,
+            thumbnail: asset.uri,
+            aspectRatio: asset.width / asset.height,
+          } : null);
+        }
+        
+        console.log('✅ Photo changed from library:', changingPhotoId);
+      }
+    } catch (error) {
+      console.error('❌ Error changing photo from library:', error);
+    } finally {
+      setShowChangePhotoModal(false);
+      setChangingPhotoId(null);
+    }
+  }, [changingPhotoId, lightboxMemory?.id]);
   
   const handleAddDay = useCallback((dayNumber: number) => {
     console.log('Add day:', dayNumber);
@@ -442,10 +591,11 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
             contentFit="cover"
             priority="high"
             cachePolicy="memory-disk"
-            transition={200}
-            recyclingKey={trip.id}
-            allowDownscaling={false}
-            autoplay={false}
+            transition={50}
+            decodeFormat="rgb"
+            placeholderContentFit="cover"
+            enableLiveTextInteraction={false}
+            accessible={false}
           />
           <LinearGradient
             colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.1)']}
@@ -600,6 +750,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
               onPress={handlePhotoPress}
               onCaptionEdit={handleCaptionEdit}
               onCaptionUpdate={handleCaptionUpdate}
+              onDeletePhoto={handleDeletePhoto}
+              onChangePhoto={handleChangePhoto}
               showCaption={true} // Always show captions in story view
               isEditingCaption={editingCaptionId === memory.id}
               borderRadius={BORDER_RADIUS.md}
@@ -610,7 +762,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           <TouchableOpacity 
             style={[styles.addMemoryPlaceholder, { 
               backgroundColor: colors.surface.secondary,
-              borderColor: colors.border.secondary,
+              borderColor: '#000000', // Black outline moved from Day card
+              borderWidth: 2,
             }]}
             onPress={() => handleAddMemory(selectedDay)}
           >
@@ -638,7 +791,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           <TouchableOpacity 
             style={[styles.addMemoryPlaceholder, { 
               backgroundColor: colors.surface.secondary,
-              borderColor: colors.border.secondary,
+              borderColor: '#000000', // Black outline moved from Day card
+              borderWidth: 2,
             }]}
             onPress={() => handleAddMemory(selectedDay)}
           >
@@ -669,6 +823,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
                   <MinimalPhotoCard
                     memory={memory}
                     onPress={handlePhotoPress}
+                    onDeletePhoto={handleDeletePhoto}
+                    onChangePhoto={handleChangePhoto}
                     showCaption={false} // Hide captions in grid view
                     width={photoWidth}
                     borderRadius={BORDER_RADIUS.md}
@@ -686,6 +842,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
                   <MinimalPhotoCard
                     memory={memory}
                     onPress={handlePhotoPress}
+                    onDeletePhoto={handleDeletePhoto}
+                    onChangePhoto={handleChangePhoto}
                     showCaption={false} // Hide captions in grid view
                     width={photoWidth}
                     borderRadius={BORDER_RADIUS.md}
@@ -699,7 +857,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         <TouchableOpacity 
           style={[styles.addMemoryPlaceholder, { 
             backgroundColor: colors.surface.secondary,
-            borderColor: colors.border.secondary,
+            borderColor: '#000000', // Black outline moved from Day card
+            borderWidth: 2,
             marginHorizontal: GRID_PADDING,
           }]}
           onPress={() => handleAddMemory(selectedDay)}
@@ -770,6 +929,67 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           onCaptionUpdate={handleCaptionUpdate}
         />
       )}
+      
+      {/* Change Photo Modal */}
+      <Modal
+        visible={showChangePhotoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowChangePhotoModal(false);
+          setChangingPhotoId(null);
+        }}
+      >
+        <View style={styles.changePhotoModalOverlay}>
+          <View style={styles.changePhotoModal}>
+            {/* Modal Header */}
+            <View style={styles.changePhotoHeader}>
+              <Text style={styles.changePhotoTitle}>
+                Change Photo
+              </Text>
+              <Text style={styles.changePhotoSubtitle}>
+                How would you like to add a photo?
+              </Text>
+            </View>
+            
+            {/* Options */}
+            <View style={styles.changePhotoOptions}>
+              <TouchableOpacity 
+                style={[styles.changePhotoOption, { 
+                  borderTopWidth: 0.5,
+                  borderTopColor: '#E0E0E0',
+                }]}
+                onPress={handleChangePhotoFromCamera}
+              >
+                <Text style={styles.changePhotoOptionText}>
+                  Take Photo
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.changePhotoOption}
+                onPress={handleChangePhotoFromLibrary}
+              >
+                <Text style={styles.changePhotoOptionText}>
+                  Choose from Library
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.changePhotoOption, { borderBottomWidth: 0 }]}
+                onPress={() => {
+                  setShowChangePhotoModal(false);
+                  setChangingPhotoId(null);
+                }}
+              >
+                <Text style={styles.changePhotoOptionText}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1080,5 +1300,67 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   bottomSpacing: {
     height: 100,
+  },
+  
+  // Change Photo Modal Styles
+  changePhotoModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  
+  changePhotoModal: {
+    borderRadius: 14,
+    width: screenWidth * 0.65,
+    maxWidth: 270,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.35,
+    shadowRadius: 35,
+    elevation: 25,
+  },
+  
+  changePhotoHeader: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md,
+    alignItems: 'center',
+  },
+  
+  changePhotoTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: SPACING.xs,
+    textAlign: 'center',
+    color: '#000000',
+  },
+  
+  changePhotoSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    color: '#666666',
+  },
+  
+  changePhotoOptions: {
+    // Container for options
+  },
+  
+  changePhotoOption: {
+    paddingVertical: SPACING.md + 2,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E0E0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 44,
+  },
+  
+  changePhotoOptionText: {
+    fontSize: 17,
+    fontWeight: '400',
+    color: '#007AFF',
   },
 }); 

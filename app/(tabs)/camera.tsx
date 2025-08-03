@@ -102,7 +102,7 @@ export default function CameraScreen() {
     if (!cameraRef.current) return;
     try {
       const photo = await cameraRef.current.takePictureAsync({ 
-        quality: 1.0, // Maximum quality for ultra-sharp photos
+        quality: 1.0, // ABSOLUTE MAXIMUM quality for crystal clear photos
         skipProcessing: false,
         mirror: false,
         exif: true, // Keep EXIF data for best quality

@@ -50,11 +50,11 @@ export const APP_LIMITS = {
 
 // Media Configuration
 export const MEDIA_CONFIG = {
-  imageQuality: 1.0, // Maximum quality for ultra-sharp images
-  imageMaxWidth: 4096, // 4K resolution for maximum detail
-  imageMaxHeight: 4096, // 4K resolution for maximum detail
-  videoQuality: 'high' as const,
-  compressionRatio: 0.95, // Minimal compression for best quality
+  imageQuality: 1.0, // ABSOLUTE MAXIMUM quality for crystal clear images
+  imageMaxWidth: 3840, // Ultra high resolution for crystal clarity
+  imageMaxHeight: 3840, // Ultra high resolution for crystal clarity
+  videoQuality: 'highest' as const,
+  compressionRatio: 1.0, // ZERO compression for maximum clarity
 };
 
 // Deep Link Configuration

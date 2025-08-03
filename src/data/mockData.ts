@@ -111,7 +111,7 @@ export const mockUsers: User[] = [
       show3D: true,
       exportFormat: 'json',
       includeMedia: true,
-      imageQuality: 'high',
+      imageQuality: 'original', // Maximum quality setting
     },
   }
 ];
@@ -224,7 +224,7 @@ export const mockMedia: Media[] = [
     width: 800,
     height: 600,
     format: 'jpg',
-    quality: 'high',
+            quality: 'original', // Maximum quality - no compromises
     metadata: {
       fileSize: 1024000,
       mimeType: 'image/jpeg',
