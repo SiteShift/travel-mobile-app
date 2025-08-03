@@ -14,13 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
-import Reanimated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withSpring, 
-  runOnJS,
-  useAnimatedGestureHandler 
-} from 'react-native-reanimated';
+
 
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -108,8 +102,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
   const [lightboxMemory, setLightboxMemory] = useState<MinimalMemory | null>(null);
   const [showChangePhotoModal, setShowChangePhotoModal] = useState(false);
   const [changingPhotoId, setChangingPhotoId] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [isReorderMode, setIsReorderMode] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
   
@@ -475,24 +468,38 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     console.log('✅ Photo moved from', fromIndex, 'to', toIndex, 'for day:', selectedDay);
   }, [selectedDay]);
 
-  const handleDragStart = useCallback((index: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsDragging(true);
-    setDraggedIndex(index);
-  }, []);
+  const handleMovePhoto = useCallback((fromIndex: number, direction: 'up' | 'down') => {
+    const currentDay = trip.days.find(d => d.day === selectedDay);
+    if (!currentDay) return;
 
-  const handleDragEnd = useCallback((fromIndex: number, toIndex: number) => {
-    setIsDragging(false);
-    setDraggedIndex(null);
+    const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
     
-    if (fromIndex !== toIndex) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      handleReorderPhotos(fromIndex, toIndex);
-    }
-  }, [handleReorderPhotos]);
+    // Check bounds
+    if (toIndex < 0 || toIndex >= currentDay.memories.length) return;
 
-  // Draggable Photo Component
-  const DraggablePhotoItem = useCallback(({ 
+    setTrip(prevTrip => {
+      const updatedTrip = { ...prevTrip };
+      const dayIndex = updatedTrip.days.findIndex(d => d.day === selectedDay);
+      
+      if (dayIndex !== -1) {
+        const memories = [...updatedTrip.days[dayIndex].memories];
+        const [movedMemory] = memories.splice(fromIndex, 1);
+        memories.splice(toIndex, 0, movedMemory);
+        
+        updatedTrip.days[dayIndex] = {
+          ...updatedTrip.days[dayIndex],
+          memories,
+        };
+      }
+      
+      return updatedTrip;
+    });
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    console.log('✅ Photo moved from', fromIndex, 'to', toIndex, 'for day:', selectedDay);
+  }, [selectedDay, trip.days]);
+
+  const ReorderablePhotoItem = useCallback(({ 
     memory, 
     index, 
     isStoryView = true 
@@ -501,73 +508,51 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     index: number; 
     isStoryView?: boolean;
   }) => {
-    const translateX = useSharedValue(0);
-    const translateY = useSharedValue(0);
-    const scale = useSharedValue(1);
-    const zIndex = useSharedValue(0);
-    
-    const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
-      onStart: () => {
-        scale.value = withSpring(1.05);
-        zIndex.value = 1000;
-        runOnJS(handleDragStart)(index);
-      },
-      onActive: (event) => {
-        translateX.value = event.translationX;
-        translateY.value = event.translationY;
-      },
-      onEnd: () => {
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
-        scale.value = withSpring(1);
-        zIndex.value = withSpring(0);
-        
-        // Calculate drop position based on translateY
-        const itemHeight = isStoryView ? 300 : 200; // Approximate item height
-        const moveDistance = Math.round(translateY.value / itemHeight);
-        const newIndex = Math.max(0, Math.min(index + moveDistance, (currentDay?.memories.length || 1) - 1));
-        
-        runOnJS(handleDragEnd)(index, newIndex);
-      },
-    });
-
-    const animatedStyle = useAnimatedStyle(() => ({
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { scale: scale.value },
-      ],
-      zIndex: zIndex.value,
-      elevation: zIndex.value > 0 ? 8 : 0,
-    }));
-
-    const isDraggedItem = draggedIndex === index;
+    const currentDay = trip.days.find(d => d.day === selectedDay);
+    const canMoveUp = index > 0;
+    const canMoveDown = index < (currentDay?.memories.length || 1) - 1;
 
     return (
-      <PanGestureHandler onGestureEvent={gestureHandler}>
-        <Reanimated.View 
-          style={[
-            isStoryView ? styles.sortableItem : styles.sortableGridItem,
-            animatedStyle,
-            isDraggedItem && styles.draggedItem
-          ]}
-        >
-          <MinimalPhotoCard
-            memory={memory}
-            onPress={isDragging ? () => {} : handlePhotoPress}
-            onCaptionEdit={isStoryView && !isDragging ? handleCaptionEdit : undefined}
-            onCaptionUpdate={isStoryView && !isDragging ? handleCaptionUpdate : undefined}
-            onDeletePhoto={!isDragging ? handleDeletePhoto : undefined}
-            onChangePhoto={!isDragging ? handleChangePhoto : undefined}
-            showCaption={isStoryView}
-            isEditingCaption={editingCaptionId === memory.id && !isDragging}
-            borderRadius={BORDER_RADIUS.md}
-            width={!isStoryView ? screenWidth * 0.4 : undefined}
-          />
-        </Reanimated.View>
-      </PanGestureHandler>
+      <View style={[
+        isStoryView ? styles.sortableItem : styles.sortableGridItem,
+        isReorderMode && styles.reorderModeItem
+      ]}>
+        <MinimalPhotoCard
+          memory={memory}
+          onPress={isReorderMode ? () => {} : handlePhotoPress}
+          onCaptionEdit={isStoryView && !isReorderMode ? handleCaptionEdit : undefined}
+          onCaptionUpdate={isStoryView && !isReorderMode ? handleCaptionUpdate : undefined}
+          onDeletePhoto={!isReorderMode ? handleDeletePhoto : undefined}
+          onChangePhoto={!isReorderMode ? handleChangePhoto : undefined}
+          showCaption={isStoryView && !isReorderMode}
+          isEditingCaption={editingCaptionId === memory.id && !isReorderMode}
+          borderRadius={BORDER_RADIUS.md}
+          width={!isStoryView ? screenWidth * 0.4 : undefined}
+        />
+        
+        {/* Reorder Controls */}
+        {isReorderMode && (
+          <View style={styles.reorderControls}>
+            <TouchableOpacity
+              style={[styles.reorderButton, !canMoveUp && styles.reorderButtonDisabled]}
+              onPress={() => canMoveUp && handleMovePhoto(index, 'up')}
+              disabled={!canMoveUp}
+            >
+              <Icon name="chevron-up" size="md" color={canMoveUp ? '#007AFF' : '#C7C7CC'} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.reorderButton, !canMoveDown && styles.reorderButtonDisabled]}
+              onPress={() => canMoveDown && handleMovePhoto(index, 'down')}
+              disabled={!canMoveDown}
+            >
+              <Icon name="chevron-down" size="md" color={canMoveDown ? '#007AFF' : '#C7C7CC'} />
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     );
-  }, [draggedIndex, isDragging, handleDragStart, handleDragEnd, handlePhotoPress, handleCaptionEdit, handleCaptionUpdate, handleDeletePhoto, handleChangePhoto, editingCaptionId, screenWidth]);
+  }, [isReorderMode, handleMovePhoto, handlePhotoPress, handleCaptionEdit, handleCaptionUpdate, handleDeletePhoto, handleChangePhoto, editingCaptionId, screenWidth, trip.days, selectedDay]);
 
   const handleAddDay = useCallback((dayNumber: number) => {
     console.log('Add day:', dayNumber);
@@ -874,7 +859,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         {/* Photos */}
         <View style={styles.photosContainer}>
           {currentDay.memories.map((memory: MinimalMemory, index: number) => (
-            <DraggablePhotoItem
+            <ReorderablePhotoItem
               key={memory.id}
               memory={memory}
               index={index}
@@ -937,7 +922,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         {/* Grid Photos */}
         <View style={styles.gridPhotosWrapper}>
           {currentMemories.map((memory: MinimalMemory, index: number) => (
-            <DraggablePhotoItem
+            <ReorderablePhotoItem
               key={memory.id}
               memory={memory}
               index={index}
@@ -993,7 +978,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled={true}
-            scrollEnabled={!isDragging}
+            scrollEnabled={!isReorderMode}
           >
             {/* Header */}
             {renderHeader()}
@@ -1001,6 +986,26 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
             <View style={styles.contentArea}>
               {/* Day Selector */}
               {renderDaySelector()}
+              
+              {/* Reorder Mode Toggle */}
+              <View style={styles.reorderToggleContainer}>
+                <TouchableOpacity
+                  style={[styles.reorderToggle, isReorderMode && styles.reorderToggleActive]}
+                  onPress={() => setIsReorderMode(!isReorderMode)}
+                >
+                  <Icon 
+                    name={isReorderMode ? "checkmark" : "swap-vertical"} 
+                    size="sm" 
+                    color={isReorderMode ? '#FFFFFF' : '#007AFF'} 
+                  />
+                  <Text style={[
+                    styles.reorderToggleText, 
+                    isReorderMode && styles.reorderToggleTextActive
+                  ]}>
+                    {isReorderMode ? 'Done' : 'Reorder'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               
               {/* Main Content */}
               {viewMode === 'story' ? renderStoryView() : renderGridView()}
@@ -1340,12 +1345,73 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: '50%',
   },
   
-  draggedItem: {
+  reorderModeItem: {
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderRadius: BORDER_RADIUS.md,
+    borderStyle: 'dashed',
+  },
+  
+  reorderControls: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    transform: [{ translateY: -40 }],
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 20,
+    padding: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  
+  reorderButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 20,
+    marginVertical: 2,
+  },
+  
+  reorderButtonDisabled: {
+    opacity: 0.3,
+  },
+  
+  reorderToggleContainer: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+  },
+  
+  reorderToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    backgroundColor: '#FFFFFF',
+    gap: SPACING.xs,
+  },
+  
+  reorderToggleActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  
+  reorderToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  
+  reorderToggleTextActive: {
+    color: '#FFFFFF',
   },
   
   addMemoryPlaceholder: {
