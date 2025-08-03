@@ -14,6 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -439,6 +440,25 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
       setChangingPhotoId(null);
     }
   }, [changingPhotoId, lightboxMemory?.id]);
+
+  const handleReorderPhotos = useCallback((data: MinimalMemory[]) => {
+    setTrip(prevTrip => {
+      const updatedTrip = { ...prevTrip };
+      
+      // Find the current day and update its memories with the new order
+      const dayIndex = updatedTrip.days.findIndex(d => d.day === selectedDay);
+      if (dayIndex !== -1) {
+        updatedTrip.days[dayIndex] = {
+          ...updatedTrip.days[dayIndex],
+          memories: data,
+        };
+      }
+      
+      return updatedTrip;
+    });
+    
+    console.log('✅ Photos reordered for day:', selectedDay);
+  }, [selectedDay]);
   
   const handleAddDay = useCallback((dayNumber: number) => {
     console.log('Add day:', dayNumber);
@@ -724,11 +744,28 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     return completedDays;
   };
   
+  const renderDraggablePhotoItem = ({ item: memory, drag, isActive }: RenderItemParams<MinimalMemory>) => {
+    return (
+      <View style={[styles.draggableItem, isActive && styles.draggableItemActive]}>
+        <MinimalPhotoCard
+          memory={memory}
+          onPress={handlePhotoPress}
+          onCaptionEdit={handleCaptionEdit}
+          onCaptionUpdate={handleCaptionUpdate}
+          onDeletePhoto={handleDeletePhoto}
+          onChangePhoto={handleChangePhoto}
+          showCaption={true} // Always show captions in story view
+          isEditingCaption={editingCaptionId === memory.id}
+          borderRadius={BORDER_RADIUS.md}
+          onLongPress={drag}
+          isDragging={isActive}
+        />
+      </View>
+    );
+  };
+
   const renderStoryView = () => {
     if (!currentDay) return null;
-    
-    // Check for next available day to add
-    const nextDayToAdd = trip.days.find(d => d.memories.length === 0 && d.day !== selectedDay);
     
     return (
       <View style={styles.storyContainer}>
@@ -741,22 +778,18 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           </View>
         </View>
         
-        {/* Photos */}
+        {/* Draggable Photos */}
         <View style={styles.photosContainer}>
-          {currentDay.memories.map(memory => (
-            <MinimalPhotoCard
-              key={memory.id}
-              memory={memory}
-              onPress={handlePhotoPress}
-              onCaptionEdit={handleCaptionEdit}
-              onCaptionUpdate={handleCaptionUpdate}
-              onDeletePhoto={handleDeletePhoto}
-              onChangePhoto={handleChangePhoto}
-              showCaption={true} // Always show captions in story view
-              isEditingCaption={editingCaptionId === memory.id}
-              borderRadius={BORDER_RADIUS.md}
+          {currentDay.memories.length > 0 && (
+            <DraggableFlatList
+              data={currentDay.memories}
+              onDragEnd={({ data }) => handleReorderPhotos(data)}
+              keyExtractor={(item) => item.id}
+              renderItem={renderDraggablePhotoItem}
+              scrollEnabled={false} // Disable scroll since we're inside a ScrollView
+              style={styles.draggableList}
             />
-          ))}
+          )}
           
           {/* Add Memory Placeholder */}
           <TouchableOpacity 
@@ -773,12 +806,33 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
             </Text>
           </TouchableOpacity>
         </View>
-        
-
       </View>
     );
   };
   
+  const renderGridDraggableItem = ({ item: memory, drag, isActive }: RenderItemParams<MinimalMemory>) => {
+    const GRID_PADDING = SPACING.md;
+    const GRID_GAP = SPACING.sm;
+    const availableWidth = screenWidth - (GRID_PADDING * 2);
+    const photoWidth = (availableWidth - GRID_GAP) / 2;
+    
+    return (
+      <View style={[styles.gridPhotoWrapper, isActive && styles.draggableItemActive]}>
+        <MinimalPhotoCard
+          memory={memory}
+          onPress={handlePhotoPress}
+          onDeletePhoto={handleDeletePhoto}
+          onChangePhoto={handleChangePhoto}
+          onLongPress={drag}
+          isDragging={isActive}
+          showCaption={false} // Hide captions in grid view
+          width={photoWidth}
+          borderRadius={BORDER_RADIUS.md}
+        />
+      </View>
+    );
+  };
+
   const renderGridView = () => {
     // Get memories from selected day only (like story mode)
     const currentDay = trip.days.find(d => d.day === selectedDay);
@@ -807,51 +861,22 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     
     // Perfect grid spacing calculations
     const GRID_PADDING = SPACING.md;
-    const GRID_GAP = SPACING.sm;
-    const availableWidth = screenWidth - (GRID_PADDING * 2);
-    const photoWidth = (availableWidth - GRID_GAP) / 2;
     
     return (
       <View style={[styles.gridContainer, { paddingHorizontal: GRID_PADDING }]}>
-        <View style={styles.gridRow}>
-          {/* Left Column */}
-          <View style={[styles.gridColumn, { width: photoWidth }]}>
-            {currentMemories
-              .filter((_, index) => index % 2 === 0)
-              .map(memory => (
-                <View key={memory.id} style={styles.gridPhotoWrapper}>
-                  <MinimalPhotoCard
-                    memory={memory}
-                    onPress={handlePhotoPress}
-                    onDeletePhoto={handleDeletePhoto}
-                    onChangePhoto={handleChangePhoto}
-                    showCaption={false} // Hide captions in grid view
-                    width={photoWidth}
-                    borderRadius={BORDER_RADIUS.md}
-                  />
-                </View>
-              ))}
-          </View>
-          
-          {/* Right Column */}
-          <View style={[styles.gridColumn, { width: photoWidth }]}>
-            {currentMemories
-              .filter((_, index) => index % 2 === 1)
-              .map(memory => (
-                <View key={memory.id} style={styles.gridPhotoWrapper}>
-                  <MinimalPhotoCard
-                    memory={memory}
-                    onPress={handlePhotoPress}
-                    onDeletePhoto={handleDeletePhoto}
-                    onChangePhoto={handleChangePhoto}
-                    showCaption={false} // Hide captions in grid view
-                    width={photoWidth}
-                    borderRadius={BORDER_RADIUS.md}
-                  />
-                </View>
-              ))}
-          </View>
-        </View>
+        {/* Draggable Grid */}
+        {currentMemories.length > 0 && (
+          <DraggableFlatList
+            data={currentMemories}
+            onDragEnd={({ data }) => handleReorderPhotos(data)}
+            keyExtractor={(item) => item.id}
+            renderItem={renderGridDraggableItem}
+            numColumns={2}
+            scrollEnabled={false} // Disable scroll since we're inside a ScrollView
+            style={styles.draggableGridList}
+            contentContainerStyle={styles.draggableGridContent}
+          />
+        )}
         
         {/* Add Memory Button for Grid View */}
         <TouchableOpacity 
@@ -1221,6 +1246,33 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: SPACING.lg,
   },
   
+  // Draggable styles
+  draggableList: {
+    flexGrow: 0,
+  },
+  
+  draggableGridList: {
+    flexGrow: 0,
+  },
+  
+  draggableGridContent: {
+    paddingBottom: SPACING.lg,
+  },
+  
+  draggableItem: {
+    marginBottom: SPACING.lg,
+  },
+  
+  draggableItemActive: {
+    opacity: 0.9,
+    transform: [{ scale: 1.02 }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  
   addMemoryPlaceholder: {
     height: 120,
     borderWidth: 1,
@@ -1277,7 +1329,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   
   gridPhotoWrapper: {
-    marginBottom: SPACING.sm, // Reduced from SPACING.md to match smaller horizontal gaps
+    marginBottom: SPACING.sm,
+    flex: 0.5,
+    paddingHorizontal: SPACING.xs / 2,
   },
   
   // Empty State
