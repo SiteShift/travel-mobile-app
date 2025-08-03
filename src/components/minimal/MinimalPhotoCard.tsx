@@ -135,10 +135,7 @@ const MinimalPhotoCard: React.FC<MinimalPhotoCardProps> = memo(({
       }
     ]}>
       <TouchableOpacity
-        style={[
-          styles.container, 
-          { width, height, borderRadius }
-        ]}
+        style={[styles.container, { width, height, borderRadius }]}
         onPress={handlePress}
         activeOpacity={0.95}
       >
@@ -279,11 +276,6 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     backgroundColor: 'white',
-  },
-  
-  draggingContainer: {
-    opacity: 0.8,
-    transform: [{ scale: 1.05 }],
   },
   
   loadingState: {
