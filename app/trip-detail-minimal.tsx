@@ -14,12 +14,20 @@ import {
   Modal,
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
+import Reanimated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  runOnJS,
+  useAnimatedGestureHandler 
+} from 'react-native-reanimated';
 
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 
 
 // Components
@@ -100,6 +108,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
   const [lightboxMemory, setLightboxMemory] = useState<MinimalMemory | null>(null);
   const [showChangePhotoModal, setShowChangePhotoModal] = useState(false);
   const [changingPhotoId, setChangingPhotoId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
   
@@ -441,10 +451,124 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
       setShowChangePhotoModal(false);
       setChangingPhotoId(null);
     }
-  }, [changingPhotoId, lightboxMemory?.id]);
+    }, [changingPhotoId, lightboxMemory?.id]);
 
+  const handleReorderPhotos = useCallback((fromIndex: number, toIndex: number) => {
+    setTrip(prevTrip => {
+      const updatedTrip = { ...prevTrip };
+      const dayIndex = updatedTrip.days.findIndex(d => d.day === selectedDay);
+      
+      if (dayIndex !== -1) {
+        const memories = [...updatedTrip.days[dayIndex].memories];
+        const [movedMemory] = memories.splice(fromIndex, 1);
+        memories.splice(toIndex, 0, movedMemory);
+        
+        updatedTrip.days[dayIndex] = {
+          ...updatedTrip.days[dayIndex],
+          memories,
+        };
+      }
+      
+      return updatedTrip;
+    });
+    
+    console.log('✅ Photo moved from', fromIndex, 'to', toIndex, 'for day:', selectedDay);
+  }, [selectedDay]);
 
-  
+  const handleDragStart = useCallback((index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsDragging(true);
+    setDraggedIndex(index);
+  }, []);
+
+  const handleDragEnd = useCallback((fromIndex: number, toIndex: number) => {
+    setIsDragging(false);
+    setDraggedIndex(null);
+    
+    if (fromIndex !== toIndex) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      handleReorderPhotos(fromIndex, toIndex);
+    }
+  }, [handleReorderPhotos]);
+
+  // Draggable Photo Component
+  const DraggablePhotoItem = useCallback(({ 
+    memory, 
+    index, 
+    isStoryView = true 
+  }: { 
+    memory: MinimalMemory; 
+    index: number; 
+    isStoryView?: boolean;
+  }) => {
+    const translateX = useSharedValue(0);
+    const translateY = useSharedValue(0);
+    const scale = useSharedValue(1);
+    const zIndex = useSharedValue(0);
+    
+    const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
+      onStart: () => {
+        scale.value = withSpring(1.05);
+        zIndex.value = 1000;
+        runOnJS(handleDragStart)(index);
+      },
+      onActive: (event) => {
+        translateX.value = event.translationX;
+        translateY.value = event.translationY;
+      },
+      onEnd: () => {
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        scale.value = withSpring(1);
+        zIndex.value = withSpring(0);
+        
+        // Calculate drop position based on translateY
+        const itemHeight = isStoryView ? 300 : 200; // Approximate item height
+        const moveDistance = Math.round(translateY.value / itemHeight);
+        const newIndex = Math.max(0, Math.min(index + moveDistance, (currentDay?.memories.length || 1) - 1));
+        
+        runOnJS(handleDragEnd)(index, newIndex);
+      },
+    });
+
+    const animatedStyle = useAnimatedStyle(() => ({
+      transform: [
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+        { scale: scale.value },
+      ],
+      zIndex: zIndex.value,
+      elevation: zIndex.value > 0 ? 8 : 0,
+    }));
+
+    const isDraggedItem = draggedIndex === index;
+
+    return (
+      <PanGestureHandler onGestureEvent={gestureHandler}>
+        <Reanimated.View 
+          style={[
+            isStoryView ? styles.sortableItem : styles.sortableGridItem,
+            animatedStyle,
+            isDraggedItem && styles.draggedItem
+          ]}
+        >
+          <MinimalPhotoCard
+            memory={memory}
+            onPress={isDragging ? () => {} : handlePhotoPress}
+            onCaptionEdit={isStoryView && !isDragging ? handleCaptionEdit : undefined}
+            onCaptionUpdate={isStoryView && !isDragging ? handleCaptionUpdate : undefined}
+            onDeletePhoto={!isDragging ? handleDeletePhoto : undefined}
+            onChangePhoto={!isDragging ? handleChangePhoto : undefined}
+            showCaption={isStoryView}
+            isEditingCaption={editingCaptionId === memory.id && !isDragging}
+            borderRadius={BORDER_RADIUS.md}
+            width={!isStoryView ? screenWidth * 0.4 : undefined}
+          />
+        </Reanimated.View>
+      </PanGestureHandler>
+    );
+  }, [draggedIndex, isDragging, handleDragStart, handleDragEnd, handlePhotoPress, handleCaptionEdit, handleCaptionUpdate, handleDeletePhoto, handleChangePhoto, editingCaptionId, screenWidth]);
+
   const handleAddDay = useCallback((dayNumber: number) => {
     console.log('Add day:', dayNumber);
     // Future: Navigate to photo picker or day setup
@@ -750,19 +874,12 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         {/* Photos */}
         <View style={styles.photosContainer}>
           {currentDay.memories.map((memory: MinimalMemory, index: number) => (
-            <View key={memory.id} style={styles.sortableItem}>
-              <MinimalPhotoCard
-                memory={memory}
-                onPress={handlePhotoPress}
-                onCaptionEdit={handleCaptionEdit}
-                onCaptionUpdate={handleCaptionUpdate}
-                onDeletePhoto={handleDeletePhoto}
-                onChangePhoto={handleChangePhoto}
-                showCaption={true}
-                isEditingCaption={editingCaptionId === memory.id}
-                borderRadius={BORDER_RADIUS.md}
-              />
-            </View>
+            <DraggablePhotoItem
+              key={memory.id}
+              memory={memory}
+              index={index}
+              isStoryView={true}
+            />
           ))}
           
           {/* Add Memory Placeholder */}
@@ -820,18 +937,12 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         {/* Grid Photos */}
         <View style={styles.gridPhotosWrapper}>
           {currentMemories.map((memory: MinimalMemory, index: number) => (
-            <View key={memory.id} style={styles.sortableGridItem}>
-              <MinimalPhotoCard
-                memory={memory}
-                onPress={handlePhotoPress}
-                onDeletePhoto={handleDeletePhoto}
-                onChangePhoto={handleChangePhoto}
-                showCaption={false}
-                isEditingCaption={false}
-                borderRadius={BORDER_RADIUS.md}
-                width={screenWidth * 0.4}
-              />
-            </View>
+            <DraggablePhotoItem
+              key={memory.id}
+              memory={memory}
+              index={index}
+              isStoryView={false}
+            />
           ))}
         </View>
         
@@ -882,7 +993,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled={true}
-
+            scrollEnabled={!isDragging}
           >
             {/* Header */}
             {renderHeader()}
@@ -1227,6 +1338,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginBottom: SPACING.sm,
     alignItems: 'center',
     width: '50%',
+  },
+  
+  draggedItem: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 16,
   },
   
   addMemoryPlaceholder: {
