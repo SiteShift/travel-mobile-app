@@ -1442,4 +1442,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontWeight: '400',
     color: '#007AFF',
   },
-}); 
+});
+
+ 
