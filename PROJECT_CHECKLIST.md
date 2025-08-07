@@ -156,6 +156,15 @@ Building a premium travel diary mobile app with map-centric design and "Airbnb-l
     - Efficient update mechanism only touches relevant memory objects
     - No data loss or inconsistency during caption editing sessions
 - **CREATED PREMIUM PHOTO LIGHTBOX** with full-screen viewing and editing
+
+### 2025-08-07 UI Polish - Add Trip Book Animation
+- [x] Real book-opening animation for Add Trip flow
+  ✅ Implemented 2025-08-07: Reworked `AnimatedBookCreation` to use a true left-edge hinge rotation for the cover with perspective transforms, measured pivot, dynamic shadows, and staggered page reveal for a realistic book open. Improved easing, timing, and layering for smoother performance. Located in `src/components/AnimatedBookCreation.tsx`.
+  - Added `coverHingeRotationY` shared value and width-based pivot math
+  - Introduced `coverShadowOverlay` with animated opacity tied to rotation
+  - Refined page flip using translateX pivot and perspective for natural feel
+  - Maintained performance with Reanimated worklets and early returns
+
   - **IMMERSIVE FULL-SCREEN EXPERIENCE**: Cinema-quality photo viewing
     - Complete full-screen overlay with intelligent image sizing
     - Maintains natural aspect ratios while maximizing screen usage

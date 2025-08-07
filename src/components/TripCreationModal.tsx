@@ -184,18 +184,16 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
       if (source === 'camera') {
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 1.0, // Maximum quality for ultra-sharp images
-        exif: true, // Preserve image metadata
+          allowsEditing: false, // do not crop
+          quality: 1.0,
+          exif: true,
       });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [16, 9],
-          quality: 1.0, // Maximum quality for ultra-sharp images
-          exif: true, // Preserve image metadata
+          allowsEditing: false, // do not crop
+          quality: 1.0,
+          exif: true,
         });
       }
       

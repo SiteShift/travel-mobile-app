@@ -433,9 +433,29 @@ export default function HomeTab() {
     };
 
     if (trip.type === 'placeholder') {
+      // Anticipation: press scale for the card
+      const pressScale = useRef(new Animated.Value(1)).current;
+      const onPressIn = () => {
+        Animated.timing(pressScale, {
+          toValue: 0.98,
+          duration: 90,
+          useNativeDriver: true,
+        }).start();
+      };
+      const onPressOut = () => {
+        Animated.timing(pressScale, {
+          toValue: 1,
+          duration: 110,
+          useNativeDriver: true,
+        }).start();
+      };
+      const cardPress = () => {
+        // Small delay so the scale is perceptible
+        setTimeout(() => handleTripPress(trip), 60);
+      };
       return (
         <View style={styles.itemContainer}>
-          <Animated.View style={[styles.unifiedWrapper, unifiedTransform]}>
+          <Animated.View style={[styles.unifiedWrapper, unifiedTransform, { transform: [...(unifiedTransform as any).transform, { scale: pressScale }] }]}>
             {/* Book pages - positioned behind the card */}
             <View style={styles.bookPagesContainer}>
               <View style={[styles.bookPage, styles.bookPage3, { backgroundColor: colors.surface.tertiary }]} />
@@ -448,7 +468,10 @@ export default function HomeTab() {
                 backgroundColor: colors.surface.secondary,
                 borderColor: colors.border.primary,
               }]} 
-              onPress={() => handleTripPress(trip)}
+              onPress={cardPress}
+              onPressIn={onPressIn}
+              onPressOut={onPressOut}
+              accessibilityLabel="Add Trip"
             >
               {/* Dotted border overlay */}
               <View style={[styles.dottedBorder, { borderColor: colors.border.primary }]} />
@@ -482,7 +505,9 @@ export default function HomeTab() {
                   styles.tripButton,
                   pressed && styles.tripButtonPressed,
                 ]} 
-                onPress={() => handleTripPress(trip)}
+                onPress={cardPress}
+                onPressIn={onPressIn}
+                onPressOut={onPressOut}
               >
                 <LinearGradient
                   colors={['#f4845f', '#ef6144']}

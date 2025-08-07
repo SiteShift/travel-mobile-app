@@ -211,7 +211,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
             onPress={handleClose}
             hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
           >
-            <Icon name="x" size="md" color="white" />
+          <Icon name="close" size="md" color="white" />
           </TouchableOpacity>
           
           {/* Image */}
