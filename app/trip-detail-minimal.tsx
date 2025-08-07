@@ -997,12 +997,12 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
 const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // White background for entire screen
+    backgroundColor: 'transparent',
   },
   
   modal: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // Explicitly white background
+    backgroundColor: 'transparent',
     overflow: 'hidden',
   },
   
@@ -1179,7 +1179,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   // Scroll View
   scrollView: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // Ensure white background throughout
+    backgroundColor: 'transparent',
   },
   
   contentArea: {

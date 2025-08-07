@@ -27,6 +27,15 @@ export default function RootLayout() {
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen 
+            name="trip/[id]" 
+            options={{ 
+              headerShown: false,
+              presentation: 'transparentModal',
+              animation: 'fade',
+              contentStyle: { backgroundColor: 'transparent' },
+            }} 
+          />
+          <Stack.Screen 
             name="entry-editor" 
             options={{ 
               headerShown: false, 

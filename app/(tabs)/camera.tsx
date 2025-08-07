@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, StatusBar } from 'react-native';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, StatusBar, Animated as RNAnimated } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType, FlashMode } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { Icon } from '../../src/components/Icon';
@@ -24,11 +24,15 @@ export default function CameraScreen() {
   const [zoom, setZoom] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   
   // Refs
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
+  const shutterOpacity = useRef(new RNAnimated.Value(0)).current; // legacy (unused now)
+  const flashOpacity = useRef(new RNAnimated.Value(0)).current;
   
   // Animation Shared Values
   const scale = useSharedValue(1);
@@ -46,8 +50,10 @@ export default function CameraScreen() {
           clearTimeout(recordingTimer.current);
           recordingTimer.current = null;
         }
+        setIsNavigating(false);
+        shutterOpacity.setValue(0);
       };
-    }, [])
+    }, [shutterOpacity])
   );
 
   // Animated Styles
@@ -101,19 +107,26 @@ export default function CameraScreen() {
   const takePicture = useCallback(async () => {
     if (!cameraRef.current) return;
     try {
+      // White flash to mask any preview pause during capture
+      flashOpacity.setValue(1);
+      RNAnimated.timing(flashOpacity, { toValue: 0, duration: 180, useNativeDriver: true }).start();
       const photo = await cameraRef.current.takePictureAsync({ 
-        quality: 1.0, // ABSOLUTE MAXIMUM quality for crystal clear photos
-        skipProcessing: false,
+        quality: 1.0,
+        skipProcessing: true,
         mirror: false,
-        exif: true, // Keep EXIF data for best quality
+        exif: true,
       });
       if (photo?.uri) {
         navigateToEditor(photo.uri, false);
+      } else {
+        // ensure flash is gone
+        flashOpacity.setValue(0);
       }
     } catch (e) {
+      flashOpacity.setValue(0);
       console.error('Photo capture failed:', e);
     }
-  }, [navigateToEditor]);
+  }, [navigateToEditor, shutterOpacity]);
 
   const startRecording = useCallback(() => {
     if (!cameraRef.current) return;
@@ -144,7 +157,9 @@ export default function CameraScreen() {
       clearTimeout(recordingTimer.current);
       recordingTimer.current = null;
       buttonScale.value = withTiming(1);
-      takePicture();
+      if (isCameraReady) {
+        takePicture();
+      }
     } else if (isRecording) {
       cameraRef.current?.stopRecording();
       setIsRecording(false);
@@ -152,7 +167,7 @@ export default function CameraScreen() {
       recordingProgress.value = 0;
       buttonScale.value = withTiming(1);
     }
-  }, [isRecording, takePicture, buttonScale, recordingProgress]);
+  }, [isRecording, takePicture, buttonScale, recordingProgress, isCameraReady]);
 
   const toggleFlash = useCallback(() => {
     setFlash(current => (current === 'off' ? 'on' : 'off'));
@@ -189,7 +204,14 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.fullScreenContainer}>
-      <CameraView style={styles.fullScreenCamera} facing={facing} flash={flash} zoom={zoom} ref={cameraRef}>
+      <CameraView 
+        style={styles.fullScreenCamera} 
+        facing={facing} 
+        flash={flash} 
+        zoom={zoom} 
+        ref={cameraRef}
+        onCameraReady={() => setIsCameraReady(true)}
+      >
         <GestureDetector gesture={composedGestures}>
           <View style={styles.gestureArea} />
         </GestureDetector>
@@ -241,6 +263,8 @@ export default function CameraScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        {/* White flash overlay (very quick) */}
+        <RNAnimated.View pointerEvents="none" style={[styles.flashOverlay, { opacity: flashOpacity }]} />
       </CameraView>
     </View>
   );
@@ -261,6 +285,24 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  flashOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#fff',
+    zIndex: 20,
+  },
+  shutterOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000',
+    zIndex: 20,
   },
   gestureArea: {
     position: 'absolute',

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { LevelLightbox } from '../../src/components/LevelLightbox';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../src/contexts/ThemeContext';
@@ -789,96 +790,19 @@ export default function HomeTab() {
   };
 
   const renderLevelsModal = () => (
-    <Modal
+    <LevelLightbox
       visible={showLevelsModal}
-      animationType="fade"
-      transparent={true}
-      statusBarTranslucent={true}
-    >
-      <View style={styles.levelsModalOverlay}>
-        <View style={[styles.levelsModalContainer, { backgroundColor: colors.background.primary }]}>
-          {/* Header */}
-          <View style={styles.levelsModalHeader}>
-            <Text style={[styles.levelsModalTitle, { color: colors.text.primary }]}>
-              Character Collection
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowLevelsModal(false)}
-              style={styles.levelsModalCloseButton}
-            >
-              <Icon name="close" size="md" color="text" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Progress Bar */}
-          <View style={styles.levelsProgressContainer}>
-            <Text style={[styles.levelsProgressText, { color: colors.text.secondary }]}>
-              Level {userLevel} • {Math.round((userLevel / 8) * 100)}% Complete
-            </Text>
-            <View style={[styles.levelsProgressBarContainer, { backgroundColor: colors.surface.secondary }]}>
-              <Animated.View 
-                style={[
-                  styles.levelsProgressBar, 
-                  { 
-                    backgroundColor: '#FF6B6B',
-                    width: `${(userLevel / 8) * 100}%`
-                  }
-                ]} 
-              />
-            </View>
-          </View>
-
-          {/* Characters Grid */}
-          <FlatList
-            data={levelsData}
-            numColumns={2}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.levelsGrid}
-            renderItem={({ item }) => (
-              <View style={styles.levelCard}>
-                <LinearGradient
-                  colors={item.unlocked ? [item.color, `${item.color}90`] : ['#E0E0E0', '#F5F5F5']}
-                  style={[
-                    styles.levelCardGradient,
-                    !item.unlocked && styles.levelCardLocked
-                  ]}
-                >
-                  <View style={styles.levelCardContent}>
-                    <Text style={styles.levelCardCharacter}>
-                      {item.unlocked ? item.character : '🔒'}
-                    </Text>
-                    <Text style={[
-                      styles.levelCardLevel,
-                      { color: item.unlocked ? '#FFFFFF' : '#999999' }
-                    ]}>
-                      Level {item.level}
-                    </Text>
-                    <Text style={[
-                      styles.levelCardName,
-                      { color: item.unlocked ? '#FFFFFF' : '#999999' }
-                    ]}>
-                      {item.name}
-                    </Text>
-                    <Text style={[
-                      styles.levelCardDescription,
-                      { color: item.unlocked ? 'rgba(255,255,255,0.8)' : '#CCCCCC' }
-                    ]}>
-                      {item.description}
-                    </Text>
-                    {item.unlocked && (
-                      <View style={styles.levelCardUnlockedBadge}>
-                        <Text style={styles.levelCardUnlockedText}>UNLOCKED</Text>
-                      </View>
-                    )}
-                  </View>
-                </LinearGradient>
-              </View>
-            )}
-            keyExtractor={(item) => item.level.toString()}
-          />
-        </View>
-      </View>
-    </Modal>
+      onClose={() => setShowLevelsModal(false)}
+      levels={levelsData.map((l) => ({
+        level: l.level,
+        name: l.name,
+        character: l.unlocked ? l.character : '🔒',
+        unlocked: l.unlocked,
+        description: l.description,
+        color: l.color,
+      }))}
+      initialIndex={Math.max(0, (userLevel || 1) - 1)}
+    />
   );
 
   return (
@@ -997,6 +921,90 @@ export default function HomeTab() {
 }
 
 const styles = StyleSheet.create({
+  // Levels pager modal styles
+  levelsPagerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+  },
+  levelsPagerClose: {
+    position: 'absolute',
+    top: screenHeight * 0.06,
+    right: SPACING.lg,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)'
+  },
+  levelPage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelPageGradient: {
+    ...StyleSheet.absoluteFillObject as any,
+  },
+  levelPageContent: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  levelPageCharacter: {
+    fontSize: 84,
+    marginBottom: SPACING.md,
+  },
+  levelPageTitle: {
+    fontSize: 32,
+    fontWeight: FONT_WEIGHTS.bold,
+    fontFamily: 'Merienda',
+    color: 'white',
+    letterSpacing: -1,
+  },
+  levelPageName: {
+    fontSize: 22,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: 'white',
+    marginTop: 4,
+    marginBottom: SPACING.sm,
+  },
+  levelPageDescription: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 320,
+    marginBottom: SPACING.lg,
+  },
+  levelBadge: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 10,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.25)'
+  },
+  levelBadgeText: {
+    fontSize: 12,
+    fontWeight: FONT_WEIGHTS.bold,
+    letterSpacing: 1,
+    color: 'white'
+  },
+  levelsPagerDots: {
+    position: 'absolute',
+    bottom: screenHeight * 0.08,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  levelsPagerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.35)'
+  },
+  levelsPagerDotActive: {
+    backgroundColor: 'white',
+  },
   container: {
     flex: 1,
   },
