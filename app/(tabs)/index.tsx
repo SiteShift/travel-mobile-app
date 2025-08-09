@@ -806,7 +806,7 @@ export default function HomeTab() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]} pointerEvents={showTripCreationModal ? 'none' : 'auto'}>
       <StatusBar 
         barStyle={isDark ? 'light-content' : 'dark-content'} 
         backgroundColor={colors.background.primary} 

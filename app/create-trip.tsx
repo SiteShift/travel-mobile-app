@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Animated, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, Animated, StatusBar, InteractionManager } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SimpleDateTimePicker } from '../src/components/SimpleDateTimePicker';
 
 export default function CreateTripScreen() {
-  const { imageUri } = useLocalSearchParams<{ imageUri?: string }>();
+  const { imageUri, handoff } = useLocalSearchParams<{ imageUri?: string; handoff?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -15,25 +15,10 @@ export default function CreateTripScreen() {
   const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
   const [isSaving, setIsSaving] = useState(false);
 
-  // Staggered fade-in for elements
-  const fadeTitle = useRef(new Animated.Value(0)).current;
-  const fadeTitleGroup = useRef(new Animated.Value(0)).current;
-  const fadeDates = useRef(new Animated.Value(0)).current;
-  const fadeDescription = useRef(new Animated.Value(0)).current;
-  const fadeButton = useRef(new Animated.Value(0)).current;
-  const fadeClose = useRef(new Animated.Value(0)).current;
+  // Render instantly with no staged animations
 
-  useEffect(() => {
-    const duration = 260;
-    Animated.sequence([
-      Animated.timing(fadeTitle, { toValue: 1, duration, useNativeDriver: true }),
-      Animated.timing(fadeTitleGroup, { toValue: 1, duration, useNativeDriver: true }),
-      Animated.timing(fadeDates, { toValue: 1, duration, useNativeDriver: true }),
-      Animated.timing(fadeDescription, { toValue: 1, duration, useNativeDriver: true }),
-      Animated.timing(fadeButton, { toValue: 1, duration, useNativeDriver: true }),
-      Animated.timing(fadeClose, { toValue: 1, duration: 200, useNativeDriver: true }),
-    ]).start();
-  }, [fadeTitle, fadeTitleGroup, fadeDates, fadeDescription, fadeButton, fadeClose]);
+  // One-frame white guard to prevent first-run reveal when arriving via handoff
+  const [showGuard, setShowGuard] = useState(handoff === '1');
 
   const handleCreate = async () => {
     if (!title.trim() || !imageUri) {
@@ -65,12 +50,43 @@ export default function CreateTripScreen() {
     }
   };
 
+  // Staggered fade-in animations
+  const fadeTitle = useRef(new Animated.Value(0)).current;
+  const fadeTitleGroup = useRef(new Animated.Value(0)).current;
+  const fadeDatesDesc = useRef(new Animated.Value(0)).current;
+  const fadeButton = useRef(new Animated.Value(0)).current;
+  const fadeClose = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Instantly visible; then stagger children
+    Animated.sequence([
+      Animated.timing(fadeTitle, { toValue: 1, duration: 160, useNativeDriver: true }),
+      Animated.timing(fadeTitleGroup, { toValue: 1, duration: 160, useNativeDriver: true }),
+      Animated.timing(fadeDatesDesc, { toValue: 1, duration: 160, useNativeDriver: true }),
+      Animated.timing(fadeButton, { toValue: 1, duration: 160, useNativeDriver: true }),
+      Animated.timing(fadeClose, { toValue: 1, duration: 120, useNativeDriver: true }),
+    ]).start();
+  }, [fadeTitle, fadeTitleGroup, fadeDatesDesc, fadeButton, fadeClose]);
+
+  useEffect(() => {
+    if (!showGuard) return;
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => setShowGuard(false));
+    });
+  }, [showGuard]);
+
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      {/* Instant render: no white overlay */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.content}>
-          {/* Close button (fades last) */}
-          <Animated.View style={[styles.closeButtonWrapper, { opacity: fadeClose, top: insets.top + 12 }]}> 
+          {/* First-render guard to ensure white is fully painted on first frame */}
+          {showGuard && (
+            <View pointerEvents="none" style={styles.whiteOverlay} />
+          )}
+          {/* Close button */}
+          <Animated.View style={[styles.closeButtonWrapper, { top: insets.top + 12, opacity: fadeClose }]}> 
             <TouchableOpacity
               onPress={() => router.replace('/(tabs)')}
               activeOpacity={0.8}
@@ -96,7 +112,7 @@ export default function CreateTripScreen() {
               />
             </Animated.View>
 
-            <Animated.View style={[styles.row, { opacity: fadeDates }]}> 
+            <Animated.View style={[styles.row, { opacity: fadeDatesDesc }]}> 
               <View style={styles.col}>
                 <Text style={styles.label}>Start Date</Text>
                 <SimpleDateTimePicker value={startDate} onDateChange={setStartDate} mode="date" />
@@ -107,7 +123,7 @@ export default function CreateTripScreen() {
               </View>
             </Animated.View>
 
-            <Animated.View style={[styles.group, { opacity: fadeDescription }]}> 
+            <Animated.View style={[styles.group, { opacity: fadeDatesDesc }]}> 
               <Text style={styles.label}>Description</Text>
               <TextInput
                 style={[styles.input, styles.multiline]}
@@ -119,7 +135,7 @@ export default function CreateTripScreen() {
               />
             </Animated.View>
 
-            <Animated.View style={{ opacity: fadeButton }}> 
+            <Animated.View style={{ opacity: fadeButton }}>
               <TouchableOpacity style={[styles.button, !title.trim() && styles.buttonDisabled]} disabled={!title.trim() || isSaving} onPress={handleCreate} activeOpacity={0.9}>
                 <Text style={styles.buttonText}>{isSaving ? 'Creating...' : 'Create Trip'}</Text>
               </TouchableOpacity>
@@ -135,6 +151,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  whiteOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    zIndex: 100,
   },
   content: {
     flex: 1,
