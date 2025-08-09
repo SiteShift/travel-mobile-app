@@ -40,6 +40,8 @@ import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { Icon } from './Icon';
+import { useRouter } from 'expo-router';
+import { SimpleDateTimePicker } from './SimpleDateTimePicker';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -120,6 +122,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
   onCreateTrip,
 }) => {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
   
   // State management with better typing
   const [currentState, setCurrentState] = useState<BookState>(BookState.INITIAL);
@@ -132,6 +135,8 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
     endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [overlayActive, setOverlayActive] = useState(false);
+  const isNavigatingRef = useRef(false);
   const [hasError, setHasError] = useState(false);
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -155,6 +160,16 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
   // New: real cover hinge rotation and measured width for proper pivot
   const coverHingeRotationY = useSharedValue(0);
   const pageWidth = useSharedValue(0);
+  // Full white overlay animation values
+  const whiteOverlayOpacity = useSharedValue(0);
+  const whiteOverlayScale = useSharedValue(1);
+  // UI entrance animations for white screen content
+  const uiTitleOpacity = useSharedValue(0);
+  const uiTitleTranslateY = useSharedValue(12);
+  const uiFieldsOpacity = useSharedValue(0);
+  const uiFieldsTranslateY = useSharedValue(14);
+  const uiButtonOpacity = useSharedValue(0);
+  const uiButtonTranslateY = useSharedValue(16);
 
   // Error boundary handler
   const handleError = useCallback((error: Error, context: string) => {
@@ -168,6 +183,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
     if (visible) {
       resetAnimation();
       startBookCreationFlow();
+      isNavigatingRef.current = false;
     } else {
       resetAnimation();
       setCurrentState(BookState.INITIAL);
@@ -179,6 +195,8 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
         startDate: new Date(),
         endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       });
+      setOverlayActive(false);
+      isNavigatingRef.current = false;
     }
   }, [visible]);
 
@@ -200,10 +218,13 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
     sparkleOpacity.value = 0;
     glowOpacity.value = 0;
     coverHingeRotationY.value = 0;
+    whiteOverlayOpacity.value = 0;
+    whiteOverlayScale.value = 1;
   }, [
     bookScale, bookOpacity, bookRotationY, bookRotationX, coverOpacity, coverScale,
     pageRotationY, pageOpacity, formOpacity, backdropOpacity, bookTranslateY,
-    bookTranslateX, placeholderPulse, sparkleOpacity, glowOpacity, coverHingeRotationY
+    bookTranslateX, placeholderPulse, sparkleOpacity, glowOpacity, coverHingeRotationY,
+    whiteOverlayOpacity, whiteOverlayScale
   ]);
 
   const startBookCreationFlow = useCallback(() => {
@@ -310,6 +331,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
 
   const openBook = useCallback(() => {
     try {
+      if (isNavigatingRef.current) return;
       setCurrentState(BookState.OPENING);
       
       // Epic haptic feedback for magical book opening
@@ -353,16 +375,35 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
         withDelay(ANIMATION_CONFIG.SPARKLE_DURATION, withTiming(0, { duration: 400 }))
       );
       
-      // Show form with better timing after page flip
+      // After flip: immediately cover with pure white, zoom book behind it, then navigate
       setTimeout(() => {
-        setCurrentState(BookState.FORM_ENTRY);
-        formOpacity.value = withDelay(
-          100, 
-          withTiming(1, { 
-            duration: ANIMATION_CONFIG.FORM_FADE_DURATION, 
-            easing: Easing.out(Easing.quad) 
-          })
-        );
+        // Instantly show a full-bleed white overlay so nothing underneath is visible during handoff
+        setOverlayActive(true);
+        whiteOverlayOpacity.value = withTiming(1, { duration: 0 });
+        whiteOverlayScale.value = 1;
+        // Big zoom to give full-screen feel
+        bookScale.value = withTiming(1.6, { duration: 320, easing: Easing.out(Easing.cubic) });
+        bookTranslateX.value = withTiming(0, { duration: 320 });
+        bookTranslateY.value = withTiming(0, { duration: 320 });
+        // Optionally fade the book behind the white overlay
+        bookOpacity.value = withTiming(0, { duration: 0 });
+        // Navigate right after zoom completes; close the modal a beat later so the white overlay masks any flash
+        setTimeout(() => {
+          if (isNavigatingRef.current) return;
+          isNavigatingRef.current = true;
+          const img = formData.image || coverImage;
+          if (img) {
+            runOnJS(router.replace)({ pathname: '/create-trip', params: { imageUri: img } });
+          } else {
+            runOnJS(router.replace)('/create-trip');
+          }
+          // Allow a short frame for the new screen to mount before removing the modal
+          setTimeout(() => {
+            runOnJS(onClose)();
+            runOnJS(setOverlayActive)(false);
+            isNavigatingRef.current = false;
+          }, 180);
+        }, 320);
       }, ANIMATION_CONFIG.PAGE_FLIP_DURATION);
       
     } catch (error) {
@@ -370,7 +411,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
     }
   }, [
     bookRotationY, bookTranslateX, bookTranslateY, pageOpacity, pageRotationY,
-    sparkleOpacity, formOpacity, handleError, coverHingeRotationY
+    sparkleOpacity, handleError, coverHingeRotationY, whiteOverlayOpacity, whiteOverlayScale, bookOpacity
   ]);
 
   const handleCreateTrip = async () => {
@@ -421,7 +462,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
 
   // Animated styles
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
+    opacity: overlayActive ? 0 : backdropOpacity.value,
   }));
 
   const bookContainerStyle = useAnimatedStyle(() => ({
@@ -489,6 +530,25 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
     opacity: formOpacity.value,
   }));
 
+  // Full-white overlay animated style
+  const whiteOverlayStyle = useAnimatedStyle(() => ({
+    opacity: whiteOverlayOpacity.value,
+    transform: [{ scale: whiteOverlayScale.value }],
+  }));
+
+  const uiTitleStyle = useAnimatedStyle(() => ({
+    opacity: uiTitleOpacity.value,
+    transform: [{ translateY: uiTitleTranslateY.value }],
+  }));
+  const uiFieldsStyle = useAnimatedStyle(() => ({
+    opacity: uiFieldsOpacity.value,
+    transform: [{ translateY: uiFieldsTranslateY.value }],
+  }));
+  const uiButtonStyle = useAnimatedStyle(() => ({
+    opacity: uiButtonOpacity.value,
+    transform: [{ translateY: uiButtonTranslateY.value }],
+  }));
+
   const placeholderStyle = useAnimatedStyle(() => ({
     transform: [{ scale: placeholderPulse.value }],
   }));
@@ -537,7 +597,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
     >
       <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+          <StatusBar barStyle={overlayActive ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
           
           {/* Close button */}
           <TouchableOpacity 
@@ -634,110 +694,96 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
 
                 {/* Realistic book page with proper 3D flip */}
                 <Animated.View style={[styles.bookPage, pageStyle]}>
-                  <View style={styles.pageContent}>
-                    {/* Page texture and lines */}
-                    <View style={styles.pageLines} />
-                    {/* Paper styling overlays: subtle vignette + faint ruled lines */}
-                    <View pointerEvents="none" style={styles.paperOverlayContainer}>
-                      {/* Top-to-bottom vignette */}
-                      <LinearGradient
-                        colors={['rgba(0,0,0,0.03)', 'transparent', 'rgba(0,0,0,0.02)']}
-                        start={{ x: 0.5, y: 0 }}
-                        end={{ x: 0.5, y: 1 }}
-                        style={styles.paperVignetteTopBottom}
-                      />
-                      {/* Left-to-right warmth */}
-                      <LinearGradient
-                        colors={['rgba(255, 214, 150, 0.03)', 'transparent']}
-                        start={{ x: 0, y: 0.5 }}
-                        end={{ x: 1, y: 0.5 }}
-                        style={styles.paperVignetteLeftRight}
-                      />
-                      {/* Faint ruled lines */}
-                      <View style={styles.ruledLinesContainer}>
-                        {Array.from({ length: 18 }).map((_, i) => (
-                          <View
-                            key={`line-${i}`}
-                            style={[
-                              styles.ruledLine,
-                              { top: `${(i + 1) * (100 / 20)}%` },
-                            ]}
-                          />
-                        ))}
-                      </View>
-                    </View>
-                    
-                    <Animated.View style={[styles.formContainer, formStyle]}>
-                      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-                        <KeyboardAvoidingView
-                          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                          style={styles.keyboardView}
-                        >
-                          <ScrollView 
-                            contentContainerStyle={styles.scrollContent}
-                            keyboardShouldPersistTaps="handled"
-                            showsVerticalScrollIndicator={false}
-                          >
-                            <Text style={styles.pageTitle}>Create Book</Text>
-                            
-                            <View style={styles.inputGroup}>
-                              <Text style={styles.inputLabel}>Title</Text>
-                              <TextInput
-                                style={styles.titleInput}
-                                placeholder="Enter your trip name..."
-                                placeholderTextColor="#999"
-                                value={formData.title}
-                                onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
-                                maxLength={50}
-                                returnKeyType="next"
-                                blurOnSubmit={false}
-                                onBlur={() => Keyboard.dismiss()}
-                              />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                              <Text style={styles.inputLabel}>Description</Text>
-                              <TextInput
-                                style={styles.descriptionInput}
-                                placeholder="Tell your story..."
-                                placeholderTextColor="#999"
-                                value={formData.description}
-                                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
-                                multiline
-                                numberOfLines={3}
-                                maxLength={200}
-                                returnKeyType="done"
-                                onSubmitEditing={() => Keyboard.dismiss()}
-                                onBlur={() => Keyboard.dismiss()}
-                              />
-                            </View>
-
-                            <TouchableOpacity
-                              style={[
-                                styles.createButton,
-                                !formData.title.trim() && styles.createButtonDisabled
-                              ]}
-                              onPress={handleCreateTrip}
-                              disabled={!formData.title.trim() || isLoading}
-                            >
-                              <LinearGradient
-                                colors={!formData.title.trim() ? ['#ccc', '#aaa'] : ['#FF6B6B', '#FF5252']}
-                                style={styles.createButtonGradient}
-                              >
-                                <Text style={styles.createButtonText}>
-                                  {isLoading ? 'Creating...' : 'Create Trip'}
-                                </Text>
-                              </LinearGradient>
-                            </TouchableOpacity>
-                          </ScrollView>
-                        </KeyboardAvoidingView>
-                      </TouchableWithoutFeedback>
-                    </Animated.View>
-                  </View>
+                  <View style={styles.pageContent} />
                 </Animated.View>
               </View>
             </GestureDetector>
           </Animated.View>
+        
+          {/* Full-screen white overlay sits on top of everything to mask during handoff */}
+          <Animated.View
+            style={[styles.whiteOverlay, whiteOverlayStyle]}
+            pointerEvents={overlayActive || currentState === BookState.FORM_ENTRY ? 'auto' : 'none'}
+          >
+            <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.whiteOverlayContent}>
+                {/* Only render form when in FORM_ENTRY to avoid seeing the card during handoff */}
+                {overlayActive && currentState !== BookState.FORM_ENTRY ? (
+                  // During handoff, render an empty full-white filler so nothing shows
+                  <View style={{ flex: 1 }} />
+                ) : currentState === BookState.FORM_ENTRY ? (
+                  <View style={styles.centerFormContainer}>
+                    <View style={styles.centeredFormCard}>
+                    <Animated.Text style={[styles.whiteTitle, uiTitleStyle]}>Create Book</Animated.Text>
+
+                    <Animated.View style={[styles.inputGroupWhite, uiFieldsStyle]}>
+                      <Text style={styles.inputLabelWhite}>Title</Text>
+                      <TextInput
+                        style={styles.titleInputWhite}
+                        placeholder="Enter your trip name..."
+                        placeholderTextColor="#B0B0B0"
+                        value={formData.title}
+                        onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
+                        maxLength={50}
+                        returnKeyType="next"
+                      />
+                    </Animated.View>
+
+                    <Animated.View style={[styles.inputGroupWhiteRow, uiFieldsStyle]}>
+                      <View style={styles.datePickerCol}>
+                        <Text style={styles.inputLabelWhite}>Start Date</Text>
+                        <SimpleDateTimePicker
+                          value={formData.startDate}
+                          onDateChange={(d: Date) => setFormData(prev => ({ ...prev, startDate: d }))}
+                          mode="date"
+                          showIcon
+                        />
+                      </View>
+                      <View style={styles.datePickerCol}>
+                        <Text style={styles.inputLabelWhite}>End Date</Text>
+                        <SimpleDateTimePicker
+                          value={formData.endDate}
+                          onDateChange={(d: Date) => setFormData(prev => ({ ...prev, endDate: d }))}
+                          mode="date"
+                          showIcon
+                        />
+                      </View>
+                    </Animated.View>
+
+                    <Animated.View style={[styles.inputGroupWhite, uiFieldsStyle]}>
+                      <Text style={styles.inputLabelWhite}>Description</Text>
+                      <TextInput
+                        style={styles.descriptionInputWhite}
+                        placeholder="Tell your story..."
+                        placeholderTextColor="#B0B0B0"
+                        value={formData.description}
+                        onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+                        multiline
+                        numberOfLines={3}
+                        maxLength={200}
+                        returnKeyType="done"
+                      />
+                    </Animated.View>
+
+                    <Animated.View style={uiButtonStyle}>
+                      <TouchableOpacity
+                        style={[styles.createButtonWhite, !formData.title.trim() && styles.createButtonWhiteDisabled]}
+                        onPress={handleCreateTrip}
+                        disabled={!formData.title.trim() || isLoading}
+                        activeOpacity={0.9}
+                      >
+                        <Text style={styles.createButtonWhiteText}>
+                          {isLoading ? 'Creating...' : 'Create Trip'}
+                        </Text>
+                      </TouchableOpacity>
+                    </Animated.View>
+                    </View>
+                  </View>
+                ) : null}
+              </KeyboardAvoidingView>
+            </TouchableWithoutFeedback>
+          </Animated.View>
+
         </View>
       </Animated.View>
       </TouchableWithoutFeedback>
@@ -1014,8 +1060,8 @@ const styles = StyleSheet.create({
   pageContent: {
     flex: 1,
     borderRadius: 16,
-    padding: 32,
-    backgroundColor: '#FEFEFE',
+    padding: 0,
+    backgroundColor: '#FFFFFF',
     position: 'relative',
   },
   
@@ -1063,6 +1109,117 @@ const styles = StyleSheet.create({
     right: 28,
     height: 1,
     backgroundColor: 'rgba(0,0,0,0.045)',
+  },
+  
+  // Full white overlay styles
+  whiteOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    zIndex: 100,
+  },
+  whiteOverlayContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+  },
+  whiteOverlayScroll: {
+    paddingBottom: 24,
+  },
+  centerFormContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centeredFormCard: {
+    width: '90%',
+    maxWidth: 520,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  whiteTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#111111',
+    textAlign: 'center',
+    marginBottom: 28,
+    letterSpacing: -0.5,
+    fontFamily: 'Merienda',
+  },
+  inputGroupWhite: {
+    marginBottom: 20,
+  },
+  inputGroupWhiteRow: {
+    flexDirection: 'row',
+    columnGap: 12,
+    marginBottom: 20,
+  },
+  datePickerCol: {
+    flex: 1,
+  },
+  inputLabelWhite: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#222222',
+    marginBottom: 10,
+    letterSpacing: 0.2,
+  },
+  titleInputWhite: {
+    fontSize: 16,
+    color: '#111111',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  descriptionInputWhite: {
+    fontSize: 16,
+    color: '#111111',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: '#FFFFFF',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  createButtonWhite: {
+    backgroundColor: '#111111',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+    marginTop: 8,
+  },
+  createButtonWhiteDisabled: {
+    backgroundColor: '#D1D5DB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  createButtonWhiteText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   
   formContainer: {

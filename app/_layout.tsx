@@ -27,6 +27,14 @@ export default function RootLayout() {
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen 
+            name="create-trip" 
+            options={{ 
+              headerShown: false,
+              animation: 'none',
+              presentation: 'card',
+            }} 
+          />
+          <Stack.Screen 
             name="trip/[id]" 
             options={{ 
               headerShown: false,
