@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent, State } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
@@ -86,6 +87,7 @@ const createMinimalTripFromId = (tripId: string, tripData?: any): MinimalTrip =>
 
 export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors, isDark } = useTheme();
   
   // State
@@ -189,7 +191,13 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           toValue: screenHeight,
           duration: 250,
           useNativeDriver: true,
-        }).start(() => router.back());
+        }).start(() => {
+          if (typeof (navigation as any).canGoBack === 'function' && (navigation as any).canGoBack()) {
+            (navigation as any).goBack();
+          } else {
+            router.replace('/(tabs)');
+          }
+        });
       } else {
         Animated.timing(translateY, {
           toValue: 0,
@@ -198,7 +206,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         }).start();
       }
     }
-  }, [translateY, router]);
+  }, [translateY, router, navigation]);
   
   const handleGesture = Animated.event(
     [{ nativeEvent: { translationY: translateY } }],
@@ -227,7 +235,13 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           toValue: screenHeight,
           duration: 250,
           useNativeDriver: true,
-        }).start(() => router.back());
+        }).start(() => {
+          if (typeof (navigation as any).canGoBack === 'function' && (navigation as any).canGoBack()) {
+            (navigation as any).goBack();
+          } else {
+            router.replace('/(tabs)');
+          }
+        });
       } else {
         Animated.timing(translateY, {
           toValue: 0,
@@ -236,7 +250,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         }).start();
       }
     }
-  }, [translateY, router]);
+  }, [translateY, router, navigation]);
   
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -602,15 +616,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
             style={styles.heroGradient}
           />
           
-          {/* Back Button */}
-          <View style={styles.headerNav}>
-            <TouchableOpacity 
-              style={styles.backButton} 
-              onPress={() => router.back()}
-            >
-              <Icon name="arrow-left" size="md" color="white" />
-            </TouchableOpacity>
-          </View>
+          {/* Back button removed per request */}
         </Animated.View>
       </PanGestureHandler>
     );
@@ -656,7 +662,7 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
             onPress={toggleViewMode}
           >
             <Icon 
-              name={viewMode === 'story' ? 'grid' : 'journal'} 
+              name={viewMode === 'story' ? 'grid' : 'notebook'} 
               size="sm" 
               color={colors.text.primary} 
             />
@@ -762,8 +768,9 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           <TouchableOpacity 
             style={[styles.addMemoryPlaceholder, { 
               backgroundColor: colors.surface.secondary,
-              borderColor: '#000000', // Black outline moved from Day card
+              borderColor: '#9CA3AF',
               borderWidth: 2,
+              borderStyle: 'dashed',
             }]}
             onPress={() => handleAddMemory(selectedDay)}
           >
@@ -787,19 +794,19 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
     if (currentMemories.length === 0) {
       return (
         <View style={styles.gridContainer}>
-          {/* Add Memory Button for Grid View */}
+          {/* Add Memory Button for Grid View - dashed even when no photos */}
           <TouchableOpacity 
             style={[styles.addMemoryPlaceholder, { 
               backgroundColor: colors.surface.secondary,
-              borderColor: '#000000', // Black outline moved from Day card
+              borderColor: '#9CA3AF',
               borderWidth: 2,
+              borderStyle: 'dashed',
+              marginHorizontal: SPACING.md,
             }]}
             onPress={() => handleAddMemory(selectedDay)}
           >
             <Icon name="plus" size="lg" color={colors.text.tertiary} />
-            <Text style={[styles.addMemoryText, { color: colors.text.secondary }]}>
-              Add Memory
-            </Text>
+            <Text style={[styles.addMemoryText, { color: colors.text.secondary }]}>Add Memory</Text>
           </TouchableOpacity>
         </View>
       );
@@ -857,9 +864,11 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
         <TouchableOpacity 
           style={[styles.addMemoryPlaceholder, { 
             backgroundColor: colors.surface.secondary,
-            borderColor: '#000000', // Black outline moved from Day card
+            borderColor: '#9CA3AF',
             borderWidth: 2,
+            borderStyle: 'dashed',
             marginHorizontal: GRID_PADDING,
+            alignSelf: 'stretch',
           }]}
           onPress={() => handleAddMemory(selectedDay)}
         >
@@ -894,9 +903,13 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
           {/* Scrollable Content */}
           <Animated.ScrollView
             style={styles.scrollView}
+            contentContainerStyle={[styles.scrollContentContainer]}
             onScroll={handleScroll}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
+            bounces={false}
+            alwaysBounceVertical={false}
+            overScrollMode="never"
           >
             {/* Header */}
             {renderHeader()}
@@ -997,12 +1010,12 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
 const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
   },
   
   modal: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
   },
   
@@ -1181,6 +1194,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
+  scrollContentContainer: {
+    backgroundColor: '#FFFFFF',
+    minHeight: screenHeight,
+  },
   
   contentArea: {
     backgroundColor: '#FFFFFF', // Explicitly white for clean overlap
@@ -1264,7 +1281,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   // Grid View
   gridContainer: {
     backgroundColor: '#FFFFFF', // Consistent white background
-    // paddingHorizontal will be set dynamically in the component
+    paddingBottom: SPACING.xl,
   },
   
   gridRow: {
@@ -1300,6 +1317,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   bottomSpacing: {
     height: 100,
+    backgroundColor: '#FFFFFF',
   },
   
   // Change Photo Modal Styles

@@ -207,6 +207,7 @@ export const Modal: React.FC<ModalProps> = ({
       backgroundColor: colors.surface.primary,
       borderRadius: variant === 'fullscreen' ? 0 : BORDER_RADIUS.lg,
       ...SHADOWS.lg,
+      overflow: 'hidden',
     };
 
     switch (variant) {
@@ -246,9 +247,10 @@ export const Modal: React.FC<ModalProps> = ({
       case 'center':
       case 'alert':
         return {
-          opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }],
-        };
+          // If animationType is 'none', avoid transforms that can break some native views (e.g., UIDatePicker)
+          opacity: animationType === 'fade' ? fadeAnim : 1,
+          transform: animationType === 'none' ? [] : [{ scale: scaleAnim }],
+        } as any;
       case 'bottom':
         return {
           transform: [
@@ -308,7 +310,7 @@ export const Modal: React.FC<ModalProps> = ({
     const contentProps = scrollable ? {
       showsVerticalScrollIndicator: false,
       bounces: false,
-    } : { style: { flex: 1 } };
+    } : {} as any;
 
     return (
       <ContentWrapper {...contentProps}>

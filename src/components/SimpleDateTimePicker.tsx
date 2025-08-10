@@ -1,15 +1,10 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-} from 'react-native';
-import { useTheme } from '../contexts/ThemeContext';
-import { Icon } from './Icon';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { Input } from './Input';
+import { useTheme } from '../contexts/ThemeContext';
+import { Icon } from './Icon';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   SPACING,
   TYPOGRAPHY,
@@ -24,6 +19,9 @@ export interface SimpleDateTimePickerProps {
   placeholder?: string;
   showIcon?: boolean;
   testID?: string;
+  minDate?: Date;
+  maxDate?: Date;
+  accentColor?: string;
 }
 
 export const SimpleDateTimePicker: React.FC<SimpleDateTimePickerProps> = ({
@@ -34,13 +32,13 @@ export const SimpleDateTimePicker: React.FC<SimpleDateTimePickerProps> = ({
   placeholder,
   showIcon = true,
   testID,
+  minDate,
+  maxDate,
+  accentColor = '#EF6144',
 }) => {
   const { colors } = useTheme();
   const [isVisible, setIsVisible] = useState(false);
-  const [tempDate, setTempDate] = useState(value.toISOString().split('T')[0]);
-  const [tempTime, setTempTime] = useState(
-    value.toTimeString().split(':').slice(0, 2).join(':')
-  );
+  const [temp, setTemp] = useState<Date>(value);
 
   const formatDate = (date: Date) => {
     switch (mode) {
@@ -123,29 +121,14 @@ export const SimpleDateTimePicker: React.FC<SimpleDateTimePickerProps> = ({
 
   const handlePress = () => {
     if (disabled) return;
-    setTempDate(value.toISOString().split('T')[0]);
-    setTempTime(value.toTimeString().split(':').slice(0, 2).join(':'));
+    setTemp(value);
     setIsVisible(true);
   };
 
   const handleConfirm = () => {
     try {
-      let newDate: Date;
-      
-      if (mode === 'time') {
-        const [hours, minutes] = tempTime.split(':');
-        newDate = new Date(value);
-        newDate.setHours(parseInt(hours), parseInt(minutes));
-      } else if (mode === 'date') {
-        newDate = new Date(tempDate);
-        newDate.setHours(value.getHours(), value.getMinutes());
-      } else {
-        const [hours, minutes] = tempTime.split(':');
-        newDate = new Date(tempDate);
-        newDate.setHours(parseInt(hours), parseInt(minutes));
-      }
-      
-      onDateChange(newDate);
+      const clamped = clampDate(temp, minDate, maxDate);
+      onDateChange(clamped);
     } catch (error) {
       console.error('Invalid date/time format');
     }
@@ -153,97 +136,54 @@ export const SimpleDateTimePicker: React.FC<SimpleDateTimePickerProps> = ({
   };
 
   const handleCancel = () => {
-    setTempDate(value.toISOString().split('T')[0]);
-    setTempTime(value.toTimeString().split(':').slice(0, 2).join(':'));
+    setTemp(value);
     setIsVisible(false);
   };
 
-  const renderQuickDates = () => {
-    if (mode === 'time') return null;
-
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const quickDates = [
-      { label: 'Yesterday', date: yesterday },
-      { label: 'Today', date: today },
-      { label: 'Tomorrow', date: tomorrow },
-    ];
-
-    return (
-      <View style={styles.quickDatesContainer}>
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-          Quick Select
-        </Text>
-        <View style={styles.quickDates}>
-          {quickDates.map((item) => (
-            <TouchableOpacity
-              key={item.label}
-              style={[
-                styles.quickDateButton,
-                { backgroundColor: colors.surface.secondary }
-              ]}
-              onPress={() => setTempDate(item.date.toISOString().split('T')[0])}
-            >
-              <Text style={[styles.quickDateText, { color: colors.text.primary }]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    );
-  };
+  const renderQuickDates = () => null;
 
   const renderPicker = () => (
     <Modal
       visible={isVisible}
       onClose={handleCancel}
-      variant="bottom"
-      title={`Select ${mode.charAt(0).toUpperCase() + mode.slice(1)}`}
+      variant="center"
+      size="small"
+      animationType="none"
+      showCloseButton={false}
+      contentStyle={{ backgroundColor: '#FFFFFF' }}
     >
-      <View style={styles.pickerContainer}>
-        {renderQuickDates()}
-        
-        <View style={styles.inputsContainer}>
-          {(mode === 'date' || mode === 'datetime') && (
-            <Input
-              label="Date"
-              value={tempDate}
-              onChangeText={setTempDate}
-              placeholder="YYYY-MM-DD"
-              leftIcon={<Icon name="calendar" size="sm" color={colors.text.secondary} />}
-              containerStyle={styles.input}
+      <View style={[styles.pickerContainer, { backgroundColor: '#FFFFFF' }]}>        
+        {(mode === 'date' || mode === 'datetime') && (
+          <View style={{ alignItems: 'center', paddingVertical: 8 } as any}>
+            <DateTimePicker
+              value={temp}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
+              onChange={(e: any, d?: Date) => { if (d) setTemp(new Date(d)); }}
+              minimumDate={minDate}
+              maximumDate={maxDate}
+              themeVariant={Platform.OS === 'ios' ? 'light' : undefined}
+              textColor={Platform.OS === 'ios' ? '#111111' : undefined}
             />
-          )}
-          
-          {(mode === 'time' || mode === 'datetime') && (
-            <Input
-              label="Time"
-              value={tempTime}
-              onChangeText={setTempTime}
-              placeholder="HH:MM"
-              leftIcon={<Icon name="time" size="sm" color={colors.text.secondary} />}
-              containerStyle={styles.input}
+          </View>
+        )}
+
+        {(mode === 'time' || mode === 'datetime') && (
+          <View style={{ alignItems: 'center', paddingVertical: 8 } as any}>
+            <DateTimePicker
+              value={temp}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
+              onChange={(e: any, d?: Date) => { if (d) setTemp(new Date(d)); }}
+              themeVariant={Platform.OS === 'ios' ? 'light' : undefined}
+              textColor={Platform.OS === 'ios' ? '#111111' : undefined}
             />
-          )}
-        </View>
-        
+          </View>
+        )}
+
         <View style={styles.buttonContainer}>
-          <Button
-            title="Cancel"
-            variant="secondary"
-            onPress={handleCancel}
-            style={styles.button}
-          />
-          <Button
-            title="Confirm"
-            onPress={handleConfirm}
-            style={styles.button}
-          />
+          <Button title="Cancel" variant="secondary" onPress={handleCancel} style={styles.button} />
+          <Button title="Confirm" onPress={handleConfirm} style={StyleSheet.flatten([styles.button, { backgroundColor: accentColor }])} />
         </View>
       </View>
     </Modal>
@@ -256,7 +196,8 @@ export const SimpleDateTimePicker: React.FC<SimpleDateTimePickerProps> = ({
           styles.trigger,
           {
             backgroundColor: colors.surface.secondary,
-            borderColor: colors.border.primary,
+            borderColor: isVisible ? accentColor : colors.border.primary,
+            borderStyle: isVisible ? 'solid' : 'dashed',
           },
           disabled && styles.disabled,
         ]}
@@ -301,6 +242,13 @@ export const SimpleDateTimePicker: React.FC<SimpleDateTimePickerProps> = ({
   );
 };
 
+function clampDate(date: Date, min?: Date, max?: Date) {
+  let d = date;
+  if (min && d < min) d = new Date(min);
+  if (max && d > max) d = new Date(max);
+  return d;
+}
+
 const styles = StyleSheet.create({
   container: {
     // No additional styles needed
@@ -326,6 +274,51 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     paddingBottom: SPACING.lg,
+    backgroundColor: '#FFFFFF',
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  sheetTitle: {
+    ...TYPOGRAPHY.styles.h4,
+    fontWeight: '700',
+  },
+  sheetClose: {
+    fontSize: 26,
+    lineHeight: 26,
+    fontWeight: '700',
+  },
+  wheelRow: {
+    flexDirection: 'row',
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  wheelCol: {
+    flex: 1,
+    height: 200,
+  },
+  wheelItem: {
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wheelItemText: {
+    ...TYPOGRAPHY.styles.body,
+  },
+  wheelDivider: {
+    position: 'absolute',
+    top: 78,
+    left: 0,
+    right: 0,
+    height: 44,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
   },
   quickDatesContainer: {
     paddingHorizontal: SPACING.lg,
