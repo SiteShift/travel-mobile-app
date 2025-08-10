@@ -1,28 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, Animated, StatusBar, InteractionManager, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, Animated, StatusBar, InteractionManager } from 'react-native';
 import LottieView from 'lottie-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Icon } from '../src/components/Icon';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SimpleDateTimePicker } from '../src/components/SimpleDateTimePicker';
-import { MediaPicker, MediaItem } from '../src/components/MediaPicker';
+ 
 
 export default function CreateTripScreen() {
-  const { imageUri, handoff } = useLocalSearchParams<{ imageUri?: string; handoff?: string }>();
+  const { imageUri, handoff, title: initialTitle, startDate: initialStart, endDate: initialEnd } = useLocalSearchParams<{ imageUri?: string; handoff?: string; title?: string; startDate?: string; endDate?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const BRAND_ORANGE = '#EF6144';
   const BORDER_GREY = '#E5E7EB';
 
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(initialTitle ? String(initialTitle) : '');
   const [description, setDescription] = useState('');
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  const [startDate, setStartDate] = useState(initialStart ? new Date(initialStart as string) : new Date());
+  const [endDate, setEndDate] = useState(initialEnd ? new Date(initialEnd as string) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
   const [isSaving, setIsSaving] = useState(false);
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const [coverImageUri, setCoverImageUri] = useState<string | undefined>(typeof imageUri === 'string' ? imageUri : undefined);
-  const [isMediaPickerVisible, setIsMediaPickerVisible] = useState(false);
+  const [coverImageUri] = useState<string | undefined>(typeof imageUri === 'string' ? decodeURIComponent(String(imageUri)) : undefined);
   const [isTitleFocused, setIsTitleFocused] = useState(false);
   const [isDescFocused, setIsDescFocused] = useState(false);
   const [startFocusPulse, setStartFocusPulse] = useState(false);
@@ -34,19 +31,28 @@ export default function CreateTripScreen() {
   const [showGuard, setShowGuard] = useState(handoff === '1');
 
   const handleCreate = async () => {
-    if (!title.trim() || !coverImageUri) {
-      Alert.alert('Missing Info', 'Please add a title and cover image.');
+    if (!title.trim()) {
+      Alert.alert('Missing Info', 'Please add a title.');
       return;
     }
     setIsSaving(true);
     try {
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       const tripId = `trip-${Date.now()}`;
+      // As a robust fallback, check if a pending cover image was persisted by the animation step
+      let finalCover = coverImageUri || (typeof imageUri === 'string' ? imageUri : undefined);
+      try {
+        if (!finalCover) {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const pending = await AsyncStorage.getItem('pending_cover_image');
+          if (pending) finalCover = pending;
+        }
+      } catch {}
       const simpleTrip = {
         id: tripId,
         title: title.trim(),
         description: description.trim(),
-        coverImage: coverImageUri,
+        coverImage: finalCover,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         country: 'Adventure',
@@ -116,32 +122,7 @@ export default function CreateTripScreen() {
           <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 72 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Animated.Text style={[styles.title, { opacity: fadeTitle }]}>Create Book</Animated.Text>
 
-            {/* Cover Image */}
-            <Animated.View style={[styles.group, { opacity: fadeTitleGroup }]}> 
-              <Text style={styles.label}>Cover Image</Text>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={[styles.coverBox, !coverImageUri ? styles.inputDashed : styles.inputFocused]}
-                onPress={() => setIsMediaPickerVisible(true)}
-                accessibilityLabel="Choose cover image"
-              >
-                {coverImageUri ? (
-                  <Image source={{ uri: coverImageUri }} style={styles.coverImage} resizeMode="cover" />
-                ) : (
-                  <View style={{ alignItems: 'center' }}>
-                    <LinearGradient
-                      colors={[ 'rgba(244,132,95,0.8)', 'rgba(239,97,68,0.8)' ]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.coverPlusCircle}
-                    >
-                      <Icon name="plus" size="lg" color="#FFFFFF" />
-                    </LinearGradient>
-                    <Text style={styles.coverPlaceholder}>Tap to add a cover photo</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
+            {/* Cover image selection removed: cover comes from the book creation flow */}
 
             <Animated.View style={[styles.group, { opacity: fadeTitleGroup }]}> 
               <Text style={styles.label}>Title</Text>
@@ -205,15 +186,7 @@ export default function CreateTripScreen() {
               </TouchableOpacity>
             </Animated.View>
           </ScrollView>
-          <MediaPicker
-            visible={isMediaPickerVisible}
-            onClose={() => setIsMediaPickerVisible(false)}
-            onMediaSelect={(items: MediaItem[]) => {
-              if (items && items[0]) setCoverImageUri(items[0].uri);
-            }}
-            maxSelection={1}
-            includeVideos={false}
-          />
+          {/* No media picker here; cover image is supplied by the previous step */}
           {isSaving && (
             <Animated.View style={[styles.loadingOverlay, { opacity: overlayOpacity }]} pointerEvents="auto">
               <View style={styles.loadingContent}>

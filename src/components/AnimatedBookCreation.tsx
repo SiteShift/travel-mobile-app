@@ -38,6 +38,41 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+// MediaLibrary used defensively to coerce iOS ph:// assets into file:// URIs
+let MediaLibrary: any;
+try {
+  // Lazy require to avoid bundling issues if not available
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  MediaLibrary = require('expo-media-library');
+} catch {}
+
+async function ensureFileUriAsync(originalUri: string): Promise<string> {
+  // Already a file URI
+  if (originalUri.startsWith('file://')) return originalUri;
+  // Try image manipulator to write into app cache (works for many sources)
+  try {
+    const manipulated = await ImageManipulator.manipulateAsync(originalUri, [], {
+      compress: 1,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+    if (manipulated?.uri) return manipulated.uri;
+  } catch {}
+  // Try MediaLibrary to resolve ph:// to a local file
+  try {
+    if (MediaLibrary && originalUri.startsWith('ph://')) {
+      const perm = await MediaLibrary.requestPermissionsAsync?.();
+      if (!perm || perm.status === 'granted') {
+        const asset = await MediaLibrary.createAssetAsync(originalUri);
+        const info = await MediaLibrary.getAssetInfoAsync(asset);
+        if (info?.localUri) return info.localUri as string;
+      }
+    }
+  } catch {}
+  // As a last resort, prefix bare absolute paths with file://
+  if (originalUri.startsWith('/')) return `file://${originalUri}`;
+  return originalUri;
+}
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../contexts/ThemeContext';
@@ -293,9 +328,16 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
       });
 
       if (!result.canceled && result.assets[0]) {
-        const imageUri = result.assets[0].uri;
+        let imageUri = result.assets[0].uri;
+        imageUri = await ensureFileUriAsync(imageUri);
         setCoverImage(imageUri);
         setFormData(prev => ({ ...prev, image: imageUri }));
+        try {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          await AsyncStorage.setItem('pending_cover_image', imageUri);
+        } catch (e) {
+          console.warn('Failed to persist pending cover image', e);
+        }
         // Immediately show the image as cover by making coverOpacity visible
         coverOpacity.value = withTiming(1, { duration: 100 });
         coverScale.value = withTiming(1, { duration: 100 });
@@ -396,11 +438,12 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
         if (isNavigatingRef.current) return;
         isNavigatingRef.current = true;
         const img = formData.image || coverImage;
-        if (img) {
-          runOnJS(router.replace)({ pathname: '/create-trip', params: { imageUri: img, handoff: '1' } });
-        } else {
-          runOnJS(router.replace)({ pathname: '/create-trip', params: { handoff: '1' } });
-        }
+        const params: Record<string, string> = { handoff: '1' };
+        if (img) params.imageUri = img as string;
+        if (formData.title) params.title = String(formData.title);
+        if (formData.startDate) params.startDate = (formData.startDate as Date).toISOString();
+        if (formData.endDate) params.endDate = (formData.endDate as Date).toISOString();
+        runOnJS(router.replace)({ pathname: '/create-trip', params });
         // Close after new screen finishes mounting/layout to avoid any flash
         InteractionManager.runAfterInteractions(() => {
           runOnJS(onClose)();

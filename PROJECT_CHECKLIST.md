@@ -675,3 +675,16 @@ Building a premium travel diary mobile app with map-centric design and "Airbnb-l
 - Consider implementing custom native modules for advanced features
 
 **Note**: This checklist follows the mandatory protocol of reading before work and updating after completion. Each completed item includes implementation date and location details. 
+
+---
+
+## Recent Update: 2025-08-10 Trip Book Front Cover (View Trip Overhaul)
+- [x] Replace old trip detail opening with new book-style front cover
+  ✅ Implemented 2025-08-10: Created `src/screens/TripBookScreen.tsx` and updated `app/trip/[id].tsx` to render it. The front cover includes:
+  - Large single-line title using `TimesCondensed` (file `public/assets/Times New Roman MT Condensed Regular.otf`) with 11-character limit
+  - Date beneath in `Month Year` format based on the trip start date
+  - 4:5 cover image placed in a polaroid frame with extended caption area using `ZingScriptRust` (file `public/assets/zing.script-rust-semibold-demo-base.otf`)
+  - Bottom-right arrow to open the first page; smooth horizontal swipe enabled
+  - Loads trip data from AsyncStorage key `trip_<id>` created by the trip creation flow
+- [x] Add custom fonts globally
+  ✅ Implemented 2025-08-10: Registered fonts in `app/_layout.tsx` as `TimesCondensed` and `ZingScriptRust`.

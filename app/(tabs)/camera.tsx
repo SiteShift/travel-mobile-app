@@ -22,15 +22,16 @@ export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<FlashMode>('off');
   const [zoom, setZoom] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
+  
   const [permission, requestPermission] = useCameraPermissions();
+  
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   
   // Refs
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
-  const recordingTimer = useRef<NodeJS.Timeout | null>(null);
+  const recordingTimer = useRef<NodeJS.Timeout | null>(null); // no longer used for long-press, kept for safety
   const shutterOpacity = useRef(new RNAnimated.Value(0)).current; // legacy (unused now)
   const flashOpacity = useRef(new RNAnimated.Value(0)).current;
   
@@ -44,6 +45,10 @@ export default function CameraScreen() {
   useFocusEffect(
     useCallback(() => {
       StatusBar.setHidden(true);
+      // Proactively ask for camera permission on first open
+      if (!permission?.granted) {
+        requestPermission();
+      }
       return () => {
         StatusBar.setHidden(false);
         if (recordingTimer.current) {
@@ -52,14 +57,13 @@ export default function CameraScreen() {
         }
         setIsNavigating(false);
         shutterOpacity.setValue(0);
+        setIsCameraReady(false);
       };
-    }, [shutterOpacity])
+    }, [shutterOpacity, permission?.granted, requestPermission])
   );
 
   // Animated Styles
-  const progressRingStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${recordingProgress.value * 360}deg` }],
-  }));
+  // progress ring removed (photo-only)
 
   const shutterButtonStyle = useAnimatedStyle(() => ({
     transform: [{ scale: buttonScale.value }],
@@ -128,56 +132,33 @@ export default function CameraScreen() {
     }
   }, [navigateToEditor, shutterOpacity]);
 
-  const startRecording = useCallback(() => {
-    if (!cameraRef.current) return;
-    
-    setIsRecording(true);
-    
-    cameraRef.current.recordAsync({ maxDuration: 30 })
-      .then(video => {
-        if (video?.uri) {
-          navigateToEditor(video.uri, true);
-        }
-      })
-      .catch(error => {
-        console.error('Recording failed:', error);
-      });
-  }, [navigateToEditor]);
+  // removed: video recording (photo-only)
 
-  const onShutterPressIn = useCallback(() => {
-    buttonScale.value = withTiming(0.9, { duration: 100 });
-    recordingTimer.current = setTimeout(() => {
-      recordingProgress.value = withRepeat(withTiming(1, { duration: 30000 }), -1, true);
-      startRecording();
-    }, 200);
-  }, [startRecording, buttonScale, recordingProgress]);
-  
-  const onShutterPressOut = useCallback(() => {
-    if (recordingTimer.current) {
-      clearTimeout(recordingTimer.current);
-      recordingTimer.current = null;
-      buttonScale.value = withTiming(1);
-      if (isCameraReady) {
-        takePicture();
+  // Request camera + mic permissions on first interaction (must be declared before use)
+  const ensurePermissions = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!permission?.granted) {
+        const { granted } = await requestPermission();
+        if (!granted) return false;
       }
-    } else if (isRecording) {
-      cameraRef.current?.stopRecording();
-      setIsRecording(false);
-      cancelAnimation(recordingProgress);
-      recordingProgress.value = 0;
-      buttonScale.value = withTiming(1);
+      return true;
+    } catch (e) {
+      console.warn('Permission request failed', e);
+      return false;
     }
-  }, [isRecording, takePicture, buttonScale, recordingProgress, isCameraReady]);
+  }, [permission?.granted, requestPermission]);
+
+  const handleShutterPress = useCallback(async () => {
+    const ok = await ensurePermissions();
+    if (!ok || !isCameraReady) return;
+    takePicture();
+  }, [ensurePermissions, isCameraReady, takePicture]);
 
   const toggleFlash = useCallback(() => {
     setFlash(current => (current === 'off' ? 'on' : 'off'));
   }, []);
 
   const closeCamera = useCallback(() => {
-    if (isRecording) {
-      cameraRef.current?.stopRecording();
-      setIsRecording(false);
-    }
     if (recordingTimer.current) {
       clearTimeout(recordingTimer.current);
     }
@@ -186,44 +167,31 @@ export default function CameraScreen() {
     } else {
       router.push('/(tabs)/');
     }
-  }, [isRecording, router]);
+  }, [router]);
 
-  // Render Logic
-  if (!permission) return <View style={styles.fullScreenContainer} />;
+  // (moved ensurePermissions above)
 
-  if (!permission.granted) {
-    return (
-      <View style={styles.fullScreenContainer}>
-        <Text style={styles.permissionText}>We need your permission</Text>
-        <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
-          <Text style={styles.permissionButtonText}>Grant permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  const hasCameraPermission = !!permission?.granted;
 
   return (
     <View style={styles.fullScreenContainer}>
-      <CameraView 
-        style={styles.fullScreenCamera} 
-        facing={facing} 
-        flash={flash} 
-        zoom={zoom} 
-        ref={cameraRef}
-        onCameraReady={() => setIsCameraReady(true)}
-      >
+      {hasCameraPermission && (
+        <CameraView 
+          style={styles.fullScreenCamera} 
+          facing={facing} 
+          flash={flash} 
+          zoom={zoom} 
+          ref={cameraRef}
+          onCameraReady={() => setIsCameraReady(true)}
+        >
         <GestureDetector gesture={composedGestures}>
           <View style={styles.gestureArea} />
         </GestureDetector>
         
           <View style={styles.controlsOverlay}>
+            {/* Photo-only: no mode toggle */}
           <View style={styles.topControls}>
-            {isRecording && (
-              <View style={styles.recordingIndicator}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingText}>REC</Text>
-              </View>
-            )}
+            {/* photo-only: no recording indicator */}
             <TouchableOpacity style={styles.controlButton} onPress={closeCamera} activeOpacity={0.7}>
               <Icon name="close" size="xl" color="white" />
             </TouchableOpacity>
@@ -238,21 +206,17 @@ export default function CameraScreen() {
               />
             </TouchableOpacity>
             
+
             <View style={styles.shutterContainer}>
-              {isRecording && (
-                <Animated.View style={[styles.progressRing, progressRingStyle]}>
-                  <View style={styles.progressRingInner} />
-                </Animated.View>
-              )}
               
-              <Animated.View style={[styles.shutterButton, shutterButtonStyle]}>
+              <Animated.View style={[styles.shutterButton, shutterButtonStyle, !isCameraReady && { opacity: 0.6 } ]}>
                 <TouchableOpacity
                   style={styles.shutterTouchable}
-                  onPressIn={onShutterPressIn}
-                  onPressOut={onShutterPressOut}
+                  onPress={handleShutterPress}
                   activeOpacity={1}
+                  disabled={!isCameraReady}
                 >
-                  <View style={[styles.shutterButtonInner, isRecording && styles.shutterButtonRecording]} />
+                  <View style={styles.shutterButtonInner} />
                 </TouchableOpacity>
               </Animated.View>
             </View>
@@ -265,6 +229,10 @@ export default function CameraScreen() {
         {/* White flash overlay (very quick) */}
         <RNAnimated.View pointerEvents="none" style={[styles.flashOverlay, { opacity: flashOpacity }]} />
       </CameraView>
+      )}
+      {!hasCameraPermission && (
+        <View style={styles.permissionOverlay} />
+      )}
     </View>
   );
 }
@@ -293,6 +261,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: '#fff',
     zIndex: 20,
+  },
+  permissionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000',
   },
   shutterOverlay: {
     position: 'absolute',
@@ -337,37 +313,21 @@ const styles = StyleSheet.create({
     paddingTop: 60, // Account for status bar
     zIndex: 10,
   },
+  // removed modeToggleOverlay
   topControls: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    position: 'relative',
   },
-  recordingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 59, 48, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'white',
-    marginRight: 6,
-  },
-  recordingText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  // removed recording indicator styles
   bottomControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingBottom: 40, // Account for home indicator
   },
+  // removed mode toggle styles
   controlButton: {
     width: 50,
     height: 50,
@@ -382,20 +342,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  progressRing: {
-    position: 'absolute',
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-  },
-  progressRingInner: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 44,
-    borderWidth: 3,
-    borderColor: 'transparent',
-    borderTopColor: '#FF3B30',
-  },
+  // removed recording ring styles
   shutterButton: {
     width: 80,
     height: 80,
@@ -426,8 +373,5 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: 'black',
   },
-  shutterButtonRecording: {
-    backgroundColor: '#FF3B30',
-    borderColor: '#FF3B30',
-  },
+  // removed recording state style
 }); 

@@ -10,6 +10,9 @@ export default function RootLayout() {
   const [loaded, error] = useFonts({
     'Merienda': require('../public/assets/Merienda-VariableFont_wght.ttf'),
     'PlusJakartaSans': require('../public/assets/PlusJakartaSans-VariableFont_wght.ttf'),
+    // New display fonts for Trip Book cover and polaroid caption
+    'TimesCondensed': require('../public/assets/Times New Roman MT Condensed Regular.otf'),
+    'ZingScriptRust': require('../public/assets/zing.script-rust-semibold-demo-base.otf'),
   });
 
   if (!loaded && !error) {

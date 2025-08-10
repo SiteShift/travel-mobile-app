@@ -379,12 +379,10 @@ export default function StreamlinedEntryEditor() {
           </View>
         )}
 
-      {/* Close Button */}
+      {/* Close Button (match camera style) */}
       <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
-        <Pressable onPress={handleClose} style={styles.closeButton}>
-          <BlurView intensity={40} style={styles.closeButtonBlur}>
-            <Icon name="close" size="lg" color="white" />
-          </BlurView>
+        <Pressable onPress={handleClose} style={styles.editorCloseButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Icon name="close" size="xl" color="white" />
         </Pressable>
       </View>
 
@@ -539,25 +537,14 @@ const styles = StyleSheet.create({
     zIndex: 100,
     paddingHorizontal: 20,
   },
-  closeButton: {
+  editorCloseButton: {
     alignSelf: 'flex-end',
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  closeButtonBlur: {
     width: 50,
     height: 50,
     borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   bottomContainer: {
     position: 'absolute',
