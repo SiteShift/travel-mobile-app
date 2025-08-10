@@ -216,18 +216,17 @@ export default function CameraScreen() {
           <View style={styles.gestureArea} />
         </GestureDetector>
         
-        <View style={styles.controlsOverlay}>
+          <View style={styles.controlsOverlay}>
           <View style={styles.topControls}>
-            <TouchableOpacity style={styles.controlButton} onPress={closeCamera} activeOpacity={0.7}>
-              <Icon name="close" size="xl" color="white" />
-            </TouchableOpacity>
-            
             {isRecording && (
               <View style={styles.recordingIndicator}>
                 <View style={styles.recordingDot} />
                 <Text style={styles.recordingText}>REC</Text>
               </View>
             )}
+            <TouchableOpacity style={styles.controlButton} onPress={closeCamera} activeOpacity={0.7}>
+              <Icon name="close" size="xl" color="white" />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.bottomControls}>

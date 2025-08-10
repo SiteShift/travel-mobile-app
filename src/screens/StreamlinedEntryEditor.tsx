@@ -406,7 +406,7 @@ export default function StreamlinedEntryEditor() {
                   ]}
                 >
                   <Text style={styles.tripText} numberOfLines={1}>
-                    {selectedTrip?.title || (isLoadingTrips ? 'Loading trips...' : 'Create new trip')}
+                    {selectedTrip?.title || (isLoadingTrips ? 'Loading trips...' : 'Select your trip')}
                   </Text>
                   {userTrips.length > 0 && (
                     <Icon 
