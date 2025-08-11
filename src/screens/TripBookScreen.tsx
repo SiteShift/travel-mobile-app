@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, ScrollView, Image as RNImage } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, ScrollView, Image as RNImage, Easing } from 'react-native';
 import { Image } from 'expo-image';
 import { Icon } from '../components/Icon';
 import * as ImagePicker from 'expo-image-picker';
@@ -148,8 +148,14 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   // Fade the day title on page change
   useEffect(() => {
     if (pageIndex > 0) {
-      dayTitleOpacity.setValue(0);
-      Animated.timing(dayTitleOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+      // Start slightly visible for smoother transition instead of a hard fade-from-zero
+      dayTitleOpacity.setValue(0.4);
+      Animated.timing(dayTitleOpacity, {
+        toValue: 1,
+        duration: 360,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
     }
   }, [pageIndex]);
 
@@ -296,54 +302,46 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
           <View key={`day-${day}`} style={[styles.page, { width: SCREEN_WIDTH }]}> 
             <ScrollView
               style={{ flex: 1, width: '100%' }}
-              contentContainerStyle={{ paddingTop: headerHeight + 12, paddingBottom: 120 }}
+              contentContainerStyle={{
+                paddingTop: headerHeight + 12,
+                // Keep a comfortable bottom area while letting the pager start near the bottom
+                paddingBottom: insets.bottom + 24,
+                // Ensure the content at least fills the viewport so the pager sits near bottom when few/no photos
+                minHeight: SCREEN_HEIGHT - headerHeight - insets.bottom - 16,
+                flexGrow: 1,
+              }}
               showsVerticalScrollIndicator={false}
             >
               {/* Add Photos placeholder at top if no photos yet */}
               {photos.length === 0 && (
                 <TouchableOpacity onPress={() => handleAddPhotos(day)} activeOpacity={0.9} style={[styles.addPolaroidContainer, { marginTop: 16 }] }>
                   <View style={styles.polaroidSmall}> 
-                    <View style={[styles.polaroidPlaceholder, { backgroundColor: '#F0F0F0' }]} />
-                    <View style={[styles.addCircle, { position: 'absolute', top: 24 }]}><Text style={styles.addPlus}>+</Text></View>
+                    <View style={[styles.polaroidPlaceholder, { backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }]}>
+                      <View style={styles.addCircle}><Text style={styles.addPlus}>+</Text></View>
+                    </View>
                     <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>Add Photos</Text>
                   </View>
                 </TouchableOpacity>
               )}
 
-              {/* Each photo as its own polaroid row */}
+              {/* Each photo as its own polaroid row with staggered fade-in */}
               {photos.map((uri, i) => (
-                <View key={`${uri}-${i}`} style={{ alignItems: 'center', marginBottom: 28 }}>
-                  <View style={[
-                    styles.polaroidSmall,
-                    {
-                      transform: [{ rotate: i % 2 === 0 ? '-2deg' : '2deg' }],
-                      alignSelf: i % 2 === 0 ? 'flex-start' : 'flex-end',
-                      marginLeft: i % 2 === 0 ? 24 : 0,
-                      marginRight: i % 2 === 1 ? 24 : 0,
-                    },
-                  ]}> 
-                    {/* Image first, then tape overlay to appear above */}
-                    <Image source={{ uri }} style={styles.polaroidImage} contentFit="cover" />
-                    {i % 2 === 0 ? (
-                      <RNImage source={require('../../public/assets/tape-top-left (1)_compressed.webp')} style={[styles.tapeTopLeft as any, { width: 110, height: 72 }]} />
-                    ) : (
-                      <RNImage source={require('../../public/assets/tape-top-right (1)_compressed.webp')} style={[styles.tapeTopRight as any, { width: 110, height: 72 }]} />
-                    )}
-                  </View>
-                </View>
+                <DayPhotoPolaroid key={`${uri}-${i}`} uri={uri} index={i} />
               ))}
-            </ScrollView>
+              {/* Spacer to push pager closer to the bottom on short content */}
+              <View style={{ flexGrow: 1, minHeight: SCREEN_HEIGHT * 0.22 }} />
 
-            {/* Bottom page indicator with arrows */}
-            <View style={[styles.pageIndicatorRow, { position: 'relative' }]}>
-              <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day - 1), animated: true })} style={styles.pageArrowCircle}>
-                <Text style={styles.pageArrowText}>←</Text>
-              </TouchableOpacity>
-              <Text style={styles.pageIndicatorText}>Page {day} of {totalDays}</Text>
-              <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day + 1), animated: true })} style={styles.pageArrowCircle}>
-                <Text style={styles.pageArrowText}>→</Text>
-              </TouchableOpacity>
-            </View>
+              {/* Bottom page indicator with arrows (non-sticky) */}
+              <View style={[styles.pageIndicatorRow]}>
+                <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day - 1), animated: true })} style={styles.pageArrowCircle}>
+                  <Text style={styles.pageArrowText}>←</Text>
+                </TouchableOpacity>
+                <Text style={styles.pageIndicatorText}>Day {day} of {totalDays}</Text>
+                <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day + 1), animated: true })} style={styles.pageArrowCircle}>
+                  <Text style={styles.pageArrowText}>→</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         );
       })}
@@ -358,20 +356,66 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         ]}
       > 
         <TouchableOpacity
-          accessibilityLabel="Back to cover"
-          onPress={() => scrollRef.current?.scrollTo({ x: 0, animated: true })}
-          style={styles.fixedHeaderButton}
+          accessibilityLabel="Close"
+          onPress={() => router.replace('/(tabs)')}
+          style={[styles.fixedHeaderButton, { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }]}
         >
-          <Icon name="chevron-left" size="md" color="#000" />
+          <Text style={styles.topLeftCloseText}>×</Text>
         </TouchableOpacity>
-        <Animated.Text style={[styles.dayTitle, { color: '#000' }]}>{pageIndex > 0 ? `Trip ${trip?.id ?? ''}` : ' '}</Animated.Text>
-        <TouchableOpacity accessibilityLabel="Edit Day" activeOpacity={0.8} style={[styles.editBadge, { marginRight: 18 }]}> 
+        <Animated.Text style={[styles.dayTitle, { color: '#000', opacity: dayTitleOpacity, textAlign: 'center', flex: 1 }]}>
+          {pageIndex > 0 ? `Day ${currentDayNumber}` : ' '}
+        </Animated.Text>
+        <TouchableOpacity accessibilityLabel="Edit Day" activeOpacity={0.8} style={[styles.editBadge, { marginRight: 8 }]}> 
           <Image source={require('../../public/assets/pencil-icon.svg')} style={{ width: 16, height: 16 }} contentFit="contain" />
         </TouchableOpacity>
       </View>
     </View>
   );
 }
+
+// Staggered polaroid item for day photos
+const DayPhotoPolaroid: React.FC<{ uri: string; index: number }> = ({ uri, index }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const delay = 220 * index;
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 900,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [index, fadeAnim]);
+
+  return (
+    <Animated.View style={{ alignItems: 'center', marginBottom: 28, opacity: fadeAnim }}>
+      <View
+        style={[
+          styles.polaroidSmall,
+          {
+            transform: [{ rotate: index % 2 === 0 ? '-2deg' : '2deg' }],
+            alignSelf: index % 2 === 0 ? 'flex-start' : 'flex-end',
+            marginLeft: index % 2 === 0 ? 24 : 0,
+            marginRight: index % 2 === 1 ? 24 : 0,
+          },
+        ]}
+      >
+        <Image source={{ uri }} style={styles.polaroidImage} contentFit="cover" />
+        {index % 2 === 0 ? (
+          <RNImage
+            source={require('../../public/assets/tape-top-left (1)_compressed.webp')}
+            style={[styles.tapeTopLeft as any, { width: 110, height: 72 }]}
+          />
+        ) : (
+          <RNImage
+            source={require('../../public/assets/tape-top-right (1)_compressed.webp')}
+            style={[styles.tapeTopRight as any, { width: 110, height: 72 }]}
+          />
+        )}
+      </View>
+    </Animated.View>
+  );
+};
 
 const styles = StyleSheet.create({
   page: {
@@ -554,31 +598,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#E6E6E6',
   },
   pageIndicatorRow: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 28,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 64,
+    justifyContent: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: 16,
+    marginTop: 8,
+    marginBottom: 24,
   },
   pageIndicatorText: {
     fontSize: 18,
-    color: '#000',
+    color: '#8A8A8A',
     fontFamily: 'TimesCondensed',
   },
   pageArrowCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    padding: 8,
+    marginHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pageArrowText: {
     fontSize: 22,
-    color: '#000',
+    color: '#8A8A8A',
   },
 });
 
