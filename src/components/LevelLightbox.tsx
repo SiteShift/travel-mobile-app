@@ -46,7 +46,20 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
   const scaleAnim = useRef(new Animated.Value(0.96)).current;
   const listRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
-  // per-slide local progress will be computed inside render
+  const progressX = useRef(new Animated.Value(0)).current; // relative progress within current page
+
+  // Global connector fill width between pages
+  const connectorFillWidth = useMemo(() => {
+    return progressX.interpolate({
+      inputRange: [0, CARD_WIDTH],
+      outputRange: [0, PROGRESS_TRACK_WIDTH],
+      extrapolate: 'clamp',
+    });
+  }, [progressX]);
+  const currentLevel = levels[Math.min(activeIndex, levels.length - 1)] || levels[0];
+  const currentProgressColors = currentLevel && currentLevel.level === 1
+    ? (['#E8C087', '#CD7F32', '#B46A2A'] as const)
+    : (['#f4845f', '#f97316', '#d946ef'] as const);
 
   useEffect(() => {
     if (visible) {
@@ -94,6 +107,10 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     const isLocked = !item.unlocked;
     const isUnlocked = !isLocked;
     const isLevelOne = item.level === 1;
+    const displayName = isLevelOne ? 'Rookie Ramble' : item.name;
+    const progressColors = isLevelOne
+      ? (['#E8C087', '#CD7F32', '#B46A2A'] as const)
+      : (['#f4845f', '#f97316', '#d946ef'] as const);
 
     // Crest color sets
     const crestOuterColors = isLocked
@@ -115,59 +132,31 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     return (
       <View style={styles.pageContainer}>
         {isUnlocked && (
-          <>
-            {/* Soft blur wash for Level 1 to add premium depth */}
-            {isLevelOne && (
-              <BlurView intensity={26} tint="light" style={styles.unlockedBgBlur} />
-            )}
-            {/* Soft warm base */}
-            <LinearGradient
-              colors={[ '#fff7ed', '#fffaf3' ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.unlockedBgBase}
-            />
-            {/* Subtle brand gradient overlay (restored) */}
-            <LinearGradient
-              colors={[ 'rgba(244,132,95,0.10)', 'rgba(249,115,22,0.06)', 'rgba(217,70,239,0.10)' ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.unlockedGradientOverlay}
-              pointerEvents="none"
-            />
-            {/* Diagonal band removed to avoid white-circle artifact */}
-            {/* Very soft color wash for Level 1 */}
+          <View style={styles.bgClip} pointerEvents="none">
+            {isLevelOne ? (
+              <Image
+                source={require('../../public/assets/level1background (1).webp')}
+                style={styles.bgImage}
+                contentFit="cover"
+                accessibilityLabel="Level 1 background"
+              />
+            ) : null}
             {isLevelOne && (
               <LinearGradient
-                colors={[ 'rgba(244,132,95,0.08)', 'rgba(249,115,22,0.06)', 'rgba(217,70,239,0.06)' ]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.unlockedColorWash}
+                colors={[ 'rgba(205,127,50,0.18)', 'rgba(205,127,50,0.00)' ]}
+                start={{ x: 0.5, y: 0.0 }}
+                end={{ x: 0.5, y: 1.0 }}
+                style={styles.bronzeOverlay}
               />
             )}
-            {/* Blobs */}
-            <View style={[styles.unlockedBlobBR, isLevelOne && { backgroundColor: 'rgba(217,70,239,0.10)' }]} />
-            {/* Blur the blobs slightly */}
-            <BlurView intensity={22} tint="light" style={styles.unlockedBlobBRBlur} pointerEvents="none" />
-            {/* Overall extra blur for unlocked */}
-            <BlurView intensity={isLevelOne ? 18 : 16} tint="light" style={styles.unlockedOverallBlur} pointerEvents="none" />
-            {/* Subtle vignette */}
-            <LinearGradient
-              colors={[ 'rgba(0,0,0,0.06)', 'rgba(0,0,0,0)' ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.unlockedVignetteTop}
-            />
-            <LinearGradient
-              colors={[ 'rgba(0,0,0,0)', 'rgba(0,0,0,0.05)' ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.unlockedVignetteBottom}
-            />
-          </>
+          </View>
         )}
+        {/* No award accents - clean look */}
+
         {/* Premium badge */}
         <Animated.View style={[styles.badgeWrap, { transform: [{ translateY: characterTranslateY }, { scale: characterScale }] }]}> 
+          {/* Subtle under shadow so the medallion stands out */}
+          <View style={styles.badgeShadowWrap} pointerEvents="none" />
           {/* Outer gradient ring */}
           <LinearGradient
             colors={isLocked ? ['#9CA3AF', '#6B7280'] : ['#f4845f', '#f97316', '#d946ef']}
@@ -175,28 +164,42 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             end={{ x: 1, y: 1 }}
             style={styles.badgeOuter}
           />
+          {/* Ambient ring glow (Level 1 only) */}
+          {isLevelOne && !isLocked && <View style={styles.ringAmbientGlow} pointerEvents="none" />}
           {/* Inner white circle to create ring */}
           <View style={[styles.badgeInner, isLocked ? styles.badgeInnerLocked : styles.badgeInnerUnlocked]} />
-          {/* Inner effects clipped to circle (unlocked only) */}
+          {/* Metallic frame sheen for badge ring (subtle) */}
+          {!isLocked && (
+            <LinearGradient
+              colors={[ 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)' ]}
+              start={{ x: 0.15, y: 0.1 }}
+              end={{ x: 0.85, y: 0.9 }}
+              style={styles.badgeRingSheen}
+            />
+          )}
+          {/* Soft inner gloss at top of circle */}
           {!isLocked && (
             <View style={styles.badgeClip} pointerEvents="none">
               <LinearGradient
-                colors={['#fff7f2', '#ffefe6', '#ffe9fb']}
-                start={{ x: 0.15, y: 0.1 }}
-                end={{ x: 0.9, y: 0.95 }}
-                style={styles.badgeGlow}
-              />
-              <LinearGradient
-                colors={['rgba(255,255,255,0.65)', 'rgba(255,255,255,0.0)']}
+                colors={[ 'rgba(255,255,255,0.35)', 'rgba(255,255,255,0)' ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.badgeShine}
+                style={styles.badgeTopGloss}
               />
             </View>
           )}
 
+          {/* Inner effects removed for pure white circle background */}
+
           {/* Character / Lock */}
-          {item.image && !isLocked ? (
+          {isLevelOne && !isLocked ? (
+            <Image
+              source={require('../../public/assets/TripMemo-parrot-logo-Photoroom_compressed.webp')}
+              style={[styles.badgeImage]}
+              contentFit="contain"
+              accessibilityLabel={`Parrot logo`}
+            />
+          ) : item.image && !isLocked ? (
             <Image
               source={item.image}
               style={[styles.badgeImage, isLocked && styles.characterImageLocked]}
@@ -222,16 +225,29 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             end={{ x: 1, y: 1 }}
             style={styles.crestOuter}
           >
-            <View style={[styles.crestInner, !isLocked && styles.crestInnerUnlocked]}>
+            <View style={[
+              styles.crestInner,
+              !isLocked && styles.crestInnerUnlocked,
+              isLevelOne && !isLocked && styles.crestInnerBronze
+            ]}>
               {/* Subtle 3D background only when unlocked */}
               {!isLocked && (
                 <>
-                  <LinearGradient
-                    colors={['#fff7ed', '#fffaf3']}
-                    start={{ x: 0.2, y: 0 }}
-                    end={{ x: 0.8, y: 1 }}
-                    style={styles.crestBgGradient}
-                  />
+                  {isLevelOne ? (
+                    <LinearGradient
+                      colors={['#F7E3BF', '#E8C087', '#CD7F32']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.crestBgGradient}
+                    />
+                  ) : (
+                    <LinearGradient
+                      colors={['#fff7ed', '#fffaf3']}
+                      start={{ x: 0.2, y: 0 }}
+                      end={{ x: 0.8, y: 1 }}
+                      style={styles.crestBgGradient}
+                    />
+                  )}
                   <LinearGradient
                     colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0)']}
                     start={{ x: 0, y: 0 }}
@@ -239,17 +255,17 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
                     style={styles.crestHighlight}
                   />
                   <LinearGradient
-                    colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.06)']}
+                    colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.08)']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.crestShadow}
                   />
                 </>
               )}
-              <Text style={styles.crestLevel}>Level {item.level}</Text>
+              <Text style={[styles.crestLevel, isLevelOne && !isLocked && styles.crestLevelBronze]}>Level {item.level}</Text>
               {/* Title: blur only when locked */}
               <View style={styles.titleBlurWrap}>
-                <Text style={styles.crestName}>{item.name}</Text>
+                <Text style={[styles.crestName, isLevelOne && !isLocked && styles.crestNameBronze]}>{displayName}</Text>
                 {isLocked && (
                   <>
                     <BlurView
@@ -289,12 +305,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
           <LinearGradient colors={crestTipRightColors} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={styles.crestTipRight} />
         </View>
 
-        {/* Connector progress to next badge */}
-        <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFillWrapper, { width: toNextProgressWidth }]}>
-            <LinearGradient colors={['#f4845f', '#f97316', '#d946ef']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.progressFill} />
-          </Animated.View>
-        </View>
+        {/* Per-item connector removed; global connector renders below */}
       </View>
     );
   };
@@ -320,13 +331,22 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             pagingEnabled
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              { useNativeDriver: false }
+              {
+                useNativeDriver: false,
+                listener: (e: any) => {
+                  const x = e?.nativeEvent?.contentOffset?.x || 0;
+                  const rel = x - Math.floor(x / CARD_WIDTH) * CARD_WIDTH; // x % CARD_WIDTH
+                  progressX.setValue(rel);
+                },
+              }
             )}
             onMomentumScrollEnd={onMomentumEnd}
             getItemLayout={(data, index) => ({ length: CARD_WIDTH, offset: CARD_WIDTH * index, index })}
             contentContainerStyle={{ alignItems: 'center' }}
             style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}
           />
+
+          {/* Progress bar removed as requested */}
 
           {/* Dots */}
           <View style={styles.dotsRow}>
@@ -343,9 +363,6 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
               );
             })}
           </View>
-
-          {/* Progress bar */}
-          {/* The global progress bar is removed, but the dots and connector remain */}
         </Animated.View>
       </View>
     </Modal>
@@ -367,7 +384,7 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // pure white base to avoid banding
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 20 },
@@ -395,84 +412,121 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     alignItems: 'center',
   },
+  bgClip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    overflow: 'hidden',
+    borderRadius: 0,
+  },
+  bgImage: {
+    ...StyleSheet.absoluteFillObject as any,
+  },
+  bronzeOverlay: {
+    ...StyleSheet.absoluteFillObject as any,
+  },
+  sparkleA: {
+    position: 'absolute',
+    top: CARD_HEIGHT * 0.2,
+    left: CARD_WIDTH * 0.08,
+    opacity: 0.6,
+  },
+  sparkleB: {
+    position: 'absolute',
+    top: CARD_HEIGHT * 0.32,
+    right: CARD_WIDTH * 0.06,
+    opacity: 0.5,
+  },
+  underCircleGlow: {
+    position: 'absolute',
+    top: CARD_HEIGHT * 0.46,
+    left: CARD_WIDTH * 0.15,
+    width: CARD_WIDTH * 0.7,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(205,127,50,0.15)',
+    shadowColor: '#CD7F32',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  crownWrap: {
+    position: 'absolute',
+    top: CARD_HEIGHT * 0.06,
+    alignSelf: 'center',
+    opacity: 0.9,
+  },
+  ribbonLeft: {
+    position: 'absolute',
+    left: CARD_WIDTH * 0.1,
+    top: 8,
+    width: CARD_WIDTH * 0.18,
+    height: 14,
+    borderBottomLeftRadius: 6,
+    borderTopLeftRadius: 6,
+    transform: [{ rotate: '-10deg' }],
+  },
+  ribbonRight: {
+    position: 'absolute',
+    right: CARD_WIDTH * 0.1,
+    top: 8,
+    width: CARD_WIDTH * 0.18,
+    height: 14,
+    borderBottomRightRadius: 6,
+    borderTopRightRadius: 6,
+    transform: [{ rotate: '10deg' }],
+  },
+  laurelLeft: {
+    position: 'absolute',
+    left: CARD_WIDTH * 0.08,
+    top: -6,
+    opacity: 0.8,
+  },
+  laurelRight: {
+    position: 'absolute',
+    right: CARD_WIDTH * 0.08,
+    top: -6,
+    opacity: 0.8,
+  },
   unlockedBgBase: {
     ...StyleSheet.absoluteFillObject as any,
   },
-  unlockedGradientOverlay: {
-    ...StyleSheet.absoluteFillObject as any,
-  },
-  unlockedBgBlur: {
-    ...StyleSheet.absoluteFillObject as any,
-  },
-  unlockedColorWash: {
-    ...StyleSheet.absoluteFillObject as any,
-  },
-  unlockedOverallBlur: {
-    ...StyleSheet.absoluteFillObject as any,
-  },
-  unlockedBgBand: {
+  // Subtle shape layers for unlocked background
+  unlockedBanner: {
     position: 'absolute',
-    width: CARD_WIDTH * 1.1,
-    height: CARD_HEIGHT * 0.3,
-    top: CARD_HEIGHT * 0.04,
-    borderRadius: 28,
-    transform: [{ rotate: '8deg' }],
+    width: CARD_WIDTH * 1.28,
+    height: CARD_HEIGHT * 0.22,
+    top: CARD_HEIGHT * 0.12,
+    left: -CARD_WIDTH * 0.14,
+    borderRadius: 30,
+    transform: [{ rotate: '11deg' }],
   },
-  unlockedBgBandBlur: {
+  unlockedBannerBlur: {
     position: 'absolute',
-    width: CARD_WIDTH * 1.1,
-    height: CARD_HEIGHT * 0.3,
-    top: CARD_HEIGHT * 0.04,
-    borderRadius: 28,
-    transform: [{ rotate: '8deg' }],
+    width: CARD_WIDTH * 1.28,
+    height: CARD_HEIGHT * 0.22,
+    top: CARD_HEIGHT * 0.12,
+    left: -CARD_WIDTH * 0.14,
+    borderRadius: 30,
+    transform: [{ rotate: '11deg' }],
   },
-  unlockedBlobTL: {
+  unlockedCircle: {
     position: 'absolute',
-    width: CARD_WIDTH * 0.6,
-    height: CARD_WIDTH * 0.6,
-    borderRadius: (CARD_WIDTH * 0.6) / 2,
-    backgroundColor: 'rgba(244,132,95,0.08)',
-    top: CARD_HEIGHT * 0.08,
-    left: -CARD_WIDTH * 0.15,
-  },
-  unlockedBlobTLBlur: {
-    position: 'absolute',
-    width: CARD_WIDTH * 0.6,
-    height: CARD_WIDTH * 0.6,
-    borderRadius: (CARD_WIDTH * 0.6) / 2,
-    top: CARD_HEIGHT * 0.08,
-    left: -CARD_WIDTH * 0.15,
-  },
-  unlockedBlobBR: {
-    position: 'absolute',
-    width: CARD_WIDTH * 0.55,
-    height: CARD_WIDTH * 0.55,
-    borderRadius: (CARD_WIDTH * 0.55) / 2,
-    backgroundColor: 'rgba(217,70,239,0.06)',
+    width: CARD_WIDTH * 0.86,
+    height: CARD_WIDTH * 0.86,
+    borderRadius: (CARD_WIDTH * 0.86) / 2,
+    right: -CARD_WIDTH * 0.08,
     bottom: CARD_HEIGHT * 0.16,
-    right: -CARD_WIDTH * 0.12,
   },
-  unlockedBlobBRBlur: {
+  unlockedCircleBlur: {
     position: 'absolute',
-    width: CARD_WIDTH * 0.55,
-    height: CARD_WIDTH * 0.55,
-    borderRadius: (CARD_WIDTH * 0.55) / 2,
+    width: CARD_WIDTH * 0.86,
+    height: CARD_WIDTH * 0.86,
+    borderRadius: (CARD_WIDTH * 0.86) / 2,
+    right: -CARD_WIDTH * 0.08,
     bottom: CARD_HEIGHT * 0.16,
-    right: -CARD_WIDTH * 0.12,
-  },
-  unlockedVignetteTop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 24,
-  },
-  unlockedVignetteBottom: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 30,
   },
   // Badge styles
   badgeWrap: {
@@ -493,6 +547,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.10,
     shadowRadius: 16,
     elevation: 10,
+  },
+  badgeShadowWrap: {
+    position: 'absolute',
+    width: BADGE_INNER,
+    height: BADGE_INNER,
+    borderRadius: BADGE_INNER / 2,
+    top: 0,
+    left: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    elevation: 12,
   },
   badgeInner: {
     position: 'absolute',
@@ -579,12 +646,13 @@ const styles = StyleSheet.create({
   characterLocked: {
     color: '#9CA3AF',
   },
+  // ring shine/shadow styles removed
   // Gold crest framed title
   crestWrapper: {
-    marginTop: 34,
+    marginTop: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: Math.round(CARD_WIDTH * 0.64),
+    minWidth: Math.round(CARD_WIDTH * 0.75),
   },
   crestOuter: {
     padding: 2,
@@ -592,22 +660,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
     elevation: 6,
+    // subtle metallic rim
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.6)'
   },
   crestInner: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
   },
   crestInnerUnlocked: {
     backgroundColor: '#fffcf6',
+  },
+  crestInnerBronze: {
+    backgroundColor: '#FFF5E6',
   },
   crestLevel: {
     fontSize: 22,
@@ -617,11 +695,17 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
     lineHeight: 24,
   },
+  crestLevelBronze: {
+    color: '#3b2a15',
+  },
   crestName: {
     marginTop: 2,
     fontSize: 18,
     fontWeight: '600',
     color: '#374151',
+  },
+  crestNameBronze: {
+    color: '#4a3720',
   },
   titleBlurWrap: {
     position: 'relative',
@@ -703,7 +787,7 @@ const styles = StyleSheet.create({
   },
   // Connector progress under badge
   progressTrack: {
-    marginTop: 18,
+    marginTop: 26,
     width: PROGRESS_TRACK_WIDTH,
     height: PROGRESS_TRACK_HEIGHT,
     borderRadius: PROGRESS_TRACK_HEIGHT / 2,
@@ -721,15 +805,53 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject as any,
     borderRadius: PROGRESS_TRACK_HEIGHT / 2,
   },
+  // New connector bar between circles
+  connectorRow: {
+    position: 'absolute',
+    top: CARD_HEIGHT * 0.54,
+    left: 0,
+    width: CARD_WIDTH,
+    alignItems: 'center',
+  },
+  connectorTrack: {
+    width: PROGRESS_TRACK_WIDTH,
+    height: PROGRESS_TRACK_HEIGHT,
+    borderRadius: PROGRESS_TRACK_HEIGHT / 2,
+    backgroundColor: '#ECECEC',
+    overflow: 'hidden',
+  },
+  connectorFillWrapper: {
+    height: '100%',
+  },
+  connectorFill: {
+    ...StyleSheet.absoluteFillObject as any,
+    borderRadius: PROGRESS_TRACK_HEIGHT / 2,
+  },
+  progressTracker: {
+    position: 'absolute',
+    top: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#f97316',
+    shadowColor: '#f97316',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  progressTrackerBronze: {
+    backgroundColor: '#CD7F32',
+    shadowColor: '#CD7F32',
+  },
   crestBgGradient: {
     ...StyleSheet.absoluteFillObject as any,
   },
   crestHighlight: {
     position: 'absolute',
     left: 6,
-    top: 4,
+    top: 3,
     right: 6,
-    height: 10,
+    height: 14,
     borderRadius: 8,
   },
   crestShadow: {
@@ -737,7 +859,87 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 12,
+    height: 16,
+  },
+  // Branded background layers for unlocked
+  brandBackdrop: {
+    ...StyleSheet.absoluteFillObject as any,
+  },
+  brandBlobTL: {
+    position: 'absolute',
+    width: CARD_WIDTH * 0.9,
+    height: CARD_WIDTH * 0.9,
+    borderRadius: (CARD_WIDTH * 0.9) / 2,
+    backgroundColor: 'rgba(244,132,95,0.14)', // coral
+    top: CARD_HEIGHT * 0.13,
+    left: -CARD_WIDTH * 0.28,
+  },
+  brandBlobTLBlur: {
+    position: 'absolute',
+    width: CARD_WIDTH * 0.9,
+    height: CARD_WIDTH * 0.9,
+    borderRadius: (CARD_WIDTH * 0.9) / 2,
+    top: CARD_HEIGHT * 0.13,
+    left: -CARD_WIDTH * 0.28,
+  },
+  brandBannerTL: {
+    position: 'absolute',
+    width: CARD_WIDTH * 1.25,
+    height: CARD_HEIGHT * 0.22,
+    top: CARD_HEIGHT * 0.12,
+    left: -CARD_WIDTH * 0.18,
+    borderRadius: 28,
+    transform: [{ rotate: '11deg' }],
+  },
+  brandBannerTLBlur: {
+    position: 'absolute',
+    width: CARD_WIDTH * 1.25,
+    height: CARD_HEIGHT * 0.22,
+    top: CARD_HEIGHT * 0.12,
+    left: -CARD_WIDTH * 0.18,
+    borderRadius: 28,
+    transform: [{ rotate: '11deg' }],
+  },
+  brandBlobBR: {
+    position: 'absolute',
+    width: CARD_WIDTH * 0.8,
+    height: CARD_WIDTH * 0.8,
+    borderRadius: (CARD_WIDTH * 0.8) / 2,
+    backgroundColor: 'rgba(217,70,239,0.12)', // purple/magenta
+    right: -CARD_WIDTH * 0.22,
+    bottom: CARD_HEIGHT * 0.08,
+  },
+  brandBlobBRBlur: {
+    position: 'absolute',
+    width: CARD_WIDTH * 0.8,
+    height: CARD_WIDTH * 0.8,
+    borderRadius: (CARD_WIDTH * 0.8) / 2,
+    right: -CARD_WIDTH * 0.22,
+    bottom: CARD_HEIGHT * 0.08,
+  },
+  badgeRingSheen: {
+    position: 'absolute',
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    borderRadius: BADGE_SIZE / 2,
+  },
+  badgeTopGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: BADGE_SIZE * 0.22,
+  },
+  ringAmbientGlow: {
+    position: 'absolute',
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    borderRadius: BADGE_SIZE / 2,
+    shadowColor: '#CD7F32',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 22,
+    elevation: 14,
   },
 });
 

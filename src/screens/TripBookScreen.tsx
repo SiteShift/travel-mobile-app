@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, ScrollView, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
+import { Icon } from '../components/Icon';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useRouter } from 'expo-router';
@@ -76,6 +77,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const headerHeight = insets.top + 56;
   const [trip, setTrip] = useState<{ id: string; title: string; description: string; coverImage: string; monthYear: string; startDate?: Date; endDate?: Date } | null>(null);
   const [useRNImage, setUseRNImage] = useState(false);
   const [dayPhotos, setDayPhotos] = useState<Record<number, string[]>>({});
@@ -96,15 +98,25 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
     (async () => {
       const t = await loadSimpleTrip(tripId);
       if (!t) return;
-      // If the stored cover is missing, attempt to read the pending cover as last resort
-      if (!t.coverImage) {
+      // Resolve cover image without mutating the original object
+      let resolvedCover = t.coverImage || '';
+      if (!resolvedCover) {
         try {
           const AsyncStorage = require('@react-native-async-storage/async-storage').default;
           const pending = await AsyncStorage.getItem('pending_cover_image');
-          if (pending) t.coverImage = pending;
+          if (pending) resolvedCover = pending;
         } catch {}
       }
-      setTrip(t);
+      const normalizedTrip = {
+        id: String(t.id),
+        title: t.title,
+        description: t.description,
+        coverImage: resolvedCover,
+        monthYear: t.monthYear,
+        startDate: t.startDate,
+        endDate: t.endDate,
+      };
+      setTrip(normalizedTrip);
       // Initialize days photos arrays based on duration
       const days: Record<number, string[]> = {};
       const start = t.startDate ?? new Date();
@@ -282,7 +294,11 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         const photos = dayPhotos[day] || [];
         return (
           <View key={`day-${day}`} style={[styles.page, { width: SCREEN_WIDTH }]}> 
-            <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={{ paddingTop: 190, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ flex: 1, width: '100%' }}
+              contentContainerStyle={{ paddingTop: headerHeight + 12, paddingBottom: 120 }}
+              showsVerticalScrollIndicator={false}
+            >
               {/* Add Photos placeholder at top if no photos yet */}
               {photos.length === 0 && (
                 <TouchableOpacity onPress={() => handleAddPhotos(day)} activeOpacity={0.9} style={[styles.addPolaroidContainer, { marginTop: 16 }] }>
@@ -334,17 +350,22 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
       </ScrollView>
 
       {/* Fixed header overlay for day pages */}
-      {/* Always render header overlay; visible on all pages; hidden elements on cover */}
-      <View pointerEvents="box-none" style={[styles.fixedDayHeader, { paddingTop: insets.top + 72, paddingBottom: 20 }]}> 
+      <View
+        pointerEvents={pageIndex > 0 ? 'auto' : 'none'}
+        style={[
+          styles.fixedDayHeader,
+          { paddingTop: insets.top, height: headerHeight, opacity: pageIndex > 0 ? 1 : 0 },
+        ]}
+      > 
         <TouchableOpacity
           accessibilityLabel="Back to cover"
           onPress={() => scrollRef.current?.scrollTo({ x: 0, animated: true })}
           style={styles.fixedHeaderButton}
         >
-          <Text style={[styles.backText, { opacity: pageIndex > 0 ? 1 : 0.4 }]}>{'←'}</Text>
+          <Icon name="chevron-left" size="md" color="#000" />
         </TouchableOpacity>
-        <Animated.Text style={[styles.dayTitle, { color: '#000', opacity: pageIndex > 0 ? 1 : 0.4 }]}>{pageIndex > 0 ? `Day ${currentDayNumber}` : ' '}</Animated.Text>
-        <TouchableOpacity accessibilityLabel="Edit Day" activeOpacity={0.8} style={[styles.editBadge, { marginRight: 18, opacity: pageIndex > 0 ? 1 : 0.4 }]}> 
+        <Animated.Text style={[styles.dayTitle, { color: '#000' }]}>{pageIndex > 0 ? `Trip ${trip?.id ?? ''}` : ' '}</Animated.Text>
+        <TouchableOpacity accessibilityLabel="Edit Day" activeOpacity={0.8} style={[styles.editBadge, { marginRight: 18 }]}> 
           <Image source={require('../../public/assets/pencil-icon.svg')} style={{ width: 16, height: 16 }} contentFit="contain" />
         </TouchableOpacity>
       </View>
@@ -460,13 +481,13 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 140,
-    paddingTop: 64,
     paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 20,
+    zIndex: 999,
+    elevation: 12,
+    backgroundColor: '#EFEFEF',
   },
   fixedHeaderButton: {
     padding: 6,
