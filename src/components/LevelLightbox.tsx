@@ -10,18 +10,13 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export interface LevelItem {
   level: number;
-  name: string;
-  character: string; // Will later be an image source
   unlocked: boolean;
-  description?: string;
-  color: string;
-  image?: any; // Placeholder 3D image source (uri or require)
+  image: any;
 }
 
 interface LevelLightboxProps {
   visible: boolean;
   onClose: () => void;
-  levels: LevelItem[];
   initialIndex?: number;
 }
 
@@ -31,22 +26,91 @@ const CHARACTER_SIZE = Math.min(CARD_WIDTH, CARD_HEIGHT) * 0.8;
 const HALO_SIZE = CHARACTER_SIZE * 1.2;
 
 // Premium badge sizing
-const BADGE_SIZE = Math.min(CARD_WIDTH, CARD_HEIGHT) * 0.82;
+const BADGE_SIZE = Math.min(CARD_WIDTH, CARD_HEIGHT) * 1.24; // bigger main level image
 const RING_THICKNESS = Math.round(Math.max(8, Math.min(10, BADGE_SIZE * 0.028)));
 const BADGE_INNER = BADGE_SIZE - RING_THICKNESS * 2;
 const BADGE_GLOW = Math.round(BADGE_INNER * 0.98);
 const BADGE_IMAGE = Math.round(BADGE_INNER * 0.74);
 const PROGRESS_TRACK_WIDTH = Math.round(CARD_WIDTH * 0.64);
-const PROGRESS_TRACK_HEIGHT = 8;
+const PROGRESS_TRACK_HEIGHT = 12;
+const PAGE_PADDING_TOP = 36;
+const BADGE_WRAP_MARGIN_TOP = 8; // move image a tiny bit further up
+const BADGE_CENTER_Y = PAGE_PADDING_TOP + BADGE_WRAP_MARGIN_TOP + BADGE_SIZE / 2;
+const RAIL_BAR_HEIGHT = 120;
+const RAIL_BAR_TOP = BADGE_CENTER_Y - RAIL_BAR_HEIGHT / 2;
+// Connector segment (wide pill) sizing
+const CONNECT_SEGMENT_WIDTH = 16;
+const CONNECT_SEGMENT_HEIGHT = 4;
+const CONNECT_SEGMENT_SPACING = 8;
 
-export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, levels, initialIndex = 0 }) => {
+// Full-color level images (for reveal-all)
+const LEVEL1_IMG = require('../../public/assets/Picflow Images Aug 11/level-1.webp');
+const LEVEL2_IMG = require('../../public/assets/Picflow Images Aug 11/level-2.webp');
+const LEVEL3_IMG = require('../../public/assets/Picflow Images Aug 11/level-3.webp');
+const LEVEL4_IMG = require('../../public/assets/Picflow Images Aug 11/level-4.webp');
+const LEVEL5_IMG = require('../../public/assets/Picflow Images Aug 11/level-5.webp');
+const LEVEL6_IMG = require('../../public/assets/Picflow Images Aug 11/level-6.webp');
+const LEVEL7_IMG = require('../../public/assets/Picflow Images Aug 11/level-7.webp');
+const LEVEL8_IMG = require('../../public/assets/Picflow Images Aug 11/level-8.webp');
+const LEVEL9_IMG = require('../../public/assets/Picflow Images Aug 11/level-9.webp');
+const LEVEL10_IMG = require('../../public/assets/Picflow Images Aug 11/level-10.webp');
+
+const LEVEL_COLOR_MAP: Record<number, any> = {
+  1: LEVEL1_IMG,
+  2: LEVEL2_IMG,
+  3: LEVEL3_IMG,
+  4: LEVEL4_IMG,
+  5: LEVEL5_IMG,
+  6: LEVEL6_IMG,
+  7: LEVEL7_IMG,
+  8: LEVEL8_IMG,
+  9: LEVEL9_IMG,
+  10: LEVEL10_IMG,
+};
+
+export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, initialIndex = 0 }) => {
   const { colors } = useTheme();
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [revealAll, setRevealAll] = useState(false);
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.96)).current;
   const listRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const progressX = useRef(new Animated.Value(0)).current; // relative progress within current page
+
+  // Build 10 pages: level 1 unlocked, others locked; can reveal all via toggle
+  const levels: LevelItem[] = useMemo(() => {
+    // Static imports required by the bundler (no dynamic require)
+    const BLACK_2 = require('../../public/assets/levelbadges-blackedout/level-2-blackedout.webp');
+    const BLACK_3 = require('../../public/assets/levelbadges-blackedout/level-3-blackedout.webp');
+    const BLACK_4 = require('../../public/assets/levelbadges-blackedout/level-4-blackedout.webp');
+    const BLACK_5 = require('../../public/assets/levelbadges-blackedout/level-5-blackedout.webp');
+    const BLACK_6 = require('../../public/assets/levelbadges-blackedout/level-6-blackedout.webp');
+    const BLACK_7 = require('../../public/assets/levelbadges-blackedout/level-7-blackedout.webp');
+    const BLACK_8 = require('../../public/assets/levelbadges-blackedout/level-8-blackedout.webp');
+    const BLACK_9 = require('../../public/assets/levelbadges-blackedout/level-9-blackedout.webp');
+    const BLACK_10 = require('../../public/assets/levelbadges-blackedout/level-10-blackedout.webp');
+
+    const blackMap: Record<number, any> = {
+      1: LEVEL_COLOR_MAP[1],
+      2: BLACK_2,
+      3: BLACK_3,
+      4: BLACK_4,
+      5: BLACK_5,
+      6: BLACK_6,
+      7: BLACK_7,
+      8: BLACK_8,
+      9: BLACK_9,
+      10: BLACK_10,
+    };
+    const arr: LevelItem[] = [];
+    for (let i = 1; i <= 10; i++) {
+      const unlocked = revealAll ? true : i === 1;
+      const src = unlocked ? LEVEL_COLOR_MAP[i] : blackMap[i];
+      arr.push({ level: i, unlocked, image: src });
+    }
+    return arr;
+  }, [revealAll]);
 
   // Global connector fill width between pages
   const connectorFillWidth = useMemo(() => {
@@ -57,9 +121,6 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     });
   }, [progressX]);
   const currentLevel = levels[Math.min(activeIndex, levels.length - 1)] || levels[0];
-  const currentProgressColors = currentLevel && currentLevel.level === 1
-    ? (['#E8C087', '#CD7F32', '#B46A2A'] as const)
-    : (['#f4845f', '#f97316', '#d946ef'] as const);
 
   useEffect(() => {
     if (visible) {
@@ -107,205 +168,67 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     const isLocked = !item.unlocked;
     const isUnlocked = !isLocked;
     const isLevelOne = item.level === 1;
-    const displayName = isLevelOne ? 'Rookie Ramble' : item.name;
-    const progressColors = isLevelOne
-      ? (['#E8C087', '#CD7F32', '#B46A2A'] as const)
-      : (['#f4845f', '#f97316', '#d946ef'] as const);
-
-    // Crest color sets
-    const crestOuterColors = isLocked
-      ? (['#9CA3AF', '#6B7280'] as const)
-      : isLevelOne
-        ? (['#E0A060', '#CD7F32', '#B46A2A'] as const) // bronze for Level 1
-        : (['#FFE08A', '#F9C846', '#E6B400'] as const);
-    const crestTipLeftColors = isLocked
-      ? (['#9CA3AF', '#6B7280'] as const)
-      : isLevelOne
-        ? (['#E0A060', '#B46A2A'] as const)
-        : (['#FFE08A', '#E6B400'] as const);
-    const crestTipRightColors = isLocked
-      ? (['#9CA3AF', '#6B7280'] as const)
-      : isLevelOne
-        ? (['#E0A060', '#B46A2A'] as const)
-        : (['#FFE08A', '#E6B400'] as const);
 
     return (
       <View style={styles.pageContainer}>
-        {isUnlocked && (
-          <View style={styles.bgClip} pointerEvents="none">
-            {isLevelOne ? (
-              <Image
-                source={require('../../public/assets/level1background (1).webp')}
-                style={styles.bgImage}
-                contentFit="cover"
-                accessibilityLabel="Level 1 background"
-              />
-            ) : null}
-            {isLevelOne && (
-              <LinearGradient
-                colors={[ 'rgba(205,127,50,0.18)', 'rgba(205,127,50,0.00)' ]}
-                start={{ x: 0.5, y: 0.0 }}
-                end={{ x: 0.5, y: 1.0 }}
-                style={styles.bronzeOverlay}
-              />
-            )}
+        {/* Across-pages horizontal rail behind badges */}
+        <View style={styles.railBar} pointerEvents="none" />
+        {/* Segmented connector from badge center to the right, spans into next page */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: BADGE_CENTER_Y - CONNECT_SEGMENT_HEIGHT / 2,
+            left: CARD_WIDTH / 2,
+            width: CARD_WIDTH * 1.5, // extend beyond current page width
+            height: CONNECT_SEGMENT_HEIGHT,
+            zIndex: 2,
+            flexDirection: 'row',
+            overflow: 'visible',
+          }}
+        >
+          {Array.from({ length: Math.ceil((CARD_WIDTH * 1.5) / (CONNECT_SEGMENT_WIDTH + CONNECT_SEGMENT_SPACING)) }).map((_, i) => (
+            <View
+              key={`seg-${i}`}
+              style={{
+                width: CONNECT_SEGMENT_WIDTH,
+                height: CONNECT_SEGMENT_HEIGHT,
+                borderRadius: CONNECT_SEGMENT_HEIGHT / 2,
+                backgroundColor: '#6b7280',
+                marginRight: CONNECT_SEGMENT_SPACING,
+              }}
+            />
+          ))}
+        </View>
+        {/* Large centered image slightly nearer to top */}
+        <Animated.View style={[styles.badgeWrap, { transform: [{ translateY: characterTranslateY }, { scale: characterScale }] }]}> 
+          <Image
+            source={item.image}
+            style={[styles.simpleBadgeImage]}
+            contentFit="contain"
+            accessibilityLabel={`Level ${item.level}`}
+          />
+        </Animated.View>
+        {/* Level pill (only show for unlocked level 1) */}
+        {isLevelOne && isUnlocked && (
+          <View style={styles.levelPill}>
+            <Text style={styles.levelPillText}>Level 1</Text>
           </View>
         )}
-        {/* No award accents - clean look */}
-
-        {/* Premium badge */}
-        <Animated.View style={[styles.badgeWrap, { transform: [{ translateY: characterTranslateY }, { scale: characterScale }] }]}> 
-          {/* Subtle under shadow so the medallion stands out */}
-          <View style={styles.badgeShadowWrap} pointerEvents="none" />
-          {/* Outer gradient ring */}
-          <LinearGradient
-            colors={isLocked ? ['#9CA3AF', '#6B7280'] : ['#f4845f', '#f97316', '#d946ef']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.badgeOuter}
-          />
-          {/* Ambient ring glow (Level 1 only) */}
-          {isLevelOne && !isLocked && <View style={styles.ringAmbientGlow} pointerEvents="none" />}
-          {/* Inner white circle to create ring */}
-          <View style={[styles.badgeInner, isLocked ? styles.badgeInnerLocked : styles.badgeInnerUnlocked]} />
-          {/* Metallic frame sheen for badge ring (subtle) */}
-          {!isLocked && (
-            <LinearGradient
-              colors={[ 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)' ]}
-              start={{ x: 0.15, y: 0.1 }}
-              end={{ x: 0.85, y: 0.9 }}
-              style={styles.badgeRingSheen}
-            />
-          )}
-          {/* Soft inner gloss at top of circle */}
-          {!isLocked && (
-            <View style={styles.badgeClip} pointerEvents="none">
-              <LinearGradient
-                colors={[ 'rgba(255,255,255,0.35)', 'rgba(255,255,255,0)' ]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.badgeTopGloss}
-              />
-            </View>
-          )}
-
-          {/* Inner effects removed for pure white circle background */}
-
-          {/* Character / Lock */}
-          {isLevelOne && !isLocked ? (
-            <Image
-              source={require('../../public/assets/TripMemo-parrot-logo-Photoroom_compressed.webp')}
-              style={[styles.badgeImage]}
-              contentFit="contain"
-              accessibilityLabel={`Parrot logo`}
-            />
-          ) : item.image && !isLocked ? (
-            <Image
-              source={item.image}
-              style={[styles.badgeImage, isLocked && styles.characterImageLocked]}
-              contentFit="contain"
-              accessibilityLabel={`${item.name} character`}
-            />
-          ) : isLocked ? (
-            <View style={styles.lockWrap}>
-              <View style={styles.lockCircle} />
-              <View style={styles.lockGlow} />
-              <Text style={styles.lockEmoji}>🔒</Text>
-            </View>
-          ) : (
-            <Text style={[styles.badgeEmoji, isLocked && styles.characterLocked]}>{item.character}</Text>
-          )}
-        </Animated.View>
-
-        {/* Gold crest frame (outlined) */}
-        <View style={styles.crestWrapper}>
-          <LinearGradient
-            colors={crestOuterColors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.crestOuter}
-          >
-            <View style={[
-              styles.crestInner,
-              !isLocked && styles.crestInnerUnlocked,
-              isLevelOne && !isLocked && styles.crestInnerBronze
-            ]}>
-              {/* Subtle 3D background only when unlocked */}
-              {!isLocked && (
-                <>
-                  {isLevelOne ? (
-                    <LinearGradient
-                      colors={['#F7E3BF', '#E8C087', '#CD7F32']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.crestBgGradient}
-                    />
-                  ) : (
-                    <LinearGradient
-                      colors={['#fff7ed', '#fffaf3']}
-                      start={{ x: 0.2, y: 0 }}
-                      end={{ x: 0.8, y: 1 }}
-                      style={styles.crestBgGradient}
-                    />
-                  )}
-                  <LinearGradient
-                    colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.crestHighlight}
-                  />
-                  <LinearGradient
-                    colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.08)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.crestShadow}
-                  />
-                </>
-              )}
-              <Text style={[styles.crestLevel, isLevelOne && !isLocked && styles.crestLevelBronze]}>Level {item.level}</Text>
-              {/* Title: blur only when locked */}
-              <View style={styles.titleBlurWrap}>
-                <Text style={[styles.crestName, isLevelOne && !isLocked && styles.crestNameBronze]}>{displayName}</Text>
-                {isLocked && (
-                  <>
-                    <BlurView
-                      intensity={16}
-                      tint="light"
-                      style={styles.titleBlurOverlay}
-                      accessibilityLabel="Locked title"
-                    />
-                    <LinearGradient
-                      colors={[ 'rgba(255,255,255,0.45)', 'rgba(255,255,255,0.35)' ]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.titleFrostOverlay}
-                      pointerEvents="none"
-                    />
-                    <LinearGradient
-                      colors={[ 'rgba(255,255,255,0)', 'rgba(255,255,255,0.18)', 'rgba(255,255,255,0)' ]}
-                      start={{ x: 0, y: 0.5 }}
-                      end={{ x: 1, y: 0.5 }}
-                      style={styles.titleFeather}
-                      pointerEvents="none"
-                    />
-                    <LinearGradient
-                      colors={[ 'rgba(255,255,255,0)', 'rgba(255,255,255,0.12)' ]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.titleFeatherVertical}
-                      pointerEvents="none"
-                    />
-                  </>
-                )}
-              </View>
-            </View>
-          </LinearGradient>
-          {/* Crest side tips */}
-          <LinearGradient colors={crestTipLeftColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.crestTipLeft} />
-          <LinearGradient colors={crestTipRightColors} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={styles.crestTipRight} />
+        {/* Locked pill for all locked pages */}
+        {isLocked && (
+          <View style={styles.lockedPill}>
+            <Text style={styles.lockedPillText}>Locked</Text>
+          </View>
+        )}
+        {/* Info button removed from page; now fixed on card */}
+        {/* XP bar */}
+        <View style={styles.simpleProgressContainer}>
+          <View style={[styles.simpleProgressTrack, isLocked && styles.simpleProgressTrackLocked]}>
+            <View style={[styles.simpleProgressFill, isLocked && styles.simpleProgressFillLocked]} />
+          </View>
+          <Text style={[styles.xpLabel, isLocked && styles.xpLabelLocked]}>{isLocked ? '0/100' : '50/100'}</Text>
         </View>
-
-        {/* Per-item connector removed; global connector renders below */}
       </View>
     );
   };
@@ -318,6 +241,19 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
           {/* Close */}
           <TouchableOpacity onPress={onClose} accessibilityLabel="Close levels" style={styles.closeBtn}>
             <Icon name="close" size="md" color="text" />
+          </TouchableOpacity>
+          {/* Fixed Info button bottom-right */}
+          <TouchableOpacity style={styles.infoBtnFixed} activeOpacity={0.8} accessibilityLabel="Info">
+            <Text style={styles.infoBtnText}>i</Text>
+          </TouchableOpacity>
+          {/* Reveal all toggle (preview) */}
+          <TouchableOpacity
+            onPress={() => setRevealAll((v) => !v)}
+            accessibilityLabel="Reveal all levels"
+            style={styles.revealBtn}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.revealBtnText}>{revealAll ? 'Hide' : 'Reveal'}</Text>
           </TouchableOpacity>
 
           {/* Pager */}
@@ -348,7 +284,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
 
           {/* Progress bar removed as requested */}
 
-          {/* Dots */}
+           {/* Dots */}
           <View style={styles.dotsRow}>
             {levels.map((_, idx) => {
               const inputRange = [
@@ -358,8 +294,20 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
               ];
               const dotScale = scrollX.interpolate({ inputRange, outputRange: [1, 1.4, 1], extrapolate: 'clamp' });
               const dotOpacity = scrollX.interpolate({ inputRange, outputRange: [0.4, 1, 0.4], extrapolate: 'clamp' });
+              const isActive = idx === activeIndex;
+              const isActiveLocked = isActive && levels[idx] && !levels[idx].unlocked;
               return (
-                <Animated.View key={`dot-${idx}`} style={[styles.dot, { opacity: dotOpacity, transform: [{ scale: dotScale }] }]} />
+                <Animated.View
+                  key={`dot-${idx}`}
+                  style={[
+                    styles.dot,
+                    {
+                      opacity: dotOpacity,
+                      transform: [{ scale: dotScale }],
+                      backgroundColor: isActive ? (isActiveLocked ? '#000' : '#f97316') : 'rgba(0,0,0,0.2)'
+                    },
+                  ]}
+                />
               );
             })}
           </View>
@@ -409,8 +357,29 @@ const styles = StyleSheet.create({
   pageContainer: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    paddingTop: 56,
+    paddingTop: PAGE_PADDING_TOP,
     alignItems: 'center',
+  },
+  // Dotted line behind images from current badge center towards the right across all pages
+  dottedRail: {
+    position: 'absolute',
+    top: BADGE_CENTER_Y, // align to badge center
+    left: CARD_WIDTH / 2,
+    right: 0,
+    height: 0,
+    borderTopWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,0,0,0.45)',
+    zIndex: 2,
+  },
+  railBar: {
+    position: 'absolute',
+    top: RAIL_BAR_TOP,
+    left: 0,
+    right: 0,
+    height: RAIL_BAR_HEIGHT,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    zIndex: 1,
   },
   bgClip: {
     position: 'absolute',
@@ -534,8 +503,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: BADGE_SIZE,
     height: BADGE_SIZE,
-    marginTop: 18,
+    marginTop: BADGE_WRAP_MARGIN_TOP,
     marginBottom: 36,
+    zIndex: 3,
   },
   badgeOuter: {
     position: 'absolute',
@@ -602,6 +572,11 @@ const styles = StyleSheet.create({
     width: BADGE_IMAGE,
     height: BADGE_IMAGE,
     marginTop: -8,
+  },
+  simpleBadgeImage: {
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    marginTop: 12,
   },
   characterImageLocked: {
     tintColor: '#9CA3AF',
@@ -769,7 +744,7 @@ const styles = StyleSheet.create({
   },
   dotsRow: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 28, // move up a tiny bit (bigger value = closer to bottom? Actually increasing pushes away from bottom; we want move up => increase from 24 to 32? In absolute bottom, larger pushes up)
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -783,7 +758,126 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.2)'
   },
   dotActive: {
-    backgroundColor: '#111827',
+    backgroundColor: '#f97316', // ensure active dot is orange
+  },
+  simpleProgressContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simpleProgressTrack: {
+    width: PROGRESS_TRACK_WIDTH,
+    height: PROGRESS_TRACK_HEIGHT,
+    borderRadius: PROGRESS_TRACK_HEIGHT / 2,
+    backgroundColor: '#ECECEC',
+    overflow: 'hidden',
+  },
+  simpleProgressTrackLocked: {
+    backgroundColor: '#E5E7EB',
+  },
+  simpleProgressFill: {
+    width: PROGRESS_TRACK_WIDTH * 0.5,
+    height: '100%',
+    backgroundColor: '#f97316',
+    borderRadius: PROGRESS_TRACK_HEIGHT / 2,
+  },
+  simpleProgressFillLocked: {
+    width: 0,
+    backgroundColor: '#9CA3AF',
+  },
+  xpLabel: {
+    marginTop: 10,
+    fontSize: 20,
+    color: 'rgba(249,115,22,0.5)', // a bit more transparent
+    fontWeight: '800',
+  },
+  xpLabelLocked: {
+    color: '#9CA3AF',
+  },
+  levelPill: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 6, // slightly less tall
+    borderRadius: 16,
+    backgroundColor: 'rgba(249,115,22,0.55)', // a bit more orange/opaque
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.7)',
+  },
+  levelPillText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  lockedPill: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(107,114,128,0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(55,65,81,0.7)',
+  },
+  lockedPillText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  infoBtn: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    width: 28, // smaller button
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.06)', // subtle bg for touch target
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoBtnText: {
+    color: 'rgba(0,0,0,0.6)', // semi transparent
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  infoBtnFixed: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  revealBtn: {
+    position: 'absolute',
+    right: 60, // a tiny bit left of the close button area
+    top: 12,
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: '#f97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  revealBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.3,
   },
   // Connector progress under badge
   progressTrack: {

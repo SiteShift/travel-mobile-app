@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, ScrollView, Image as RNImage, Easing, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, ScrollView, Image as RNImage, Easing, TextInput, Modal } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import Reanimated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import { Icon } from '../components/Icon';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -83,9 +85,11 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   const [trip, setTrip] = useState<{ id: string; title: string; description: string; coverImage: string; monthYear: string; startDate?: Date; endDate?: Date } | null>(null);
   const [useRNImage, setUseRNImage] = useState(false);
   type CropState = { scale: number; offsetX: number; offsetY: number };
-  type DayPhoto = { uri: string; caption?: string; crop: CropState };
+  type DayPhoto = { id: string; uri: string; caption?: string; crop: CropState };
   const [dayPhotos, setDayPhotos] = useState<Record<number, DayPhoto[]>>({});
   const [isEditMode, setIsEditMode] = useState(false);
+  const [optionsSheet, setOptionsSheet] = useState<{ visible: boolean; day: number | null; index: number | null }>({ visible: false, day: null, index: null });
+  const [captionDrafts, setCaptionDrafts] = useState<Record<string, string>>({});
 
   // Horizontal pager
   const scrollRef = useRef<ScrollView>(null);
@@ -178,6 +182,26 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
     return Math.min(totalDays, n);
   }, [pageIndex, totalDays]);
 
+  const toggleEditMode = useCallback(() => {
+    setIsEditMode(prevEditing => {
+      const willBeEditing = !prevEditing;
+      if (prevEditing) {
+        // Commit drafts to photos when leaving edit mode
+        setDayPhotos(prev => {
+          const dayArr = prev[currentDayNumber] || [];
+          const updated = dayArr.map(p => ({
+            ...p,
+            caption: captionDrafts[p.id] ?? p.caption ?? '',
+          }));
+          return { ...prev, [currentDayNumber]: updated };
+        });
+        // Clear drafts after save
+        setCaptionDrafts({});
+      }
+      return willBeEditing;
+    });
+  }, [currentDayNumber, captionDrafts]);
+
   const currentDayHasPhotos = useMemo(() => {
     const list = dayPhotos[currentDayNumber] || [];
     return list.length > 0;
@@ -202,7 +226,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
       const items: DayPhoto[] = [];
       for (const a of res.assets) {
         const u = await ensureFileUriAsync(a.uri);
-        items.push({ uri: u, caption: '', crop: { scale: 1, offsetX: 0, offsetY: 0 } });
+        items.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, uri: u, caption: '', crop: { scale: 1, offsetX: 0, offsetY: 0 } });
       }
       setDayPhotos(prev => ({ ...prev, [day]: [...(prev[day] || []), ...items] }));
     } catch (e) {
@@ -316,68 +340,190 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         const photos = dayPhotos[day] || [];
         return (
           <View key={`day-${day}`} style={[styles.page, { width: SCREEN_WIDTH }]}> 
-            <ScrollView
-              style={{ flex: 1, width: '100%' }}
-              contentContainerStyle={{
-                paddingTop: headerHeight + 12,
-                // Keep a comfortable bottom area while letting the pager start near the bottom
-                paddingBottom: insets.bottom + 24,
-                // Ensure the content at least fills the viewport so the pager sits near bottom when few/no photos
-                minHeight: SCREEN_HEIGHT - headerHeight - insets.bottom - 16,
-                flexGrow: 1,
-              }}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Add Photos placeholder at top if no photos yet */}
-              {photos.length === 0 && (
-                <TouchableOpacity onPress={() => handleAddPhotos(day)} activeOpacity={0.9} style={[styles.addPolaroidContainer, { marginTop: 16 }] }>
-                  <View style={styles.polaroidSmall}> 
-                    <View style={[styles.polaroidPlaceholder, { backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }]}>
-                      <View style={styles.addCircle}><Text style={styles.addPlus}>+</Text></View>
+            {isEditMode && photos.length > 0 ? (
+              <DraggableFlatList
+                data={photos}
+                keyExtractor={(item) => item.id}
+                onDragEnd={({ data }) => setDayPhotos(prev => ({ ...prev, [day]: data }))}
+                containerStyle={{ flex: 1, width: '100%' }}
+                contentContainerStyle={{
+                  paddingTop: headerHeight + 12,
+                  paddingBottom: insets.bottom + 24,
+                  minHeight: SCREEN_HEIGHT - headerHeight - insets.bottom - 16,
+                }}
+                extraData={dayPhotos[day]}
+                showsVerticalScrollIndicator={false} 
+                renderItem={({ item, index, drag, isActive }: RenderItemParams<any>) => {
+                  const id = item.id as string;
+                  const handleCaptionChange = (text: string) => {
+                    setCaptionDrafts(prev => ({ ...prev, [id]: text }));
+                    setDayPhotos(prev => {
+                      const next = [...(prev[day] || [])];
+                      const target = next[index];
+                      if (!target) return prev;
+                      next[index] = { ...target, caption: text } as any;
+                      return { ...prev, [day]: next };
+                    });
+                  };
+                  const handleCropChange = (partial: Partial<{ scale: number; offsetX: number; offsetY: number }>) => {
+                    setDayPhotos(prev => {
+                      const next = [...(prev[day] || [])];
+                      const target = next[index];
+                      if (!target) return prev;
+                      next[index] = { ...target, crop: { ...target.crop, ...partial } } as any;
+                      return { ...prev, [day]: next };
+                    });
+                  };
+                  return (
+                    <DayPhotoPolaroid
+                      photo={item}
+                      index={index}
+                      editMode
+                      dragging={!!isActive}
+                      draftCaption={captionDrafts[id] ?? item.caption ?? ''}
+                      onUpdateCaption={handleCaptionChange}
+                      onUpdateCrop={handleCropChange}
+                      onStartDrag={() => { Haptics.selectionAsync(); drag(); }}
+                      onOpenOptions={() => setOptionsSheet({ visible: true, day, index })}
+                    />
+                  );
+                }}
+                ListFooterComponent={
+                  <View>
+                    {/* Add-more placeholder aligned opposite of last item */}
+                    <TouchableOpacity
+                      onPress={() => handleAddPhotos(day)}
+                      activeOpacity={0.9}
+                      style={{
+                        alignSelf: (photos.length - 1) % 2 === 0 ? 'flex-end' : 'flex-start',
+                        marginTop: 6,
+                        marginLeft: (photos.length - 1) % 2 === 0 ? 0 : 24,
+                        marginRight: (photos.length - 1) % 2 === 0 ? 24 : 0,
+                      }}
+                    >
+                      <View style={styles.polaroidSmall}>
+                        <View style={[styles.polaroidPlaceholder, { backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }]}>
+                          <View style={styles.addCircle}><Text style={styles.addPlus}>+</Text></View>
+                        </View>
+                        <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>Add Photos</Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Pager */}
+                    <View style={[styles.pageIndicatorRow]}>
+                      <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day - 1), animated: true })} style={styles.pageArrowCircle}>
+                        <Text style={styles.pageArrowText}>←</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.pageIndicatorText}>Day {day} of {totalDays}</Text>
+                      <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day + 1), animated: true })} style={styles.pageArrowCircle}>
+                        <Text style={styles.pageArrowText}>→</Text>
+                      </TouchableOpacity>
                     </View>
-                    <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>Add Photos</Text>
                   </View>
-                </TouchableOpacity>
-              )}
+                }
+              />
+            ) : (
+              <ScrollView
+                style={{ flex: 1, width: '100%' }}
+                contentContainerStyle={{
+                  paddingTop: headerHeight + 12,
+                  // Keep a comfortable bottom area while letting the pager start near the bottom
+                  paddingBottom: insets.bottom + 24,
+                  // Ensure the content at least fills the viewport so the pager sits near bottom when few/no photos
+                  minHeight: SCREEN_HEIGHT - headerHeight - insets.bottom - 16,
+                  flexGrow: 1,
+                }}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Add Photos placeholder at top if no photos yet */}
+                {photos.length === 0 && (
+                  <TouchableOpacity onPress={() => handleAddPhotos(day)} activeOpacity={0.9} style={[styles.addPolaroidContainer, { marginTop: 16 }] }>
+                    <View style={styles.polaroidSmall}> 
+                      <View style={[styles.polaroidPlaceholder, { backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }]}>
+                        <View style={styles.addCircle}><Text style={styles.addPlus}>+</Text></View>
+                      </View>
+                      <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>Add Photos</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
 
-              {/* Small offset when photos exist so content breathes below header */}
-              {photos.length > 0 && <View style={{ height: 12 }} />}
+                {/* Small offset when photos exist so content breathes below header */}
+                {photos.length > 0 && <View style={{ height: 12 }} />}
 
-              {/* Each photo as its own polaroid row with staggered fade-in */}
-              {photos.map((photo, i) => (
-                <DayPhotoPolaroid
-                  key={`${photo.uri}-${i}`}
-                  photo={photo}
-                  index={i}
-                  editMode={isEditMode}
-                  onUpdateCaption={(text) =>
-                    setDayPhotos(prev => ({
-                      ...prev,
-                      [day]: (prev[day] || []).map((p, idx) => (idx === i ? { ...p, caption: text } : p)),
-                    }))
-                  }
-                  onUpdateCrop={(partial) =>
-                    setDayPhotos(prev => ({
-                      ...prev,
-                      [day]: (prev[day] || []).map((p, idx) => (idx === i ? { ...p, crop: { ...p.crop, ...partial } } : p)),
-                    }))
-                  }
-                />
-              ))}
-              {/* Spacer to push pager closer to the bottom on short content */}
-              <View style={{ flexGrow: 1, minHeight: SCREEN_HEIGHT * 0.22 }} />
+                {/* Each photo as its own polaroid row with staggered fade-in */}
+                {photos.map((photo, i) => (
+                  <DayPhotoPolaroid
+                    key={photo.id}
+                    photo={photo}
+                    index={i}
+                    editMode={isEditMode}
+                    draftCaption={captionDrafts[photo.id] ?? photo.caption ?? ''}
+                    onUpdateCaption={(text) => {
+                      setCaptionDrafts(prev => ({ ...prev, [photo.id]: text }));
+                      setDayPhotos(prev => {
+                        const next = [...(prev[day] || [])];
+                        const target = next[i];
+                        if (!target) return prev;
+                        next[i] = { ...target, caption: text } as any;
+                        return { ...prev, [day]: next };
+                      });
+                    }}
+                    onUpdateCrop={(partial) => {
+                      setDayPhotos(prev => {
+                        const next = [...(prev[day] || [])];
+                        const target = next[i];
+                        if (!target) return prev;
+                        next[i] = { ...target, crop: { ...target.crop, ...partial } } as any;
+                        return { ...prev, [day]: next };
+                      });
+                    }}
+                    onOpenOptions={() => setOptionsSheet({ visible: true, day, index: i })}
+                  />
+                ))}
 
-              {/* Bottom page indicator with arrows (non-sticky) */}
-              <View style={[styles.pageIndicatorRow]}>
-                <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day - 1), animated: true })} style={styles.pageArrowCircle}>
-                  <Text style={styles.pageArrowText}>←</Text>
-                </TouchableOpacity>
-                <Text style={styles.pageIndicatorText}>Day {day} of {totalDays}</Text>
-                <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day + 1), animated: true })} style={styles.pageArrowCircle}>
-                  <Text style={styles.pageArrowText}>→</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+                {/* Edit mode: add-more placeholder aligned opposite of the last photo */}
+                {isEditMode && photos.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => handleAddPhotos(day)}
+                    activeOpacity={0.9}
+                    style={{
+                      alignSelf: (photos.length - 1) % 2 === 0 ? 'flex-end' : 'flex-start',
+                      marginTop: 6,
+                      marginLeft: (photos.length - 1) % 2 === 0 ? 0 : 24,
+                      marginRight: (photos.length - 1) % 2 === 0 ? 24 : 0,
+                    }}
+                  >
+                    <View style={styles.polaroidSmall}>
+                      <View
+                        style={[
+                          styles.polaroidPlaceholder,
+                          { backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' },
+                        ]}
+                      >
+                        <View style={styles.addCircle}>
+                          <Text style={styles.addPlus}>+</Text>
+                        </View>
+                      </View>
+                      <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>Add Photos</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+
+                {/* Spacer to push pager closer to the bottom on short content */}
+                <View style={{ flexGrow: 1, minHeight: SCREEN_HEIGHT * 0.22 }} />
+
+                {/* Bottom page indicator with arrows (non-sticky) */}
+                <View style={[styles.pageIndicatorRow]}>
+                  <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day - 1), animated: true })} style={styles.pageArrowCircle}>
+                    <Text style={styles.pageArrowText}>←</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.pageIndicatorText}>Day {day} of {totalDays}</Text>
+                  <TouchableOpacity onPress={() => scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (day + 1), animated: true })} style={styles.pageArrowCircle}>
+                    <Text style={styles.pageArrowText}>→</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
           </View>
         );
       })}
@@ -405,7 +551,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
           accessibilityLabel={isEditMode ? 'Done editing' : 'Edit Day'}
           activeOpacity={0.8}
           disabled={!currentDayHasPhotos}
-          onPress={() => currentDayHasPhotos && setIsEditMode(prev => !prev)}
+          onPress={toggleEditMode}
           style={[
             styles.editBadge,
             { marginRight: 8 },
@@ -424,6 +570,47 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
           )}
         </TouchableOpacity>
       </View>
+
+      {optionsSheet.visible && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setOptionsSheet({ visible: false, day: null, index: null })}>
+          <TouchableOpacity style={styles.optionsBackdrop} activeOpacity={1} onPress={() => setOptionsSheet({ visible: false, day: null, index: null })}>
+            <View style={styles.optionsCard}>
+              <TouchableOpacity
+                style={styles.optionsItem}
+                onPress={async () => {
+                  const d = optionsSheet.day; const i = optionsSheet.index;
+                  if (d == null || i == null) return;
+                  try {
+                    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: false, quality: 1, exif: true });
+                    if (res.canceled || !res.assets?.length) return;
+                    const u = await ensureFileUriAsync(res.assets[0].uri);
+                    setDayPhotos(prev => ({
+                      ...prev,
+                      [d]: (prev[d] || []).map((p, idx) => (idx === i ? { ...p, uri: u, crop: { scale: 1, offsetX: 0, offsetY: 0 } } : p)),
+                    }));
+                  } finally {
+                    setOptionsSheet({ visible: false, day: null, index: null });
+                  }
+                }}
+              >
+                <Text style={styles.optionsText}>Change image</Text>
+              </TouchableOpacity>
+              <View style={styles.optionsDivider} />
+              <TouchableOpacity
+                style={styles.optionsItem}
+                onPress={() => {
+                  const d = optionsSheet.day; const i = optionsSheet.index;
+                  if (d == null || i == null) return;
+                  setDayPhotos(prev => ({ ...prev, [d]: (prev[d] || []).filter((_, idx) => idx !== i) }));
+                  setOptionsSheet({ visible: false, day: null, index: null });
+                }}
+              >
+                <Text style={[styles.optionsText, { color: '#EF6144' }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -433,9 +620,13 @@ const DayPhotoPolaroid: React.FC<{
   photo: { uri: string; caption?: string; crop: { scale: number; offsetX: number; offsetY: number } };
   index: number;
   editMode?: boolean;
+  dragging?: boolean;
+  draftCaption?: string;
   onUpdateCaption?: (text: string) => void;
   onUpdateCrop?: (partial: Partial<{ scale: number; offsetX: number; offsetY: number }>) => void;
-}> = ({ photo, index, editMode = false, onUpdateCaption, onUpdateCrop }) => {
+  onStartDrag?: () => void;
+  onOpenOptions?: () => void;
+}> = ({ photo, index, editMode = false, dragging = false, draftCaption = '', onUpdateCaption, onUpdateCrop, onStartDrag, onOpenOptions }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const delay = 300 * index;
@@ -500,15 +691,38 @@ const DayPhotoPolaroid: React.FC<{
             marginLeft: index % 2 === 0 ? 24 : 0,
             marginRight: index % 2 === 1 ? 24 : 0,
           },
+          dragging && styles.draggingCard,
         ]}
       >
+        {/* Drag handle (edit mode only) */}
+        {editMode && (
+          <TouchableOpacity
+            accessibilityLabel="Reorder"
+            onLongPress={onStartDrag}
+            activeOpacity={0.7}
+            style={[
+              styles.dragHandle,
+              index % 2 === 0 ? { right: -38 } : { left: -38 },
+            ]}
+          >
+            {/* 2x3 dots grid */}
+            <View style={styles.dotsRow}>
+              <View style={styles.dotsColumn}>
+                {[0,1,2].map((k) => (<View key={`l-${k}`} style={styles.dot} />))}
+              </View>
+              <View style={[styles.dotsColumn, { marginLeft: 4 }]}>
+                {[0,1,2].map((k) => (<View key={`r-${k}`} style={styles.dot} />))}
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
         <View style={styles.cropFrame}>
           {editMode ? (
             <GestureDetector gesture={composed}>
               <Reanimated.View style={[StyleSheet.absoluteFillObject]}>
                 <Reanimated.Image
                   source={{ uri: photo.uri }}
-                  style={[styles.polaroidImageInner as any, animatedImageStyle]}
+                  style={[styles.polaroidImageInner as any, animatedImageStyle, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}
                   resizeMode="cover"
                 />
               </Reanimated.View>
@@ -541,14 +755,35 @@ const DayPhotoPolaroid: React.FC<{
             style={[styles.tapeTopRight as any, { width: 120, height: 78 }]}
           />
         )}
+        {/* Ellipsis options (edit mode only) - anchored to image inner corner */}
+        {editMode && (
+          <TouchableOpacity
+            accessibilityLabel="Photo options"
+            onPress={onOpenOptions}
+            style={[
+              styles.ellipsisButton,
+              { zIndex: 5 },
+              index % 2 === 0 ? { top: 18, right: 18 } : { top: 18, left: 18 },
+            ]}
+          >
+            <View style={styles.ellipsisDotsRow}>
+              <View style={styles.ellipsisDot} />
+              <View style={styles.ellipsisDot} />
+              <View style={styles.ellipsisDot} />
+            </View>
+          </TouchableOpacity>
+        )}
         {editMode ? (
           <TextInput
             style={styles.captionInput}
-            value={photo.caption ?? ''}
+            value={draftCaption}
             onChangeText={onUpdateCaption}
             placeholder="Add a caption..."
             placeholderTextColor="#A0A0A0"
             accessibilityLabel="Edit caption"
+            multiline
+            blurOnSubmit={false}
+            returnKeyType="default"
           />
         ) : (
           !!photo.caption && (
@@ -600,6 +835,38 @@ const styles = StyleSheet.create({
     padding: 14,
     paddingBottom: 26,
     alignItems: 'center',
+  },
+  draggingCard: {
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 20,
+  },
+  dragHandle: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -20,
+    width: 32,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dotsColumn: {
+    justifyContent: 'space-between',
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#9C9C9C',
+    margin: 2,
   },
   polaroidImage: {
     width: '100%',
@@ -793,6 +1060,59 @@ const styles = StyleSheet.create({
   pageArrowText: {
     fontSize: 22,
     color: '#8A8A8A',
+  },
+  // Options lightbox styles
+  optionsBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  optionsCard: {
+    width: 220,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  optionsItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  optionsText: {
+    fontSize: 16,
+    color: '#111',
+    textAlign: 'center',
+  },
+  optionsDivider: {
+    height: 1,
+    backgroundColor: '#E8E8E8',
+  },
+  ellipsisButton: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ellipsisDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  ellipsisDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'white',
   },
 });
 
