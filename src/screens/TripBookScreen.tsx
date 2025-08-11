@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, ScrollView, Image as RNImage, Easing } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, ScrollView, Image as RNImage, Easing, TextInput } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { Icon } from '../components/Icon';
 import * as ImagePicker from 'expo-image-picker';
@@ -80,7 +82,10 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   const headerHeight = insets.top + 56;
   const [trip, setTrip] = useState<{ id: string; title: string; description: string; coverImage: string; monthYear: string; startDate?: Date; endDate?: Date } | null>(null);
   const [useRNImage, setUseRNImage] = useState(false);
-  const [dayPhotos, setDayPhotos] = useState<Record<number, string[]>>({});
+  type CropState = { scale: number; offsetX: number; offsetY: number };
+  type DayPhoto = { uri: string; caption?: string; crop: CropState };
+  const [dayPhotos, setDayPhotos] = useState<Record<number, DayPhoto[]>>({});
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Horizontal pager
   const scrollRef = useRef<ScrollView>(null);
@@ -118,7 +123,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
       };
       setTrip(normalizedTrip);
       // Initialize days photos arrays based on duration
-      const days: Record<number, string[]> = {};
+      const days: Record<number, DayPhoto[]> = {};
       const start = t.startDate ?? new Date();
       const end = t.endDate ?? start;
       const msPerDay = 24 * 60 * 60 * 1000;
@@ -173,6 +178,17 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
     return Math.min(totalDays, n);
   }, [pageIndex, totalDays]);
 
+  const currentDayHasPhotos = useMemo(() => {
+    const list = dayPhotos[currentDayNumber] || [];
+    return list.length > 0;
+  }, [dayPhotos, currentDayNumber]);
+
+  useEffect(() => {
+    if (!currentDayHasPhotos && isEditMode) {
+      setIsEditMode(false);
+    }
+  }, [currentDayHasPhotos, isEditMode]);
+
   const handleAddPhotos = useCallback(async (day: number) => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -183,12 +199,12 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         exif: true,
       });
       if (res.canceled || !res.assets?.length) return;
-      const uris: string[] = [];
+      const items: DayPhoto[] = [];
       for (const a of res.assets) {
         const u = await ensureFileUriAsync(a.uri);
-        uris.push(u);
+        items.push({ uri: u, caption: '', crop: { scale: 1, offsetX: 0, offsetY: 0 } });
       }
-      setDayPhotos(prev => ({ ...prev, [day]: [...(prev[day] || []), ...uris] }));
+      setDayPhotos(prev => ({ ...prev, [day]: [...(prev[day] || []), ...items] }));
     } catch (e) {
       console.error('Add photos error', e);
     }
@@ -324,9 +340,29 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                 </TouchableOpacity>
               )}
 
+              {/* Small offset when photos exist so content breathes below header */}
+              {photos.length > 0 && <View style={{ height: 12 }} />}
+
               {/* Each photo as its own polaroid row with staggered fade-in */}
-              {photos.map((uri, i) => (
-                <DayPhotoPolaroid key={`${uri}-${i}`} uri={uri} index={i} />
+              {photos.map((photo, i) => (
+                <DayPhotoPolaroid
+                  key={`${photo.uri}-${i}`}
+                  photo={photo}
+                  index={i}
+                  editMode={isEditMode}
+                  onUpdateCaption={(text) =>
+                    setDayPhotos(prev => ({
+                      ...prev,
+                      [day]: (prev[day] || []).map((p, idx) => (idx === i ? { ...p, caption: text } : p)),
+                    }))
+                  }
+                  onUpdateCrop={(partial) =>
+                    setDayPhotos(prev => ({
+                      ...prev,
+                      [day]: (prev[day] || []).map((p, idx) => (idx === i ? { ...p, crop: { ...p.crop, ...partial } } : p)),
+                    }))
+                  }
+                />
               ))}
               {/* Spacer to push pager closer to the bottom on short content */}
               <View style={{ flexGrow: 1, minHeight: SCREEN_HEIGHT * 0.22 }} />
@@ -365,8 +401,27 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         <Animated.Text style={[styles.dayTitle, { color: '#000', opacity: dayTitleOpacity, textAlign: 'center', flex: 1 }]}>
           {pageIndex > 0 ? `Day ${currentDayNumber}` : ' '}
         </Animated.Text>
-        <TouchableOpacity accessibilityLabel="Edit Day" activeOpacity={0.8} style={[styles.editBadge, { marginRight: 8 }]}> 
-          <Image source={require('../../public/assets/pencil-icon.svg')} style={{ width: 16, height: 16 }} contentFit="contain" />
+        <TouchableOpacity
+          accessibilityLabel={isEditMode ? 'Done editing' : 'Edit Day'}
+          activeOpacity={0.8}
+          disabled={!currentDayHasPhotos}
+          onPress={() => currentDayHasPhotos && setIsEditMode(prev => !prev)}
+          style={[
+            styles.editBadge,
+            { marginRight: 8 },
+            isEditMode && currentDayHasPhotos && styles.editBadgeActive,
+            !currentDayHasPhotos && styles.editBadgeDisabled,
+          ]}
+        >
+          {isEditMode && currentDayHasPhotos ? (
+            <Icon library="Ionicons" name="checkmark" size="sm" color="white" />
+          ) : (
+            <Image
+              source={require('../../public/assets/pencil-icon.svg')}
+              style={{ width: 16, height: 16, tintColor: !currentDayHasPhotos ? '#9E9E9E' : undefined }}
+              contentFit="contain"
+            />
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -374,18 +429,65 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
 }
 
 // Staggered polaroid item for day photos
-const DayPhotoPolaroid: React.FC<{ uri: string; index: number }> = ({ uri, index }) => {
+const DayPhotoPolaroid: React.FC<{
+  photo: { uri: string; caption?: string; crop: { scale: number; offsetX: number; offsetY: number } };
+  index: number;
+  editMode?: boolean;
+  onUpdateCaption?: (text: string) => void;
+  onUpdateCrop?: (partial: Partial<{ scale: number; offsetX: number; offsetY: number }>) => void;
+}> = ({ photo, index, editMode = false, onUpdateCaption, onUpdateCrop }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const delay = 220 * index;
+    const delay = 300 * index;
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 900,
+      duration: 1200,
       delay,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, [index, fadeAnim]);
+
+  // Gesture-driven crop state (local animated values mirror props.crop)
+  const scale = useSharedValue(photo.crop?.scale ?? 1);
+  const translateX = useSharedValue(photo.crop?.offsetX ?? 0);
+  const translateY = useSharedValue(photo.crop?.offsetY ?? 0);
+
+  useEffect(() => {
+    // Sync if external state changes
+    scale.value = photo.crop?.scale ?? 1;
+    translateX.value = photo.crop?.offsetX ?? 0;
+    translateY.value = photo.crop?.offsetY ?? 0;
+  }, [photo.crop?.scale, photo.crop?.offsetX, photo.crop?.offsetY]);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      // clamp scale between 1 and 3
+      const next = Math.max(1, Math.min(3, (photo.crop?.scale ?? 1) * e.scale));
+      scale.value = next;
+    })
+    .onEnd(() => {
+      if (onUpdateCrop) runOnJS(onUpdateCrop)({ scale: scale.value });
+    });
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = (photo.crop?.offsetX ?? 0) + e.translationX;
+      translateY.value = (photo.crop?.offsetY ?? 0) + e.translationY;
+    })
+    .onEnd(() => {
+      if (onUpdateCrop) runOnJS(onUpdateCrop)({ offsetX: translateX.value, offsetY: translateY.value });
+    });
+
+  const composed = Gesture.Simultaneous(pinchGesture, panGesture);
+
+  const animatedImageStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
 
   return (
     <Animated.View style={{ alignItems: 'center', marginBottom: 28, opacity: fadeAnim }}>
@@ -400,17 +502,60 @@ const DayPhotoPolaroid: React.FC<{ uri: string; index: number }> = ({ uri, index
           },
         ]}
       >
-        <Image source={{ uri }} style={styles.polaroidImage} contentFit="cover" />
+        <View style={styles.cropFrame}>
+          {editMode ? (
+            <GestureDetector gesture={composed}>
+              <Reanimated.View style={[StyleSheet.absoluteFillObject]}>
+                <Reanimated.Image
+                  source={{ uri: photo.uri }}
+                  style={[styles.polaroidImageInner as any, animatedImageStyle]}
+                  resizeMode="cover"
+                />
+              </Reanimated.View>
+            </GestureDetector>
+          ) : (
+            <Image
+              source={{ uri: photo.uri }}
+              style={[
+                styles.polaroidImageInner,
+                {
+                  transform: [
+                    { translateX: photo.crop?.offsetX ?? 0 },
+                    { translateY: photo.crop?.offsetY ?? 0 },
+                    { scale: photo.crop?.scale ?? 1 },
+                  ],
+                },
+              ]}
+              contentFit="cover"
+            />
+          )}
+        </View>
         {index % 2 === 0 ? (
           <RNImage
             source={require('../../public/assets/tape-top-left (1)_compressed.webp')}
-            style={[styles.tapeTopLeft as any, { width: 110, height: 72 }]}
+            style={[styles.tapeTopLeft as any, { width: 120, height: 78 }]}
           />
         ) : (
           <RNImage
             source={require('../../public/assets/tape-top-right (1)_compressed.webp')}
-            style={[styles.tapeTopRight as any, { width: 110, height: 72 }]}
+            style={[styles.tapeTopRight as any, { width: 120, height: 78 }]}
           />
+        )}
+        {editMode ? (
+          <TextInput
+            style={styles.captionInput}
+            value={photo.caption ?? ''}
+            onChangeText={onUpdateCaption}
+            placeholder="Add a caption..."
+            placeholderTextColor="#A0A0A0"
+            accessibilityLabel="Edit caption"
+          />
+        ) : (
+          !!photo.caption && (
+            <Text numberOfLines={2} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>
+              {photo.caption}
+            </Text>
+          )
         )}
       </View>
     </Animated.View>
@@ -461,6 +606,16 @@ const styles = StyleSheet.create({
     aspectRatio: 4 / 5,
     borderRadius: 0,
     backgroundColor: '#DDD',
+  },
+  cropFrame: {
+    width: '100%',
+    aspectRatio: 4 / 5,
+    overflow: 'hidden',
+    backgroundColor: '#DDD',
+  },
+  polaroidImageInner: {
+    width: '100%',
+    aspectRatio: 4 / 5,
   },
   coverImage: {
     width: SCREEN_WIDTH * 0.84,
@@ -552,6 +707,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  editBadgeActive: {
+    backgroundColor: '#EF6144',
+  },
+  editBadgeDisabled: {
+    backgroundColor: '#E6E6E6',
+  },
   dayPolaroidWrapper: {
     flex: 1,
     alignItems: 'center',
@@ -575,6 +736,18 @@ const styles = StyleSheet.create({
     fontSize: 34,
     color: '#9E9E9E',
     lineHeight: 34,
+  },
+  captionInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    fontSize: 16,
+    color: '#000',
+    backgroundColor: '#FFFFFF',
   },
   tapeTopLeft: {
     position: 'absolute',
