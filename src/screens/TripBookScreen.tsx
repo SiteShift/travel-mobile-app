@@ -382,7 +382,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   }, []);
 
   if (!trip) {
-    return <View style={{ flex: 1, backgroundColor: '#FFFFFF' }} />;
+    return <View style={{ flex: 1, backgroundColor: colors.background.primary }} />;
   }
 
   const POLAROID_WIDTH = SCREEN_WIDTH * 0.84;
@@ -390,7 +390,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   const IMAGE_WIDTH = POLAROID_WIDTH - POLAROID_PADDING * 2; // inner image width
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#EFEFEF' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background.primary }}>
       <ScrollView
       ref={scrollRef}
       horizontal
@@ -402,7 +402,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         const newIndex = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
         setPageIndex(newIndex);
       }}
-      style={{ flex: 1, backgroundColor: '#EFEFEF' }}
+      style={{ flex: 1, backgroundColor: colors.background.primary }}
     >
       {/* Front Cover */}
       <View style={[styles.page, { width: SCREEN_WIDTH }]}> 
@@ -457,7 +457,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
               styles.title,
               {
                 width: POLAROID_WIDTH + 6, // nudge to visually match image width
-                color: '#000',
+                color: colors.text.primary,
                 fontFamily: 'TimesCondensed',
                 letterSpacing: -4.0,
                 fontSize: 120, // start large, will shrink to fit width
@@ -492,7 +492,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
           {!!trip.description && (
             <Animated.Text
               numberOfLines={3}
-              style={[styles.coverCaption, { fontFamily: 'ZingScriptRust', opacity: descOpacity }]}
+              style={[styles.coverCaption, { fontFamily: 'ZingScriptRust', opacity: descOpacity, color: colors.text.primary }]}
             >
               {trip.description}
             </Animated.Text>
@@ -517,7 +517,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         const day = idx + 1;
         const photos = dayPhotos[day] || [];
         return (
-          <View key={`day-${day}`} style={[styles.page, { width: SCREEN_WIDTH }]}> 
+          <View key={`day-${day}`} style={[styles.page, { width: SCREEN_WIDTH, backgroundColor: colors.background.primary }]}> 
             {isEditMode && photos.length > 0 ? (
               <DraggableFlatList
                 data={photos}
@@ -531,7 +531,11 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                 }}
                 extraData={dayPhotos[day]}
                 showsVerticalScrollIndicator={false} 
-                renderItem={({ item, index, drag, isActive }: RenderItemParams<any>) => {
+                renderItem={(params: any) => {
+                  const item = params.item;
+                  const drag = params.drag;
+                  const isActive = params.isActive;
+                  const index = typeof params.getIndex === 'function' ? params.getIndex() : params.index;
                   const id = item.id as string;
                   const handleCaptionChange = (text: string) => {
                     setCaptionDrafts(prev => ({ ...prev, [id]: text }));
@@ -581,11 +585,11 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                         marginRight: (photos.length - 1) % 2 === 0 ? 24 : 0,
                       }}
                     >
-                      <View style={styles.polaroidSmall}>
+                      <View style={[styles.polaroidSmall, { backgroundColor: colors.surface.primary }]}>
                         <View style={[styles.polaroidPlaceholder, { backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }]}>
                           <View style={styles.addCircle}><Text style={styles.addPlus}>+</Text></View>
                         </View>
-                        <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>Add Photos</Text>
+                         <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust', color: colors.text.primary }]}>Add Photos</Text>
                       </View>
                     </TouchableOpacity>
 
@@ -618,11 +622,11 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                 {/* Add Photos placeholder at top if no photos yet */}
                 {photos.length === 0 && (
                   <TouchableOpacity onPress={() => handleAddPhotos(day)} activeOpacity={0.9} style={[styles.addPolaroidContainer, { marginTop: 16 }] }>
-                    <View style={styles.polaroidSmall}> 
+                     <View style={[styles.polaroidSmall, { backgroundColor: colors.surface.primary }]}> 
                       <View style={[styles.polaroidPlaceholder, { backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }]}>
                         <View style={styles.addCircle}><Text style={styles.addPlus}>+</Text></View>
                       </View>
-                      <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>Add Photos</Text>
+                       <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust', color: colors.text.primary }]}>Add Photos</Text>
                     </View>
                   </TouchableOpacity>
                 )}
@@ -677,7 +681,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                       marginRight: (photos.length - 1) % 2 === 0 ? 24 : 0,
                     }}
                   >
-                    <View style={styles.polaroidSmall}>
+                     <View style={[styles.polaroidSmall, { backgroundColor: colors.surface.primary }]}>
                       <View
                         style={[
                           styles.polaroidPlaceholder,
@@ -688,7 +692,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                           <Text style={styles.addPlus}>+</Text>
                         </View>
                       </View>
-                      <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust' }]}>Add Photos</Text>
+                      <Text numberOfLines={1} style={[styles.polaroidCaption, { fontFamily: 'ZingScriptRust', color: colors.text.primary }]}>Add Photos</Text>
                     </View>
                   </TouchableOpacity>
                 )}
@@ -728,7 +732,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         >
           <Text style={styles.topLeftCloseText}>×</Text>
         </TouchableOpacity>
-        <Animated.Text style={[styles.dayTitle, { color: '#000', opacity: dayTitleOpacity, textAlign: 'center', flex: 1 }]}>
+        <Animated.Text style={[styles.dayTitle, { color: colors.text.primary, opacity: dayTitleOpacity, textAlign: 'center', flex: 1 }]}>
           {pageIndex > 0 ? `Day ${currentDayNumber}` : ' '}
         </Animated.Text>
         <TouchableOpacity
@@ -758,9 +762,9 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
       {optionsSheet.visible && (
         <Modal visible transparent animationType="fade" onRequestClose={() => setOptionsSheet({ visible: false, day: null, index: null })}>
           <TouchableOpacity style={styles.optionsBackdrop} activeOpacity={1} onPress={() => setOptionsSheet({ visible: false, day: null, index: null })}>
-            <View style={styles.optionsCard}>
+            <View style={[styles.optionsCard, { backgroundColor: colors.surface.primary }]}>
               <TouchableOpacity
-                style={styles.optionsItem}
+                style={[styles.optionsItem, { backgroundColor: 'transparent' }]}
                 onPress={async () => {
                   const d = optionsSheet.day; const i = optionsSheet.index;
                   if (d == null || i == null) return;
@@ -779,11 +783,11 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                   }
                 }}
               >
-                <Text style={styles.optionsText}>Change image</Text>
+                <Text style={[styles.optionsText, { color: colors.text.primary }]}>Change image</Text>
               </TouchableOpacity>
               <View style={styles.optionsDivider} />
               <TouchableOpacity
-                style={styles.optionsItem}
+                style={[styles.optionsItem, { backgroundColor: 'transparent' }]}
                 onPress={() => {
                   const d = optionsSheet.day; const i = optionsSheet.index;
                   if (d == null || i == null) return;
@@ -990,7 +994,7 @@ const DayPhotoPolaroid: React.FC<{
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: '#EFEFEF',
+    backgroundColor: 'transparent',
     alignItems: 'center',
   },
   coverContent: {
@@ -1157,7 +1161,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     zIndex: 999,
     elevation: 12,
-    backgroundColor: '#EFEFEF',
+    backgroundColor: 'transparent',
   },
   fixedHeaderButton: {
     padding: 6,

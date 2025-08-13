@@ -189,7 +189,7 @@ export default function MapScreen({}: MapScreenProps) {
           showsMyLocationButton={false} // Hiding default button for a cleaner look
           showsCompass={false}
           showsScale={false}
-          mapType={isDark ? 'hybrid' : 'standard'}
+          mapType="standard"
         >
           {/* User location marker */}
           {hasLocationPermission && userLocation && (
