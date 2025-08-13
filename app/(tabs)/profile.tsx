@@ -336,9 +336,9 @@ export default function ProfileTab() {
               contentFit="contain"
             />
           </Pressable>
-          <Pressable onPress={handleChangeAvatar} accessibilityLabel="Change profile picture">
-            <Image source={{ uri: avatarUri }} style={[styles.avatar, { borderColor: colors.border.secondary }]} />
-          </Pressable>
+          <View accessibilityLabel="Profile picture">
+            <Image source={{ uri: avatarUri }} style={[styles.avatar, { borderColor: colors.accent[500] }]} />
+          </View>
           <Text style={[styles.name, { color: colors.text.primary }]}>{displayName}</Text>
         </View>
 
@@ -472,7 +472,7 @@ export default function ProfileTab() {
             <View style={[styles.modalCard, { backgroundColor: colors.surface.primary }]}> 
               <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Edit Profile</Text>
               <View style={{ alignItems: 'center', marginBottom: SPACING.md }}>
-                <Image source={{ uri: avatarUri }} style={[styles.modalAvatar, { borderColor: colors.border.secondary }]} />
+                <Image source={{ uri: avatarUri }} style={[styles.modalAvatar, { borderColor: colors.accent[500] }]} />
                 <Button title="Change Photo" onPress={handleChangeAvatar} variant="secondary" />
               </View>
               <Input
