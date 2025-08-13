@@ -43,6 +43,7 @@ const achievements = [
 
 export default function ProfileTab() {
   const { colors, isDark, toggleTheme } = useTheme();
+  const PROFILE_KEY = 'profile_settings_v1';
   const animatedProgress = React.useRef(new Animated.Value(0)).current;
   const themeAnim = React.useRef(new Animated.Value(isDark ? 1 : 0)).current;
   const [missions, setMissions] = React.useState<{ id: string; title: string; rewardXp: number; maxProgress: number; progress: number }[]>([]);
@@ -80,6 +81,15 @@ export default function ProfileTab() {
   React.useEffect(() => {
     (async () => {
       try {
+        // Load persisted profile settings (name, avatar)
+        const saved = await AsyncStorage.getItem(PROFILE_KEY);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (typeof parsed?.name === 'string') setDisplayName(parsed.name);
+            if (typeof parsed?.avatarUri === 'string') setAvatarUri(parsed.avatarUri);
+          } catch {}
+        }
         const list = await getMissions();
         setMissions(list);
         const state = await getLevelingState();
@@ -212,7 +222,12 @@ export default function ProfileTab() {
       });
       if (res.canceled || !res.assets?.length) return;
       // Update avatar locally so UI reflects immediately
-      setAvatarUri(res.assets[0].uri);
+      const newUri = res.assets[0].uri;
+      setAvatarUri(newUri);
+      // Persist immediately so it survives reloads
+      try {
+        await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify({ name: displayName, avatarUri: newUri }));
+      } catch {}
       // Progress the mission
       await progressMission('add_profile_picture', 1);
       const list = await getMissions();
@@ -484,7 +499,18 @@ export default function ProfileTab() {
               />
               <View style={styles.modalActions}>
                 <Button title="Cancel" onPress={() => setIsEditProfileVisible(false)} variant="ghost" />
-                <Button title="Save" onPress={() => setIsEditProfileVisible(false)} variant="primary" />
+                <Button
+                  title="Save"
+                  onPress={async () => {
+                    try {
+                      const nameToSave = (displayName || '').trim() || user.name;
+                      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify({ name: nameToSave, avatarUri }));
+                      setDisplayName(nameToSave);
+                    } catch {}
+                    setIsEditProfileVisible(false);
+                  }}
+                  variant="primary"
+                />
               </View>
             </View>
           </View>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Dimensions, Animated, Easing, Modal, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Audio } from 'expo-av';
@@ -46,6 +46,7 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
   const [isNewBest, setIsNewBest] = React.useState(false);
   const modalOpacity = React.useRef(new Animated.Value(0)).current;
   const modalScale = React.useRef(new Animated.Value(0.92)).current;
+  const [showLeaderboard, setShowLeaderboard] = React.useState(false);
 
   const { state, start, pause, resume, reset, flap } = useTrippinLoop(
     SCREEN_WIDTH,
@@ -435,9 +436,79 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
                 </Pressable>
               </View>
             </Animated.View>
+            {/* Leaderboard button beneath lightbox, matching width */}
+            <Pressable onPress={() => setShowLeaderboard(true)} accessibilityLabel="Open leaderboard" style={styles.leaderboardButtonWrap}>
+              <Image
+                source={require('../../../public/assets/leaderboard-button (1)_compressed.webp')}
+                style={styles.leaderboardButtonImage}
+                contentFit="contain"
+                cachePolicy="memory-disk"
+              />
+            </Pressable>
           </View>
         </>
       )}
+      {/* Leaderboard modal */}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={showLeaderboard}
+        onRequestClose={() => setShowLeaderboard(false)}
+      >
+        <View style={styles.modalOverlayBackdrop}>
+          <View style={[styles.leaderboardCard, { backgroundColor: colors.surface.primary }]}> 
+            <View style={styles.leaderboardHeader}> 
+              <LinearGradient
+                colors={[ '#f59e0b', '#ef4444' ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.leaderboardHeaderGrad}
+              />
+              <View style={styles.leaderboardHeaderContent}>
+                <Icon library="Ionicons" name="trophy" size={22} color="#ffffff" />
+                <Text style={styles.leaderboardTitle}>Leaderboard</Text>
+              </View>
+              <Pressable onPress={() => setShowLeaderboard(false)} style={styles.leaderboardCloseBtn} accessibilityLabel="Close leaderboard">
+                <Icon library="Ionicons" name="close" size={18} color="#ffffff" />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
+              {(() => {
+                const base = [
+                  { name: 'Traveler A', score: 42 },
+                  { name: 'Explorer B', score: 31 },
+                  { name: 'Nomad C', score: 27 },
+                  { name: 'Adventurer D', score: 19 },
+                  { name: 'Rover E', score: 12 },
+                ];
+                const withYou = [...base, { name: 'You', score: best }];
+                const data = withYou.sort((a, b) => b.score - a.score).slice(0, 10);
+                return data.map((row, idx) => {
+                  const isYou = row.name === 'You' && row.score === best;
+                  return (
+                    <View key={`${row.name}-${idx}-${row.score}`} style={[styles.lbRow, { backgroundColor: isYou ? 'rgba(249,115,22,0.08)' : 'transparent', borderColor: isYou ? 'rgba(249,115,22,0.35)' : 'rgba(0,0,0,0.06)' }]}> 
+                      <View style={[styles.lbRankBadge, { backgroundColor: idx === 0 ? '#F59E0B' : idx === 1 ? '#9CA3AF' : idx === 2 ? '#D97706' : 'rgba(0,0,0,0.08)' }]}>
+                        <Text style={styles.lbRankText}>{idx + 1}</Text>
+                      </View>
+                      <Text style={styles.lbName} numberOfLines={1}>{row.name}</Text>
+                      <View style={styles.lbScorePill}>
+                        <Icon library="Ionicons" name="flame" size={14} color="#ffffff" />
+                        <Text style={styles.lbScoreText}>{row.score}</Text>
+                      </View>
+                    </View>
+                  );
+                });
+              })()}
+            </ScrollView>
+            <View style={styles.leaderboardFooter}> 
+              <Text style={styles.lbFooterText}>Your best: {best}</Text>
+              <Pressable onPress={() => setShowLeaderboard(false)} style={styles.lbDoneBtn} accessibilityLabel="Done">
+                <Text style={styles.lbDoneText}>Done</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       {/* Top-most touch layer: active only during ready/running so overlays can receive touches */}
       {(phase === 'ready' || phase === 'running') && (
         <Pressable onPressIn={onTap} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 10 }} accessibilityLabel="Tap to fly" />
@@ -456,14 +527,14 @@ const styles = StyleSheet.create({
   highScoreText: { ...TYPOGRAPHY.styles.caption, marginTop: -8 },
   startOverlay: { position: 'absolute', left: 0, right: 0, bottom: '12%', alignItems: 'center', zIndex: 25 },
   startText: { ...TYPOGRAPHY.styles.h1, letterSpacing: 1.5, color: 'rgba(255,255,255,0.8)', fontWeight: '800', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.25)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2 },
-  centerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  centerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'flex-start', paddingTop: SCREEN_HEIGHT * 0.28 },
   overlayCard: { position: 'absolute', left: SPACING.lg, right: SPACING.lg, top: SCREEN_HEIGHT * 0.28, borderRadius: BORDER_RADIUS.lg, padding: SPACING.lg, alignItems: 'center', zIndex: 30, ...SHADOWS.lg },
   overlayTitle: { ...TYPOGRAPHY.styles.h2 },
   overlaySub: { ...TYPOGRAPHY.styles.body, marginTop: SPACING.xs },
   overlayActions: { flexDirection: 'row', marginTop: SPACING.md, gap: SPACING.sm },
   actionBtn: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.md },
   actionText: { ...TYPOGRAPHY.styles.button },
-  backdrop: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 24 },
+  backdrop: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 24 },
   modalCard: { width: '86%', maxWidth: 440, padding: SPACING.xl, borderRadius: BORDER_RADIUS.xl, alignItems: 'center', ...SHADOWS.xl },
   gameOverImage: { width: '82%', height: 140, marginBottom: SPACING.sm },
   scoreHeadline: { ...TYPOGRAPHY.styles.h2, marginTop: 2, letterSpacing: 0.5 },
@@ -471,6 +542,25 @@ const styles = StyleSheet.create({
   actionBtnGhost: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderRadius: BORDER_RADIUS.lg, borderWidth: 1, backgroundColor: 'transparent', flexDirection: 'row', alignItems: 'center' },
   newBestBadge: { marginTop: 6, marginBottom: 2, paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(34,197,94,0.15)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.35)' },
   newBestText: { ...TYPOGRAPHY.styles.caption, color: '#22c55e', fontWeight: '800' },
+  leaderboardButtonWrap: { width: '92%', maxWidth: 520, marginTop: SPACING.xxxl * 1.8, marginBottom: SPACING.xxxl },
+  leaderboardButtonImage: { width: '100%', height: 76, borderRadius: 16, overflow: 'hidden' },
+  modalOverlayBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
+  leaderboardCard: { width: '92%', maxWidth: 520, borderRadius: BORDER_RADIUS.xl, overflow: 'hidden', ...SHADOWS.xl },
+  leaderboardHeader: { height: 64, justifyContent: 'center' },
+  leaderboardHeaderGrad: { ...StyleSheet.absoluteFillObject, borderTopLeftRadius: BORDER_RADIUS.xl, borderTopRightRadius: BORDER_RADIUS.xl },
+  leaderboardHeaderContent: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.lg },
+  leaderboardTitle: { ...TYPOGRAPHY.styles.h3, color: '#FFFFFF', fontWeight: '800', marginLeft: 6 },
+  leaderboardCloseBtn: { position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)' },
+  lbRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderBottomWidth: 1 },
+  lbRankBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md },
+  lbRankText: { ...TYPOGRAPHY.styles.caption, color: '#111827', fontWeight: '800' },
+  lbName: { ...TYPOGRAPHY.styles.body, flex: 1, color: '#111827', fontWeight: '600' },
+  lbScorePill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ef4444', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  lbScoreText: { ...TYPOGRAPHY.styles.caption, color: '#FFFFFF', fontWeight: '800' },
+  leaderboardFooter: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(0,0,0,0.02)' },
+  lbFooterText: { ...TYPOGRAPHY.styles.bodySmall, color: '#111827' },
+  lbDoneBtn: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, backgroundColor: '#f97316', borderRadius: 999 },
+  lbDoneText: { ...TYPOGRAPHY.styles.buttonSmall, color: '#FFFFFF', fontWeight: '800' },
 });
 
 
