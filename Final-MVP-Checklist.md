@@ -34,6 +34,9 @@ Final MVP Checklist
 
 [ ] The app needs to do permissions when first opening? We are going to do an onboarding eventually but we need to handle permissions so user can take photos, but more importantly so when they create trip it can use their location so it can pin pointed on the map
 
+[DONE] Add light and dark toggle to the profile page
+
+
 [ ] Make the map page pins actually have functionality, and when they click the pin it opens up the view trip page
 
 [ ] the close 'x' button top left of front cover page on trip page needs to be same exact same place as the page day header 'x'
