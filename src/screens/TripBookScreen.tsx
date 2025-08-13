@@ -155,7 +155,8 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
     })();
   }, [trip?.id]);
 
-  // Run entrance animation once trip is loaded (celebration triggers after image fades in)
+  // Run entrance animation once when trip is loaded and ready.
+  // Do not depend on hasCelebrated to avoid a second fade when the flag flips after confetti finishes.
   useEffect(() => {
     if (!trip || !celebrationReady) return;
     titleOpacity.setValue(0);
@@ -181,7 +182,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         });
       });
     });
-  }, [trip, celebrationReady, hasCelebrated]);
+  }, [trip, celebrationReady]);
 
   // Fade the day title on page change
   useEffect(() => {
@@ -299,13 +300,28 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
     >
       {/* Front Cover */}
       <View style={[styles.page, { width: SCREEN_WIDTH }]}> 
-        {/* Tiny close arrow top-left */}
-        <TouchableOpacity accessibilityLabel="Close" onPress={() => router.replace('/(tabs)')} style={styles.topLeftClose}>
+        {/* Close button aligned to match day page header position */}
+        <TouchableOpacity
+          accessibilityLabel="Close"
+          onPress={() => router.replace('/(tabs)')}
+          style={[
+            styles.topLeftClose,
+            {
+              top: insets.top + 12,
+              left: 26,
+              width: 32,
+              height: 32,
+              padding: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+          ]}
+        >
           <Text style={styles.topLeftCloseText}>×</Text>
         </TouchableOpacity>
 
         <View style={[styles.coverContent, { paddingTop: 90 }]}>
-          {showCelebration && pageIndex === 0 && (
+          {showCelebration && !hasCelebrated && (
             <View pointerEvents="none" style={styles.celebrationOverlay}>
               <LottieView
                 ref={celebrationRef}
@@ -315,7 +331,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                 style={styles.celebrationLottie}
                 onAnimationFinish={async () => {
                   setShowCelebration(false);
-                  if (!hasCelebrated && trip?.id) {
+                  if (trip?.id) {
                     try {
                       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
                       await AsyncStorage.setItem(`celebrated_trip_${trip.id}`, '1');

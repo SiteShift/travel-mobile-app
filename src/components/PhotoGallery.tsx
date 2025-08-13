@@ -77,6 +77,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({
   const { colors } = useTheme();
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [lightboxPaging, setLightboxPaging] = useState(false);
 
   const itemWidth = (SCREEN_WIDTH - SPACING.md * 2 - SPACING.sm * (numColumns - 1)) / numColumns;
 
@@ -127,11 +128,14 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({
   };
 
   const handleLightboxNavigation = (direction: 'prev' | 'next') => {
+    if (lightboxPaging) return;
+    setLightboxPaging(true);
     if (direction === 'prev' && currentPhotoIndex > 0) {
       setCurrentPhotoIndex(currentPhotoIndex - 1);
     } else if (direction === 'next' && currentPhotoIndex < photos.length - 1) {
       setCurrentPhotoIndex(currentPhotoIndex + 1);
     }
+    setTimeout(() => setLightboxPaging(false), 160);
   };
 
   const renderPhotoItem = ({ item: photo, index }: { item: PhotoItem; index: number }) => {
@@ -247,6 +251,8 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({
                 maximumZoomScale={3}
                 showsHorizontalScrollIndicator={false}
                 showsVerticalScrollIndicator={false}
+                directionalLockEnabled
+                scrollEventThrottle={16}
               >
                 <Image
                   source={{ uri: currentPhoto.uri }}

@@ -75,6 +75,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
   const scaleAnim = useRef(new Animated.Value(0.96)).current;
   const listRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  const [pagerLocked, setPagerLocked] = useState(false);
   // note: removed JS-side per-page progress tracking to enable native-driven scroll
 
   // Build 10 pages: unlock based on user's current level
@@ -300,6 +301,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             windowSize={3}
             removeClippedSubviews
             decelerationRate="fast"
+            scrollEnabled={!pagerLocked}
           />
 
           {/* Progress bar removed as requested */}

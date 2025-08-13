@@ -226,7 +226,11 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
                 }
               ]}
               contentFit="contain"
-              transition={200}
+              transition={150}
+              cachePolicy="memory-disk"
+              priority="high"
+              recyclingKey={memory.id}
+              allowDownscaling
             />
           </View>
           

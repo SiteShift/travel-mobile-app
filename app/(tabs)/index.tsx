@@ -101,6 +101,16 @@ export default function HomeTab() {
   const [showTripOptionsModal, setShowTripOptionsModal] = useState(false);
   const [showEditCoverModal, setShowEditCoverModal] = useState(false);
   const [showLevelsModal, setShowLevelsModal] = useState(false);
+  const [carouselLocked, setCarouselLocked] = useState(false);
+  const [pendingOptionsTripId, setPendingOptionsTripId] = useState<string | null>(null);
+  const isOptionsPressRef = useRef(false);
+  const pendingOptionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingNavigateTripId, setPendingNavigateTripId] = useState<string | null>(null);
+  const lastEllipsisPressRef = useRef<number>(0);
+  const [blockOverlayUntil, setBlockOverlayUntil] = useState<number>(0);
+  const navigateFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingCreateTripId, setPendingCreateTripId] = useState<string | null>(null);
+  const createFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Get user level data
   const userData = getMockDataForUser('user1');
@@ -238,29 +248,43 @@ export default function HomeTab() {
     StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content', true);
   }, [data, trips.length, isDark]);
 
-  const handleTripPress = useCallback((trip: Trip) => {
-    // Add gentle haptic feedback for emotional connection
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-      if (trip.type === 'placeholder') {
-      // Show trip creation modal
-      handleCreateTrip();
-    } else {
-      // Navigate to existing trip
-      console.log('Trip pressed:', trip.title);
-      router.push(`/trip/${trip.id}`);
+  // Ensure carousel is re-enabled when trip options modal closes
+  useEffect(() => {
+    if (!showTripOptionsModal) {
+      setCarouselLocked(false);
+      setPendingOptionsTripId(null);
+      if (pendingOptionsTimerRef.current) {
+        clearTimeout(pendingOptionsTimerRef.current);
+        pendingOptionsTimerRef.current = null;
+      }
     }
-  }, [router]);
+  }, [showTripOptionsModal]);
 
   const handleCreateTrip = useCallback(() => {
     setShowTripCreationModal(true);
   }, []);
 
+  const handleTripPress = useCallback((trip: Trip) => {
+    // Add gentle haptic feedback for emotional connection
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    if (trip.type === 'placeholder') {
+      handleCreateTrip();
+    } else {
+      // Defer navigation to the next frame to avoid any press-cycle flicker
+      console.log('Trip pressed:', trip.title);
+      requestAnimationFrame(() => {
+        router.push(`/trip/${trip.id}`);
+      });
+    }
+  }, [router, handleCreateTrip]);
+
   const handleTripOptions = useCallback((tripId: string) => {
-    // Add subtle haptic feedback for menu interaction
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedTripId(tripId);
-    setShowTripOptionsModal(true);
+    setBlockOverlayUntil(Date.now() + 400);
+    // Open on next animation frame, away from the press event lifecycle
+    requestAnimationFrame(() => setShowTripOptionsModal(true));
   }, []);
 
   const handleDeleteTrip = useCallback(async () => {
@@ -431,11 +455,45 @@ export default function HomeTab() {
     const baseLen = Math.max(2, baseLenRaw);
     const modIdx = ((newIndex % baseLen) + baseLen) % baseLen;
     setActiveModIndex(modIdx);
-    if (newIndex <= 1 || newIndex >= data.length - 2) {
-      const targetIndex = baseLen + (newIndex % baseLen);
-      flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
+    // Only recentre if we are near edges AND not in the middle of a user action
+    if (!pendingNavigateTripId && !pendingOptionsTripId) {
+      if (newIndex <= 1 || newIndex >= data.length - 2) {
+        const targetIndex = baseLen + (newIndex % baseLen);
+        flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
+      }
     }
-  }, [data.length, trips.length]);
+
+    // If we were asked to open options for an item that wasn't active,
+    // open it once we've snapped to its position
+    if (pendingOptionsTripId) {
+      const targetBaseIndex = trips.findIndex(t => t.id === pendingOptionsTripId);
+      if (targetBaseIndex !== -1 && targetBaseIndex === modIdx) {
+        const tripId = pendingOptionsTripId;
+        setPendingOptionsTripId(null);
+        handleTripOptions(tripId);
+      }
+    }
+
+    // If we were asked to navigate after snapping, do it now
+    if (pendingNavigateTripId) {
+      const targetBaseIndex = trips.findIndex(t => t.id === pendingNavigateTripId);
+      if (targetBaseIndex !== -1 && targetBaseIndex === modIdx) {
+        const tripId = pendingNavigateTripId;
+        setPendingNavigateTripId(null);
+        if (navigateFallbackTimerRef.current) { clearTimeout(navigateFallbackTimerRef.current); navigateFallbackTimerRef.current = null; }
+        router.push(`/trip/${tripId}`);
+      }
+    }
+    // If we were asked to open create modal after snapping to a placeholder, do it now
+    if (pendingCreateTripId) {
+      const targetBaseIndex = trips.findIndex(t => t.id === pendingCreateTripId);
+      if (targetBaseIndex !== -1 && targetBaseIndex === modIdx) {
+        setPendingCreateTripId(null);
+        if (createFallbackTimerRef.current) { clearTimeout(createFallbackTimerRef.current); createFallbackTimerRef.current = null; }
+        handleCreateTrip();
+      }
+    }
+  }, [data.length, trips.length, pendingOptionsTripId, handleTripOptions, trips, pendingNavigateTripId, router, pendingCreateTripId, handleCreateTrip]);
 
   const TripCardBase = ({ item: trip, index, tripsLength, activeIndexMod }: { item: Trip; index: number; tripsLength: number; activeIndexMod: number }) => {
     if (!trip) return null;
@@ -495,8 +553,23 @@ export default function HomeTab() {
         }).start();
       };
       const cardPress = () => {
-        // Small delay so the scale is perceptible
-        setTimeout(() => handleTripPress(trip), 60);
+        if (isActive) {
+          // Small delay so the scale is perceptible
+          setTimeout(() => handleTripPress(trip), 60);
+        } else {
+          // Snap to this card and open create modal once centered
+          setPendingCreateTripId(trip.id);
+          flatListRef.current?.scrollToIndex({ index, animated: true });
+          // Fallback if momentum end doesn't trigger
+          if (createFallbackTimerRef.current) clearTimeout(createFallbackTimerRef.current);
+          const targetId = trip.id;
+          createFallbackTimerRef.current = setTimeout(() => {
+            if (pendingCreateTripId === targetId) {
+              setPendingCreateTripId(null);
+              handleCreateTrip();
+            }
+          }, 900);
+        }
       };
         return (
           <View style={styles.itemContainer}>
@@ -558,7 +631,7 @@ export default function HomeTab() {
     // Real trip card
     return (
       <View style={styles.itemContainer}>
-        <Animated.View style={[styles.unifiedWrapper, unifiedTransform]} renderToHardwareTextureAndroid shouldRasterizeIOS>
+        <Animated.View style={[styles.unifiedWrapper, unifiedTransform]}>
           {/* Outer right cast shadow on background (behind the book) */}
           {isActive && (
             <LinearGradient
@@ -571,17 +644,25 @@ export default function HomeTab() {
             />
           )}
           
-          <Pressable
+          <Pressable 
             style={[styles.tripCard, !isActive && styles.tripCardInactive]}
             onPress={() => {
+              if (isOptionsPressRef.current) return;
               if (isActive) {
                 handleTripPress(trip);
               } else {
-                const baseLenRaw = trips.length || 1;
-                const baseLen = Math.max(2, baseLenRaw);
-                const targetIndex = baseLen + (index % baseLen);
-                flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
-                setTimeout(() => handleTripPress(trip), 360);
+                setPendingNavigateTripId(trip.id);
+                // Snap to the tapped absolute index to avoid long spins across loops
+                flatListRef.current?.scrollToIndex({ index, animated: true });
+                // Fallback: navigate if momentum end doesn't fire
+                if (navigateFallbackTimerRef.current) clearTimeout(navigateFallbackTimerRef.current);
+                const tripId = trip.id;
+                navigateFallbackTimerRef.current = setTimeout(() => {
+                  if (pendingNavigateTripId === tripId) {
+                    setPendingNavigateTripId(null);
+                    router.push(`/trip/${tripId}`);
+                  }
+                }, 800);
               }
             }}
           >
@@ -631,18 +712,32 @@ export default function HomeTab() {
             {/* Three-dot menu button */}
             <TouchableOpacity 
               style={styles.tripOptionsButton}
+              onPressIn={() => {
+                // Mark that we're handling options to prevent parent card onPress
+                isOptionsPressRef.current = true;
+                lastEllipsisPressRef.current = Date.now();
+              }}
               onPress={() => {
                 if (isActive) {
                   handleTripOptions(trip.id);
                 } else {
-                  const baseLenRaw = trips.length || 1;
-                  const baseLen = Math.max(2, baseLenRaw);
-                  const targetIndex = baseLen + (index % baseLen);
-                  flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
-                  setTimeout(() => handleTripOptions(trip.id), 360);
+                  // If not active, snap to this card and open once centered
+                  setPendingOptionsTripId(trip.id);
+                  flatListRef.current?.scrollToIndex({ index, animated: true });
+                  // Fallback in case momentum end doesn't fire
+                  if (pendingOptionsTimerRef.current) clearTimeout(pendingOptionsTimerRef.current);
+                  const targetId = trip.id;
+                  pendingOptionsTimerRef.current = setTimeout(() => {
+                    if (pendingOptionsTripId === targetId) {
+                      setPendingOptionsTripId(null);
+                      handleTripOptions(targetId);
+                    }
+                  }, 900);
                 }
               }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              onPressOut={() => { setTimeout(() => { isOptionsPressRef.current = false; }, 300); }}
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+              activeOpacity={0.8}
             >
               <View style={[styles.tripOptionsButtonBackground, { backgroundColor: 'rgba(0,0,0,0.2)', opacity: isActive ? 1 : 0.7 }]}>
                 <Icon name="ellipsis-horizontal" size="sm" color="rgba(255,255,255,0.8)" />
@@ -975,12 +1070,13 @@ export default function HomeTab() {
         data={data}
         renderItem={React.useCallback(({ item, index }: { item: Trip; index: number }) => (
           <TripCard item={item} index={index} tripsLength={trips.length} activeIndexMod={activeModIndex} />
-        ), [])}
+        ), [trips.length, activeModIndex])}
         keyExtractor={(item, index) => `${item?.id}-${index}`}
         horizontal
         showsHorizontalScrollIndicator={false}
         snapToInterval={ITEM_SPACING}
         decelerationRate="fast"
+        scrollEnabled={!carouselLocked}
         contentContainerStyle={{ 
           paddingHorizontal: (screenWidth - ITEM_SPACING) / 2,
         }}
@@ -1018,12 +1114,15 @@ export default function HomeTab() {
       <Modal
         visible={showTripOptionsModal}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setShowTripOptionsModal(false)}
       >
         <Pressable 
           style={styles.modalOverlay}
-          onPress={() => setShowTripOptionsModal(false)}
+          onPress={() => {
+            if (Date.now() < blockOverlayUntil) return;
+            setShowTripOptionsModal(false);
+          }}
         >
           <View style={[styles.tripOptionsModal, { backgroundColor: colors.surface.primary }]}>
             <TouchableOpacity 
