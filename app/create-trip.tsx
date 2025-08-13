@@ -29,6 +29,8 @@ export default function CreateTripScreen() {
 
   // One-frame white guard to prevent first-run reveal when arriving via handoff
   const [showGuard, setShowGuard] = useState(handoff === '1');
+  const guardOpacity = useRef(new Animated.Value(handoff === '1' ? 1 : 0)).current;
+  const contentOpacity = useRef(new Animated.Value(handoff === '1' ? 0 : 1)).current;
 
   const handleCreate = async () => {
     if (!title.trim()) {
@@ -59,11 +61,11 @@ export default function CreateTripScreen() {
       };
       await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(simpleTrip));
 
-      // Fade in overlay and show loading for 5 seconds before navigating
-      Animated.timing(overlayOpacity, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+      // Show loading animation overlay, then wait ~3 seconds before navigating
+      Animated.timing(overlayOpacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
       setTimeout(() => {
         router.replace({ pathname: `/trip/${tripId}` });
-      }, 5000);
+      }, 3000);
     } catch (e) {
       console.error('CreateTrip error:', e);
       Alert.alert('Error', 'Could not create trip.');
@@ -79,8 +81,8 @@ export default function CreateTripScreen() {
   const fadeClose = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Slower, staggered entrance
-    Animated.sequence([
+    // Slower, more pronounced stagger for a relaxed reveal
+    Animated.stagger(140, [
       Animated.timing(fadeTitle, { toValue: 1, duration: 320, useNativeDriver: true }),
       Animated.timing(fadeTitleGroup, { toValue: 1, duration: 320, useNativeDriver: true }),
       Animated.timing(fadeDatesDesc, { toValue: 1, duration: 320, useNativeDriver: true }),
@@ -91,23 +93,38 @@ export default function CreateTripScreen() {
 
   useEffect(() => {
     if (!showGuard) return;
-    InteractionManager.runAfterInteractions(() => {
-      requestAnimationFrame(() => setShowGuard(false));
-    });
-  }, [showGuard]);
+    let mounted = true;
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    (async () => {
+      try {
+        await AsyncStorage.setItem('handoff_overlay_up', '0');
+      } catch {}
+      // Crossfade immediately on next frame; don't wait for all interactions
+      requestAnimationFrame(() => {
+        if (!mounted) return;
+        Animated.parallel([
+          Animated.timing(guardOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+          Animated.timing(contentOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        ]).start(() => {
+          if (mounted) setShowGuard(false);
+        });
+      });
+    })();
+    return () => { mounted = false; };
+  }, [showGuard, guardOpacity, contentOpacity]);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       {/* Instant render: no white overlay */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.content}>
+        <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
           {/* First-render guard to ensure white is fully painted on first frame */}
           {showGuard && (
-            <View pointerEvents="none" style={styles.whiteOverlay} />
+            <Animated.View pointerEvents="none" style={[styles.whiteOverlay, { opacity: guardOpacity }]} />
           )}
           {/* Close button */}
-          <Animated.View style={[styles.closeButtonWrapper, { top: insets.top + 12, opacity: fadeClose }]}> 
+          <Animated.View style={[styles.closeButtonWrapper, { top: insets.top + 10, right: 32, opacity: fadeClose }]}> 
             <TouchableOpacity
               onPress={() => router.replace('/(tabs)')}
               activeOpacity={0.8}
@@ -119,7 +136,7 @@ export default function CreateTripScreen() {
             </TouchableOpacity>
           </Animated.View>
 
-          <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 72 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 64 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Animated.Text style={[styles.title, { opacity: fadeTitle }]}>Create Book</Animated.Text>
 
             {/* Cover image selection removed: cover comes from the book creation flow */}
@@ -200,7 +217,7 @@ export default function CreateTripScreen() {
               </View>
             </Animated.View>
           )}
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -391,6 +408,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
+    opacity: 0.7,
   },
 });
 

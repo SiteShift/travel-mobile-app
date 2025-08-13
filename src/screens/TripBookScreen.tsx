@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { SPACING, BORDER_RADIUS } from '../constants/theme';
+import LottieView from 'lottie-react-native';
 
 interface TripBookScreenProps {
   tripId?: string;
@@ -94,6 +95,10 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   // Horizontal pager
   const scrollRef = useRef<ScrollView>(null);
   const [pageIndex, setPageIndex] = useState(0);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const celebrationRef = useRef<LottieView>(null);
+  const [hasCelebrated, setHasCelebrated] = useState(false);
+  const [celebrationReady, setCelebrationReady] = useState(false);
 
   // Entrance animation opacities
   const titleOpacity = useRef(new Animated.Value(0)).current;
@@ -137,22 +142,46 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
     })();
   }, [tripId]);
 
-  // Run sequential entrance animation once trip is loaded
+  // Load per-trip celebration flag so we only play once per trip
   useEffect(() => {
-    if (!trip) return;
+    if (!trip?.id) return;
+    (async () => {
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const v = await AsyncStorage.getItem(`celebrated_trip_${trip.id}`);
+        setHasCelebrated(!!v);
+      } catch {}
+      setCelebrationReady(true);
+    })();
+  }, [trip?.id]);
+
+  // Run entrance animation once trip is loaded (celebration triggers after image fades in)
+  useEffect(() => {
+    if (!trip || !celebrationReady) return;
     titleOpacity.setValue(0);
     dateOpacity.setValue(0);
     imageOpacity.setValue(0);
     descOpacity.setValue(0);
     arrowOpacity.setValue(0);
-    Animated.sequence([
-      Animated.timing(titleOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
-      Animated.timing(dateOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
-      Animated.timing(imageOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(descOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
-      Animated.timing(arrowOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
-    ]).start();
-  }, [trip]);
+
+    Animated.timing(titleOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start(() => {
+      Animated.timing(dateOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start(() => {
+        Animated.timing(imageOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start(({ finished }) => {
+          if (finished) {
+            // Trigger the celebration right after the image settles (only once per trip)
+            if (!hasCelebrated) {
+              setTimeout(() => setShowCelebration(true), 100);
+            }
+          }
+          // Continue with description and arrow fades
+          Animated.sequence([
+            Animated.timing(descOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+            Animated.timing(arrowOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+          ]).start();
+        });
+      });
+    });
+  }, [trip, celebrationReady, hasCelebrated]);
 
   // Fade the day title on page change
   useEffect(() => {
@@ -229,6 +258,12 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         items.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, uri: u, caption: '', crop: { scale: 1, offsetX: 0, offsetY: 0 } });
       }
       setDayPhotos(prev => ({ ...prev, [day]: [...(prev[day] || []), ...items] }));
+      // Leveling: award +1 XP per image added
+      try {
+        const leveling = require('../utils/leveling');
+        await leveling.awardPhotosAdded(items.length);
+        // Optionally update celebration state or header level elsewhere on focus
+      } catch {}
     } catch (e) {
       console.error('Add photos error', e);
     }
@@ -270,6 +305,27 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         </TouchableOpacity>
 
         <View style={[styles.coverContent, { paddingTop: 90 }]}>
+          {showCelebration && pageIndex === 0 && (
+            <View pointerEvents="none" style={styles.celebrationOverlay}>
+              <LottieView
+                ref={celebrationRef}
+                source={require('../../public/assets/create-trip-celebration.json')}
+                autoPlay
+                loop={false}
+                style={styles.celebrationLottie}
+                onAnimationFinish={async () => {
+                  setShowCelebration(false);
+                  if (!hasCelebrated && trip?.id) {
+                    try {
+                      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                      await AsyncStorage.setItem(`celebrated_trip_${trip.id}`, '1');
+                    } catch {}
+                    setHasCelebrated(true);
+                  }
+                }}
+              />
+            </View>
+          )}
           {/* Title (single line, 11 char limit enforced on load) */}
           <Animated.Text
             numberOfLines={1}
@@ -321,7 +377,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
           )}
 
           {/* Navigation arrow (next only) */}
-          <Animated.View style={[styles.nextArrowRow, { width: POLAROID_WIDTH, marginTop: 68, opacity: arrowOpacity }]}> 
+          <Animated.View style={[styles.nextArrowRow, { width: POLAROID_WIDTH, marginTop: 54, opacity: arrowOpacity }]}> 
             <View style={{ flex: 1 }} />
             <TouchableOpacity accessibilityLabel="Open Day 1" onPress={goToNext} style={styles.arrowHitbox}> 
               <Image
@@ -889,6 +945,20 @@ const styles = StyleSheet.create({
     aspectRatio: 4 / 5,
     borderRadius: 10,
     backgroundColor: '#DDD',
+  },
+  celebrationOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 50,
+  },
+  celebrationLottie: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
   },
   polaroidCaption: {
     marginTop: 14,

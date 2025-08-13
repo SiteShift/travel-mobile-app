@@ -71,14 +71,15 @@ const LEVEL_COLOR_MAP: Record<number, any> = {
 export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, initialIndex = 0 }) => {
   const { colors } = useTheme();
   const [activeIndex, setActiveIndex] = useState(initialIndex);
-  const [revealAll, setRevealAll] = useState(false);
+  const [userLevel, setUserLevel] = useState<number>(1);
+  const [userXp, setUserXp] = useState<number>(0);
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.96)).current;
   const listRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const progressX = useRef(new Animated.Value(0)).current; // relative progress within current page
 
-  // Build 10 pages: level 1 unlocked, others locked; can reveal all via toggle
+  // Build 10 pages: unlock based on user's current level
   const levels: LevelItem[] = useMemo(() => {
     // Static imports required by the bundler (no dynamic require)
     const BLACK_2 = require('../../public/assets/levelbadges-blackedout/level-2-blackedout.webp');
@@ -105,12 +106,12 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     };
     const arr: LevelItem[] = [];
     for (let i = 1; i <= 10; i++) {
-      const unlocked = revealAll ? true : i === 1;
+      const unlocked = i <= userLevel;
       const src = unlocked ? LEVEL_COLOR_MAP[i] : blackMap[i];
       arr.push({ level: i, unlocked, image: src });
     }
     return arr;
-  }, [revealAll]);
+  }, [userLevel]);
 
   // Global connector fill width between pages
   const connectorFillWidth = useMemo(() => {
@@ -124,6 +125,16 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
 
   useEffect(() => {
     if (visible) {
+      // Load leveling state to determine unlocked levels and xp
+      (async () => {
+        try {
+          const leveling = require('../utils/leveling');
+          const state = await leveling.getLevelingState();
+          const lvl = leveling.computeLevelFromXp(state.xp);
+          setUserLevel(lvl);
+          setUserXp(state.xp || 0);
+        } catch {}
+      })();
       Animated.parallel([
         Animated.timing(opacityAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
         Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, friction: 8, tension: 80 }),
@@ -169,37 +180,30 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     const isUnlocked = !isLocked;
     const isLevelOne = item.level === 1;
 
+    // XP/progress computation for this page
+    let fillRatio = 0;
+    let xpLabel = '0/100';
+    try {
+      const leveling = require('../utils/leveling');
+      if (item.level < userLevel) {
+        fillRatio = 1;
+        xpLabel = '100/100';
+      } else if (item.level === userLevel) {
+        const { currentLevelXp, nextLevelXp } = leveling.xpToNextLevel(userXp);
+        const levelSpan = Math.max(1, nextLevelXp - currentLevelXp);
+        const gained = Math.max(0, Math.min(levelSpan, userXp - currentLevelXp));
+        fillRatio = gained / levelSpan;
+        xpLabel = `${gained}/${levelSpan}`;
+      } else {
+        fillRatio = 0;
+        xpLabel = '0/100';
+      }
+    } catch {}
+
     return (
       <View style={styles.pageContainer}>
-        {/* Across-pages horizontal rail behind badges */}
-        <View style={styles.railBar} pointerEvents="none" />
-        {/* Segmented connector from badge center to the right, spans into next page */}
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: BADGE_CENTER_Y - CONNECT_SEGMENT_HEIGHT / 2,
-            left: CARD_WIDTH / 2,
-            width: CARD_WIDTH * 1.5, // extend beyond current page width
-            height: CONNECT_SEGMENT_HEIGHT,
-            zIndex: 2,
-            flexDirection: 'row',
-            overflow: 'visible',
-          }}
-        >
-          {Array.from({ length: Math.ceil((CARD_WIDTH * 1.5) / (CONNECT_SEGMENT_WIDTH + CONNECT_SEGMENT_SPACING)) }).map((_, i) => (
-            <View
-              key={`seg-${i}`}
-              style={{
-                width: CONNECT_SEGMENT_WIDTH,
-                height: CONNECT_SEGMENT_HEIGHT,
-                borderRadius: CONNECT_SEGMENT_HEIGHT / 2,
-                backgroundColor: '#6b7280',
-                marginRight: CONNECT_SEGMENT_SPACING,
-              }}
-            />
-          ))}
-        </View>
+        {/* Rail moved to global position above to avoid duplicates */}
+        {/* Segmented connector removed in favor of dash-dot rail */}
         {/* Large centered image slightly nearer to top */}
         <Animated.View style={[styles.badgeWrap, { transform: [{ translateY: characterTranslateY }, { scale: characterScale }] }]}> 
           <Image
@@ -225,9 +229,9 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         {/* XP bar */}
         <View style={styles.simpleProgressContainer}>
           <View style={[styles.simpleProgressTrack, isLocked && styles.simpleProgressTrackLocked]}>
-            <View style={[styles.simpleProgressFill, isLocked && styles.simpleProgressFillLocked]} />
+            <View style={[styles.simpleProgressFill, isLocked && styles.simpleProgressFillLocked, { width: PROGRESS_TRACK_WIDTH * fillRatio }]} />
           </View>
-          <Text style={[styles.xpLabel, isLocked && styles.xpLabelLocked]}>{isLocked ? '0/100' : '50/100'}</Text>
+          <Text style={[styles.xpLabel, isLocked && styles.xpLabelLocked]}>{xpLabel}</Text>
         </View>
       </View>
     );
@@ -242,19 +246,37 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
           <TouchableOpacity onPress={onClose} accessibilityLabel="Close levels" style={styles.closeBtn}>
             <Icon name="close" size="md" color="text" />
           </TouchableOpacity>
-          {/* Fixed Info button bottom-right */}
-          <TouchableOpacity style={styles.infoBtnFixed} activeOpacity={0.8} accessibilityLabel="Info">
-            <Text style={styles.infoBtnText}>i</Text>
-          </TouchableOpacity>
-          {/* Reveal all toggle (preview) */}
-          <TouchableOpacity
-            onPress={() => setRevealAll((v) => !v)}
-            accessibilityLabel="Reveal all levels"
-            style={styles.revealBtn}
-            activeOpacity={0.85}
+          {/* Info button retained (optional) */}
+
+          {/* Global rails behind badges (single instance across pages) */}
+          <View style={styles.railBar} pointerEvents="none" />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.globalDashRail,
+              {
+                width: CARD_WIDTH * levels.length,
+                transform: [
+                  { translateX: Animated.add(Animated.multiply(scrollX, -1), new Animated.Value(CARD_WIDTH * 0.5)) },
+                ],
+              },
+            ]}
           >
-            <Text style={styles.revealBtnText}>{revealAll ? 'Hide' : 'Reveal'}</Text>
-          </TouchableOpacity>
+            <View
+              style={[
+                styles.dashDotRailContainer,
+                { left: 0, right: 0 },
+              ]}
+            >
+              {Array.from({ length: Math.ceil((CARD_WIDTH * (levels.length - 1)) / 14) * 2 }).map((_, i) =>
+                i % 2 === 0 ? (
+                  <View key={`dash-${i}`} style={styles.dashSegment} />
+                ) : (
+                  <View key={`dot-${i}`} style={styles.dotSegment} />
+                )
+              )}
+            </View>
+          </Animated.View>
 
           {/* Pager */}
           <Animated.FlatList
@@ -265,6 +287,9 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             horizontal
             showsHorizontalScrollIndicator={false}
             pagingEnabled
+            bounces={false}
+            overScrollMode="never"
+            snapToAlignment="center"
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { x: scrollX } } }],
               {
@@ -360,26 +385,50 @@ const styles = StyleSheet.create({
     paddingTop: PAGE_PADDING_TOP,
     alignItems: 'center',
   },
-  // Dotted line behind images from current badge center towards the right across all pages
-  dottedRail: {
-    position: 'absolute',
-    top: BADGE_CENTER_Y, // align to badge center
-    left: CARD_WIDTH / 2,
-    right: 0,
-    height: 0,
-    borderTopWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(0,0,0,0.45)',
-    zIndex: 2,
-  },
+  // old dottedRail removed; replaced by dashDotRailContainer above
   railBar: {
     position: 'absolute',
     top: RAIL_BAR_TOP,
     left: 0,
     right: 0,
     height: RAIL_BAR_HEIGHT,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    zIndex: 0,
+  },
+  // Ensure badges sit above; rail is below
+  dashDotRailContainer: {
+    position: 'absolute',
+    top: BADGE_CENTER_Y - 1,
+    left: BADGE_SIZE / 2,
+    right: BADGE_SIZE / 2,
+    height: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 0,
+    opacity: 0.4,
+  },
+  globalDashRail: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    height: CARD_HEIGHT,
+    zIndex: 0,
+    overflow: 'hidden',
+  },
+  dashSegment: {
+    width: 14,
+    height: 3,
+    backgroundColor: '#6b7280',
+    marginHorizontal: 2,
+    borderRadius: 1,
+  },
+  dotSegment: {
+    width: 5,
+    height: 5,
+    backgroundColor: '#6b7280',
+    borderRadius: 2,
+    marginHorizontal: 2,
   },
   bgClip: {
     position: 'absolute',
@@ -804,9 +853,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 6, // slightly less tall
     borderRadius: 16,
-    backgroundColor: 'rgba(249,115,22,0.55)', // a bit more orange/opaque
+    backgroundColor: 'rgba(249,115,22,0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(249,115,22,0.7)',
+    borderColor: 'rgba(249,115,22,0.56)',
   },
   levelPillText: {
     color: '#ffffff',
@@ -820,9 +869,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: 'rgba(107,114,128,0.4)',
+    backgroundColor: 'rgba(107,114,128,0.48)',
     borderWidth: 1,
-    borderColor: 'rgba(55,65,81,0.7)',
+    borderColor: 'rgba(55,65,81,0.42)',
   },
   lockedPillText: {
     color: '#ffffff',

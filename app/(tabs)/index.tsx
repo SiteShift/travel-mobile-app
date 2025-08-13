@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+import { Easing } from 'react-native';
 import { LevelLightbox } from '../../src/components/LevelLightbox';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -87,6 +89,8 @@ export default function HomeTab() {
   // Animation refs for level pill
   const levelPillScale = useRef(new Animated.Value(1)).current;
   const levelPillShadow = useRef(new Animated.Value(1)).current;
+  const badgeShimmer = useRef(new Animated.Value(0)).current;
+  const badgeTapShimmer = useRef(new Animated.Value(0)).current;
   const [trips, setTrips] = useState<Trip[]>(createPlaceholderTrips());
   const [data, setData] = useState<Trip[]>([]);
   const [showTripCreationModal, setShowTripCreationModal] = useState(false);
@@ -97,7 +101,22 @@ export default function HomeTab() {
   
   // Get user level data
   const userData = getMockDataForUser('user1');
-  const userLevel = userData.user?.stats.level || 1;
+  const [userLevel, setUserLevel] = useState<number>(userData.user?.stats.level || 1);
+  // Level badge images (static requires for bundler)
+  const BADGE1 = require('../../public/assets/Trip Memo Level Badges for home page/level-1-level-badge_compressed.webp');
+  const LEVEL_BADGES: Record<number, any> = {
+    // Prefer special badge set; fallback to existing set if not present
+    1: BADGE1,
+    2: require('../../public/assets/Trip Memo Level Badges for home page/level-2-level-badge_compressed.webp'),
+    3: require('../../public/assets/Trip Memo Level Badges for home page/level-3-level-badge_compressed.webp'),
+    4: require('../../public/assets/Trip Memo Level Badges for home page/level-4-level-badge_compressed.webp'),
+    5: require('../../public/assets/Trip Memo Level Badges for home page/level-5-level-badge_compressed.webp'),
+    6: require('../../public/assets/Trip Memo Level Badges for home page/level-6-level-badge_compressed.webp'),
+    7: require('../../public/assets/Trip Memo Level Badges for home page/level-7-level-badge_compressed.webp'),
+    8: require('../../public/assets/Trip Memo Level Badges for home page/level-8-level-badge_compressed.webp'),
+    9: require('../../public/assets/Trip Memo Level Badges for home page/level-9-level-badge_compressed.webp'),
+    10: require('../../public/assets/Trip Memo Level Badges for home page/level-10-level-badge_compressed.webp'),
+  };
 
   // Levels system data
   const levelsData = [
@@ -185,6 +204,13 @@ export default function HomeTab() {
               // Update trips with existing data
               updateTripsData(existingTrips);
             }
+            // Also refresh leveling state on focus
+            try {
+              const leveling = require('../../src/utils/leveling');
+              const state = await leveling.getLevelingState();
+              const lvl = leveling.computeLevelFromXp(state.xp);
+              setUserLevel(lvl);
+            } catch {}
           }
         } catch (error) {
           console.error('❌ HomePage: Error loading existing trips:', error);
@@ -213,7 +239,7 @@ export default function HomeTab() {
     // Add gentle haptic feedback for emotional connection
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    if (trip.type === 'placeholder') {
+      if (trip.type === 'placeholder') {
       // Show trip creation modal
       handleCreateTrip();
     } else {
@@ -377,6 +403,15 @@ export default function HomeTab() {
       };
       
       await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(simpleTrip));
+      // Leveling: award XP for creating a trip and progress mission
+      try {
+        const leveling = require('../../src/utils/leveling');
+        await leveling.awardTripCreated();
+        await leveling.progressMission('add_3_trips', 1);
+        const state = await leveling.getLevelingState();
+        const lvl = leveling.computeLevelFromXp(state.xp);
+        setUserLevel(lvl);
+      } catch {}
     } catch (error) {
       console.error('❌ HomePage: Failed to save trip to storage:', error);
     }
@@ -454,31 +489,43 @@ export default function HomeTab() {
         // Small delay so the scale is perceptible
         setTimeout(() => handleTripPress(trip), 60);
       };
-      return (
-        <View style={styles.itemContainer}>
-          <Animated.View style={[styles.unifiedWrapper, unifiedTransform, { transform: [...(unifiedTransform as any).transform, { scale: pressScale }] }]}>
-            {/* Book pages - positioned behind the card */}
-            <View style={styles.bookPagesContainer}>
-              <View style={[styles.bookPage, styles.bookPage3, { backgroundColor: colors.surface.tertiary }]} />
-              <View style={[styles.bookPage, styles.bookPage2, { backgroundColor: colors.surface.secondary }]} />
-              <View style={[styles.bookPage, styles.bookPage1, { backgroundColor: colors.surface.primary }]} />
-            </View>
-            
-            <Pressable 
-              style={[styles.tripCard, styles.placeholderCard, { 
-                backgroundColor: colors.surface.secondary,
-                borderColor: colors.border.primary,
-              }]} 
+        return (
+          <View style={styles.itemContainer}>
+            <Animated.View style={[styles.unifiedWrapper, unifiedTransform, { transform: [...(unifiedTransform as any).transform, { scale: pressScale }] }]}> 
+              <Pressable 
+                style={[
+                  styles.tripCard, 
+                  styles.placeholderCard, 
+                  { 
+                    backgroundColor: 'transparent',
+                    // No border, no rounding, no clipping behind image
+                    borderColor: 'transparent',
+                    borderWidth: 0,
+                    borderRadius: 0,
+                    overflow: 'visible',
+                    // Make shadow very subtle for placeholder
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 6,
+                    elevation: 3,
+                  }
+                ]} 
               onPress={cardPress}
               onPressIn={onPressIn}
               onPressOut={onPressOut}
               accessibilityLabel="Add Trip"
             >
-              {/* Dotted border overlay */}
-              <View style={[styles.dottedBorder, { borderColor: colors.border.primary }]} />
-              
-              {/* Plus icon in circle with emotional gradient */}
-              <View style={styles.placeholderContent}>
+              {/* Blank book image replacing dotted outline */}
+                <Image 
+                  source={require('../../public/assets/Blank-trip-image.webp')}
+                  style={[StyleSheet.absoluteFillObject as any, { borderRadius: 0 }]}
+                  contentFit="cover"
+                  transition={200}
+                />
+
+              {/* Centered overlay content */}
+              <View style={[styles.placeholderContent, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
                 <LinearGradient
                   colors={['#fff0f3', '#fce7f3']}
                   style={styles.plusIconContainer}
@@ -493,33 +540,7 @@ export default function HomeTab() {
                 </Text>
               </View>
             </Pressable>
-            
-            <Animated.View style={[
-              styles.buttonContainer, 
-              { 
-                opacity: buttonOpacity, 
-                transform: [{ translateY: buttonTranslateY }] 
-              }
-            ]}>
-              <Pressable 
-                style={({ pressed }) => [
-                  styles.tripButton,
-                  pressed && styles.tripButtonPressed,
-                ]} 
-                onPress={cardPress}
-                onPressIn={onPressIn}
-                onPressOut={onPressOut}
-              >
-                <LinearGradient
-                  colors={['#f4845f', '#ef6144']}
-                  style={styles.tripButtonGradient}
-                >
-                  <Text style={[styles.tripButtonText, { color: 'white' }]}>
-                    {trip.buttonText}
-                  </Text>
-                </LinearGradient>
-              </Pressable>
-            </Animated.View>
+              
           </Animated.View>
         </View>
       );
@@ -529,12 +550,15 @@ export default function HomeTab() {
     return (
       <View style={styles.itemContainer}>
         <Animated.View style={[styles.unifiedWrapper, unifiedTransform]}>
-          {/* Book pages - positioned behind the card */}
-          <View style={styles.bookPagesContainer}>
-            <View style={[styles.bookPage, styles.bookPage3, { backgroundColor: colors.surface.tertiary }]} />
-            <View style={[styles.bookPage, styles.bookPage2, { backgroundColor: colors.surface.secondary }]} />
-            <View style={[styles.bookPage, styles.bookPage1, { backgroundColor: colors.surface.primary }]} />
-          </View>
+          {/* Outer right cast shadow on background (behind the book) */}
+          <LinearGradient
+            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.18)", "rgba(0,0,0,0.08)", "rgba(0,0,0,0)"]}
+            locations={[0, 0.18, 0.72, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.outerRightShadow}
+            pointerEvents="none"
+          />
           
           <Pressable style={styles.tripCard} onPress={() => handleTripPress(trip)}>
             <Image 
@@ -542,9 +566,25 @@ export default function HomeTab() {
               placeholder={{ blurhash: trip.blurhash }} 
               style={styles.tripImage} 
               contentFit="cover" 
-              transition={300} 
+              transition={0} 
             />
-            <View style={styles.imageBorder} />
+            {/* Subtle inward spine shadow from the left edge */}
+            <LinearGradient
+              colors={["rgba(0,0,0,0.24)", "rgba(0,0,0,0)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.leftInnerShadow}
+              pointerEvents="none"
+            />
+            {/* Book spine overlay on top of the image (no corner rounding) */}
+            <Image
+              source={require('../../public/assets/NEW-trip-shadow-overlay.webp')}
+              style={styles.bookSpineOverlay}
+              contentFit="cover"
+              transition={0}
+              pointerEvents="none"
+            />
+            {/* Removed outline border */}
             <LinearGradient 
               colors={trip.gradient as any || ['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']} 
               style={styles.gradientOverlay} 
@@ -556,7 +596,7 @@ export default function HomeTab() {
               onPress={() => handleTripOptions(trip.id)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <View style={[styles.tripOptionsButtonBackground, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+              <View style={[styles.tripOptionsButtonBackground, { backgroundColor: 'rgba(0,0,0,0.2)' }]}>
                 <Icon name="ellipsis-horizontal" size="sm" color="rgba(255,255,255,0.8)" />
               </View>
             </TouchableOpacity>
@@ -571,30 +611,7 @@ export default function HomeTab() {
             </View>
           </Pressable>
           
-          <Animated.View style={[
-            styles.buttonContainer, 
-            { 
-              opacity: buttonOpacity, 
-              transform: [{ translateY: buttonTranslateY }] 
-            }
-          ]}>
-            <Pressable 
-              style={({ pressed }) => [
-                styles.tripButton,
-                pressed && styles.tripButtonPressed, 
-              ]} 
-              onPress={() => handleTripPress(trip)}
-            >
-              <LinearGradient
-                colors={['rgba(255,255,255,1)', 'rgba(248,250,252,1)']}
-                style={styles.tripButtonGradient}
-              >
-                <Text style={[styles.tripButtonText, { color: colors.text.primary }]}>
-                  {trip.buttonText}
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          </Animated.View>
+          {/* Removed 'View Trip' floating button for cleaner look */}
         </Animated.View>
       </View>
     );
@@ -719,6 +736,29 @@ export default function HomeTab() {
     ]).start();
   };
 
+  // Slow, periodic shimmer across the badge (every ~10s)
+  useEffect(() => {
+    let isCancelled = false;
+    const loop = () => {
+      if (isCancelled) return;
+      badgeShimmer.setValue(0);
+      Animated.sequence([
+        Animated.delay(2000), // small initial delay after mount/return
+        Animated.timing(badgeShimmer, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.quad),
+        }),
+        Animated.delay(8000), // rest period
+      ]).start(() => {
+        if (!isCancelled) loop();
+      });
+    };
+    loop();
+    return () => { isCancelled = true; };
+  }, [badgeShimmer]);
+
   const handleLevelPillPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     
@@ -739,6 +779,17 @@ export default function HomeTab() {
       ]).start();
     }, 50);
     
+    // Quick white shimmer sweep across the badge on tap
+    badgeTapShimmer.setValue(0);
+    Animated.timing(badgeTapShimmer, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+      easing: Easing.inOut(Easing.cubic),
+    }).start(() => {
+      badgeTapShimmer.setValue(0);
+    });
+
     setShowLevelsModal(true);
   };
 
@@ -761,22 +812,60 @@ export default function HomeTab() {
           activeOpacity={1}
         >
           <View style={styles.levelContent}>
-            <View style={styles.adventureIconContainer}>
-              <LinearGradient
-                colors={['#FF6B85', '#FF8A6B', '#FF6B6B']} // Beautiful sunset gradient
+            <View style={styles.levelBadgeContainer}>
+              <Image
+                source={LEVEL_BADGES[userLevel] || LEVEL_BADGES[1]}
+                style={styles.levelBadgeImage}
+                contentFit="contain"
+              />
+              <View pointerEvents="none" style={styles.levelBadgeInnerStroke} />
+              <AnimatedLinearGradient
+                pointerEvents="none"
+                colors={[
+                  'rgba(255,255,255,0)',
+                  'rgba(255,255,255,0.55)',
+                  'rgba(255,255,255,0)'
+                ]}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.adventureIconGradient}
-              >
-                <Icon name="adventure" size="sm" color="#FFFFFF" />
-              </LinearGradient>
+                end={{ x: 1, y: 0 }}
+                style={[
+                  styles.levelBadgeShimmer,
+                  {
+                    transform: [{
+                      translateX: badgeShimmer.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-30, 40],
+                      })
+                    }],
+                  }
+                ]}
+              />
+              <AnimatedLinearGradient
+                pointerEvents="none"
+                colors={[
+                  'rgba(255,255,255,0)',
+                  'rgba(255,255,255,0.85)',
+                  'rgba(255,255,255,0)'
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[
+                  styles.levelBadgeShimmer,
+                  {
+                    opacity: 0.6,
+                    transform: [{
+                      translateX: badgeTapShimmer.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-30, 40],
+                      })
+                    }],
+                  }
+                ]}
+              />
             </View>
             <View style={styles.levelTextContainer}>
               <Text style={[styles.levelNumber, { color: colors.text.primary }]}>
-                Level 1
-              </Text>
-              <Text style={[styles.levelText, { color: colors.text.primary }]}>
-                Adventurer
+                {`Level ${userLevel}`}
               </Text>
             </View>
           </View>
@@ -793,14 +882,6 @@ export default function HomeTab() {
     <LevelLightbox
       visible={showLevelsModal}
       onClose={() => setShowLevelsModal(false)}
-      levels={levelsData.map((l) => ({
-        level: l.level,
-        name: l.name,
-        character: l.unlocked ? l.character : '🔒',
-        unlocked: l.unlocked,
-        description: l.description,
-        color: l.color,
-      }))}
       initialIndex={Math.max(0, (userLevel || 1) - 1)}
     />
   );
@@ -1076,7 +1157,7 @@ const styles = StyleSheet.create({
   tripCard: {
     width: '100%',
     height: CARD_HEIGHT,
-    borderRadius: 32,
+    borderRadius: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
@@ -1146,20 +1227,15 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   tripImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 32,
-  },
-  imageBorder: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    borderWidth: 1,
-    borderColor: 'rgba(128, 128, 128, 0.5)',
-    borderRadius: 32,
-    zIndex: 3,
+    borderRadius: 6,
+  },
+  imageBorder: {
+    // removed; kept for reference in case reintroduced later
   },
   gradientOverlay: {
     position: 'absolute',
@@ -1167,8 +1243,68 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '60%',
-    borderRadius: 32,
+    borderRadius: 6,
     zIndex: 2,
+  },
+  // Spine overlay across the entire card surface above the image
+  bookSpineOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    // Match the image’s rounding exactly
+    borderRadius: 6,
+    zIndex: 4,
+  },
+  // Subtle right-side vertical shadow as tall as the image
+  rightShadowOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: 28,
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
+    zIndex: 3,
+  },
+  // Outer background shadow to the right of the card (fades onto background)
+  outerRightShadow: {
+    position: 'absolute',
+    top: 0,
+    height: CARD_HEIGHT,
+    right: -18,
+    width: 40,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    zIndex: 0,
+  },
+  leftInnerShadow: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 22,
+    borderTopLeftRadius: 6,
+    borderBottomLeftRadius: 6,
+    zIndex: 3,
+  },
+  // Very subtle inner/right-edge shadow to suggest page thickness
+  rightEdgeShadow: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: 18,
+    // Use a vertical gradient-like effect using shadow via a semi-transparent view
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    // Add a faint dark edge inside the right side
+    borderLeftWidth: 0,
+    zIndex: 1,
   },
   tripOptionsButton: {
     position: 'absolute',
@@ -1207,6 +1343,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     lineHeight: 22,
+    paddingHorizontal: SPACING.lg,
   },
   buttonContainer: {
     position: 'absolute',
@@ -1278,7 +1415,9 @@ const styles = StyleSheet.create({
   },
   levelIndicatorWrapper: {
     paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
+    // Asymmetric padding to visually nudge contents left within the pill
+    paddingLeft: SPACING.md,
+    paddingRight: SPACING.lg,
     borderRadius: 100,
     // Very subtle 3D effects
     shadowColor: '#000',
@@ -1288,12 +1427,49 @@ const styles = StyleSheet.create({
     elevation: 2,
     // Very subtle border for minimal depth
     borderWidth: 0.3,
-    borderColor: 'rgba(0, 0, 0, 0.04)',
+    borderColor: 'rgba(0, 0, 0, 0.02)',
   },
   levelContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+    transform: [{ translateX: -4 }],
+  },
+  levelBadgeContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 2,
+    position: 'relative',
+  },
+  levelBadgeImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
+  },
+  levelBadgeInnerStroke: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  levelBadgeShimmer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 26,
+    opacity: 0.35,
+    transform: [{ rotate: '18deg' }],
   },
   adventureIconContainer: {
     width: 32,
@@ -1325,13 +1501,13 @@ const styles = StyleSheet.create({
     elevation: 1,
     // Very subtle inner border
     borderWidth: 0.3,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   levelTextContainer: {
     alignItems: 'center',
   },
   levelNumber: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: FONT_WEIGHTS.medium,
     fontFamily: 'Merienda',
     letterSpacing: -0.3,

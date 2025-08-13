@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Asset } from 'expo-asset';
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 import { BlurView } from 'expo-blur';
 import Animated, {
@@ -84,13 +85,14 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Constants for better maintainability
 const ANIMATION_CONFIG = {
-  ENTRANCE_DURATION: 650, // smoother, slightly slower entrance
-  COVER_FADE_DURATION: 1400, // slower fade-in for the cover
-  PAGE_FLIP_DURATION: 900, // slower, more elegant page flip
-  FORM_FADE_DURATION: 450,
-  SPARKLE_DURATION: 600,
-  GLOW_DURATION: 600,
-  PULSE_DURATION: 1000,
+  ENTRANCE_DURATION: 500,
+  COVER_FADE_DURATION: 600,
+  PAGE_FLIP_DURATION: 600,
+  FORM_FADE_DURATION: 300,
+  SPARKLE_DURATION: 500,
+  GLOW_DURATION: 500,
+  PULSE_DURATION: 800,
+  HOLD_AFTER_FADE_MS: 800,
 } as const;
 
 const BOOK_CONFIG = {
@@ -176,6 +178,9 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
   const isNavigatingRef = useRef(false);
   const [hasError, setHasError] = useState(false);
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const templateReadyRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const openScheduledRef = useRef(false);
 
   // Animation values - destructured for cleaner code
   const bookScale = useSharedValue(BOOK_CONFIG.INITIAL_SCALE as number);
@@ -222,10 +227,21 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
 
   // Reset animation when modal opens
   useEffect(() => {
+    isMountedRef.current = true;
     if (visible) {
       resetAnimation();
-      startBookCreationFlow();
       isNavigatingRef.current = false;
+      // Preload the blank template to avoid first-frame flicker
+      (async () => {
+        try {
+          const mod = require('../../public/assets/Blank-trip-image-book-animation.webp');
+          await Asset.fromModule(mod).downloadAsync();
+          templateReadyRef.current = true;
+        } catch {}
+        if (isMountedRef.current) {
+          startBookCreationFlow();
+        }
+      })();
     } else {
       resetAnimation();
       setCurrentState(BookState.INITIAL);
@@ -240,6 +256,9 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
       setOverlayActive(false);
       isNavigatingRef.current = false;
     }
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [visible]);
 
   const resetAnimation = useCallback(() => {
@@ -284,18 +303,18 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
       // Dramatic but smooth book entrance - small to large with gentle overshoot
       bookOpacity.value = withTiming(1, { duration: 350, easing: Easing.out(Easing.quad) });
 
-      bookScale.value = withSequence(
+       bookScale.value = withSequence(
         withTiming(BOOK_CONFIG.ENTRANCE_OVERSHOOT, {
-          duration: ANIMATION_CONFIG.ENTRANCE_DURATION,
+           duration: ANIMATION_CONFIG.ENTRANCE_DURATION,
           easing: Easing.bezier(0.22, 0.61, 0.36, 1),
         }),
         withSpring(1, { damping: 14, stiffness: 140, mass: 0.7 })
       );
 
-      // Subtle 3D rotation for depth, reduced amplitude to feel calmer
+      // Subtle 3D rotation for depth, reduced amplitude and duration
       bookRotationX.value = withSequence(
-        withTiming(-5, { duration: 380 }),
-        withSpring(0, { damping: 14, stiffness: 140 })
+        withTiming(-4, { duration: 220 }),
+        withSpring(0, { damping: 16, stiffness: 150 })
       );
       
       // Remove colored glow behind the book
@@ -366,11 +385,12 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
         // Keep glow disabled
         glowOpacity.value = withTiming(0, { duration: 0 });
         
-        // Auto-open book after brief delay to allow image to render
-        if (openTimerRef.current) clearTimeout(openTimerRef.current);
-        openTimerRef.current = setTimeout(() => {
-          openBook();
-        }, 500);
+        // Auto-open is now scheduled from the image onLoad handler after a short fade
+        if (openTimerRef.current) {
+          clearTimeout(openTimerRef.current);
+          openTimerRef.current = null;
+        }
+        openScheduledRef.current = false;
       } else {
         setCurrentState(BookState.COVER_SELECTION);
       }
@@ -390,6 +410,9 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), 300);
       
+      // As the cover begins to open, fade out the cover image quickly
+      coverOpacity.value = withTiming(0, { duration: 380, easing: Easing.out(Easing.cubic) });
+
       // Slight overall book yaw for depth while the cover opens
       bookRotationY.value = withTiming(BOOK_CONFIG.MAX_ROTATION_Y, {
         duration: ANIMATION_CONFIG.PAGE_FLIP_DURATION,
@@ -407,11 +430,11 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
       // Real cover hinge open (front cover rotates around left edge)
       coverHingeRotationY.value = withTiming(-155, {
         duration: ANIMATION_CONFIG.PAGE_FLIP_DURATION,
-        easing: Easing.bezier(0.2, 0.0, 0.1, 1.0),
+        easing: Easing.out(Easing.cubic),
       });
 
       // Reveal inner page later to avoid overlap seam during cover flip
-      pageOpacity.value = withDelay(ANIMATION_CONFIG.PAGE_FLIP_DURATION - 350, withTiming(1, { duration: 220 }));
+      pageOpacity.value = withDelay(ANIMATION_CONFIG.PAGE_FLIP_DURATION - 280, withTiming(1, { duration: 160 }));
       pageRotationY.value = withDelay(
         150,
         withTiming(0, {
@@ -420,36 +443,45 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
         })
       );
       
-      // Enhanced sparkle effect during opening
+      // Faster sparkle effect
       sparkleOpacity.value = withSequence(
-        withTiming(1, { duration: 200 }),
-        withDelay(ANIMATION_CONFIG.SPARKLE_DURATION, withTiming(0, { duration: 400 }))
+        withTiming(1, { duration: 120 }),
+        withDelay(ANIMATION_CONFIG.SPARKLE_DURATION, withTiming(0, { duration: 240 }))
       );
       
-      // After flip completes: simulate zoom using white overlay only (perfect full-bleed)
+      // After flip completes: perform a brief zoom-in with a white overlay already active to avoid any flicker
       setTimeout(() => {
-        // Instantly cover with white (full-bleed) and simulate a stronger zoom via oversized overlay
+        const ZOOM_AFTER_OPEN_MS = 160;
+        // Bring in full-white overlay BEFORE zoom so the transition stays white end-to-end
         setOverlayActive(true);
         whiteOverlayOpacity.value = withTiming(1, { duration: 0 });
-        whiteOverlayScale.value = 1.25;
-        whiteOverlayScale.value = withTiming(1.0, { duration: 200, easing: Easing.out(Easing.cubic) });
-        // Immediately hide book below
-        bookOpacity.value = withTiming(0, { duration: 0 });
-        if (isNavigatingRef.current) return;
-        isNavigatingRef.current = true;
-        const img = formData.image || coverImage;
-        const params: Record<string, string> = { handoff: '1' };
-        if (img) params.imageUri = img as string;
-        if (formData.title) params.title = String(formData.title);
-        if (formData.startDate) params.startDate = (formData.startDate as Date).toISOString();
-        if (formData.endDate) params.endDate = (formData.endDate as Date).toISOString();
-        runOnJS(router.replace)({ pathname: '/create-trip', params });
-        // Close after new screen finishes mounting/layout to avoid any flash
-        InteractionManager.runAfterInteractions(() => {
-          runOnJS(onClose)();
-          runOnJS(setOverlayActive)(false);
-          isNavigatingRef.current = false;
+        // Slightly oversize the overlay to avoid any edge/pixel rounding reveals on some devices
+        whiteOverlayScale.value = 1.06;
+
+        // Stronger, quicker zoom to emphasize reveal (book is now covered by white)
+        bookScale.value = withTiming(1.7, {
+          duration: ZOOM_AFTER_OPEN_MS,
+          easing: Easing.out(Easing.cubic),
         });
+
+        setTimeout(() => {
+          // Immediately hide book below and navigate under the white overlay
+          bookOpacity.value = withTiming(0, { duration: 0 });
+          if (isNavigatingRef.current) return;
+          isNavigatingRef.current = true;
+          const img = formData.image || coverImage;
+          const params: Record<string, string> = { handoff: '1' };
+          if (img) params.imageUri = img as string;
+          if (formData.title) params.title = String(formData.title);
+          if (formData.startDate) params.startDate = (formData.startDate as Date).toISOString();
+          if (formData.endDate) params.endDate = (formData.endDate as Date).toISOString();
+          runOnJS(router.replace)({ pathname: '/create-trip', params });
+          // Keep white overlay up; the next screen will signal when it's ready via AsyncStorage flag
+          try {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            AsyncStorage.setItem('handoff_overlay_up', '1');
+          } catch {}
+        }, ZOOM_AFTER_OPEN_MS);
       }, ANIMATION_CONFIG.PAGE_FLIP_DURATION);
       
     } catch (error) {
@@ -676,15 +708,19 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
             {/* Enhanced 3D Book */}
             <GestureDetector gesture={tapGesture}>
               <View style={styles.book}>
-                {/* Book back pages for depth */}
-                <Animated.View style={[styles.bookBackPages, edgeLayerStyle]} />
+                {/* Book back pages for depth (hide in placeholder state to remove rectangle) */}
+                <Animated.View style={[
+                  styles.bookBackPages,
+                  edgeLayerStyle,
+                  !coverImage ? { opacity: 0 } : null,
+                ]} />
                 
-                {/* Book spine with realistic shadow */}
+                {/* Book spine with realistic shadow (hide during placeholder to avoid rectangle artifacts) */}
                 <AnimatedLinearGradient
                   colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.1)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.bookSpine, edgeLayerStyle]}
+                  style={[styles.bookSpine, edgeLayerStyle, !coverImage ? { opacity: 0 } : null]}
                 />
                 
                 {/* Multiple page edges for 3D effect - disabled to avoid seams */}
@@ -693,24 +729,30 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
                 <View style={styles.pageEdge3} /> */}
                 
                 {/* Enhanced front cover with better shadows */}
-                <Animated.View
+                 <Animated.View
                   renderToHardwareTextureAndroid={hwAndroid}
                   shouldRasterizeIOS={hwiOS}
                   style={[styles.bookCoverWrapper, coverHingeStyle]}
                 >
-                  <View style={styles.bookCoverMask}>
+                  <View style={[
+                    styles.bookCoverMask,
+                    !coverImage ? styles.bookCoverMaskPlaceholder : null
+                  ]}>
                   <LinearGradient
                     colors={['rgba(0,0,0,0.1)', 'transparent']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.coverShadow}
                   />
-                  <Animated.View pointerEvents="none" style={[styles.coverShadowOverlay, coverShadowAnimatedStyle]} />
+                   {/* Avoid dark overlay in placeholder to reduce perceived flicker */}
+                   {!(!coverImage) && (
+                     <Animated.View pointerEvents="none" style={[styles.coverShadowOverlay, coverShadowAnimatedStyle]} />
+                   )}
                   
                   <View style={styles.coverContent}>
                      {coverImage ? (
                        <Animated.View style={[styles.coverImageContainer, coverStyle]} pointerEvents="none">
-                        <Image
+                         <Image
                           source={{ uri: coverImage }}
                           style={styles.coverImage}
                           contentFit="cover"
@@ -720,7 +762,15 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
                               easing: Easing.out(Easing.cubic),
                             });
                             coverLightSweep.value = 0;
-                            coverLightSweep.value = withTiming(1, { duration: 700, easing: Easing.out(Easing.quad) });
+                            coverLightSweep.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.quad) });
+                            // Schedule opening after fade-in, then hold briefly so the photo can be appreciated
+                            if (!openScheduledRef.current) {
+                              if (openTimerRef.current) clearTimeout(openTimerRef.current);
+                              openTimerRef.current = setTimeout(() => {
+                                openBook();
+                              }, ANIMATION_CONFIG.COVER_FADE_DURATION + ANIMATION_CONFIG.HOLD_AFTER_FADE_MS);
+                              openScheduledRef.current = true;
+                            }
                           }}
                         />
                         {/* Enhanced cover overlay */}
@@ -731,17 +781,24 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
                         {/* Light sweep */}
                         <Animated.View style={[styles.coverSweep, coverSweepStyle]} />
                       </Animated.View>
-                     ) : (
+                      ) : (
                        <Animated.View style={[styles.placeholderCover, placeholderStyle]} pointerEvents={currentState === BookState.COVER_SELECTION ? 'auto' : 'none'}>
-                        <View style={styles.dottedBorder} />
-                        <View style={styles.placeholderContent}>
-                          <View style={styles.plusIconContainer}>
-                            <Icon name="plus" size="lg" color="#999" />
-                          </View>
-                          <Text style={[styles.placeholderText, { color: '#666' }]}>Tap to add cover</Text>
-                        </View>
-                      </Animated.View>
-                    )}
+                         {/* Blank book template filling the cover area */}
+                         <Image
+                           source={require('../../public/assets/Blank-trip-image-book-animation.webp')}
+                           style={[StyleSheet.absoluteFillObject as any]}
+                           contentFit="cover"
+                           transition={300}
+                         />
+                         {/* Tap affordance overlay */}
+                         <View style={styles.placeholderContent}>
+                           <View style={styles.plusIconContainer}>
+                             <Icon name="plus" size="lg" color="#999" />
+                           </View>
+                           <Text style={[styles.placeholderText, { color: '#666' }]}>Tap to add cover</Text>
+                         </View>
+                       </Animated.View>
+                     )}
                   </View>
                   </View>
                 </Animated.View>
@@ -752,7 +809,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
                   shouldRasterizeIOS={hwiOS}
                   style={[styles.bookPageWrapper, pageStyle]}
                 >
-                  <View style={styles.bookPageMask}>
+                   <View style={[styles.bookPageMask, !coverImage ? { backgroundColor: 'transparent', borderWidth: 0 } : null]}>
                     <View style={styles.pageContent} />
                   </View>
                 </Animated.View>
@@ -1016,6 +1073,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#FFFFFF',
   },
+  // When showing the placeholder, remove white rectangle so only the blank template shows
+  bookCoverMaskPlaceholder: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
   
   coverShadow: {
     position: 'absolute',
@@ -1075,20 +1138,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: 'transparent',
     position: 'relative',
   },
   
   dottedBorder: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    right: 20,
-    bottom: 20,
-    borderWidth: 2,
-    borderColor: '#DDDDDD',
-    borderStyle: 'dashed',
-    borderRadius: 12,
+    // removed in favor of blank book template
   },
   
   placeholderContent: {

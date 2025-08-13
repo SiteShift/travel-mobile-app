@@ -164,6 +164,12 @@ Building a premium travel diary mobile app with map-centric design and "Airbnb-l
   - Introduced `coverShadowOverlay` with animated opacity tied to rotation
   - Refined page flip using translateX pivot and perspective for natural feel
   - Maintained performance with Reanimated worklets and early returns
+  - 🚀 2025-08-12 Performance: Cut create-trip handoff delay dramatically
+    - Reduced animation timings (cover fade/page flip/zoom) and scheduled open earlier
+    - Enabled immediate white overlay during handoff to mask transitions cleanly
+    - Shortened create-trip screen guard and entrance fades for instant render
+    - Removed artificial 5s delay after pressing Create Trip; navigate immediately
+    - Files: `src/components/AnimatedBookCreation.tsx`, `app/create-trip.tsx`
 
   - **IMMERSIVE FULL-SCREEN EXPERIENCE**: Cinema-quality photo viewing
     - Complete full-screen overlay with intelligent image sizing
