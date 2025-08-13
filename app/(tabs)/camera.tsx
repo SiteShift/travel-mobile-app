@@ -1,10 +1,29 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, StatusBar, Animated as RNAnimated } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType, FlashMode } from 'expo-camera';
+import type { CameraViewRef } from 'expo-camera';
+// Lazy-load MediaLibrary to avoid bundler error if the module isn't installed yet
+let MediaLibrary: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  MediaLibrary = require('expo-media-library');
+} catch {}
 import { useRouter } from 'expo-router';
 import { Icon } from '../../src/components/Icon';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+// Lazy-load Constants so we can detect Expo Go without adding a hard dep
+let Constants: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Constants = require('expo-constants');
+} catch {}
+// Haptics feedback on shutter press
+let Haptics: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Haptics = require('expo-haptics');
+} catch {}
 import Animated, {
   useSharedValue,
   runOnJS,
@@ -29,16 +48,16 @@ export default function CameraScreen() {
   const [isNavigating, setIsNavigating] = useState(false);
   
   // Refs
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<CameraViewRef | null>(null);
   const router = useRouter();
-  const recordingTimer = useRef<NodeJS.Timeout | null>(null); // no longer used for long-press, kept for safety
-  const shutterOpacity = useRef(new RNAnimated.Value(0)).current; // legacy (unused now)
+  const recordingTimer = useRef<NodeJS.Timeout | null>(null);
+  const shutterOpacity = useRef(new RNAnimated.Value(0)).current;
   const flashOpacity = useRef(new RNAnimated.Value(0)).current;
+  const isFocused = useIsFocused();
   
   // Animation Shared Values
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
-  const recordingProgress = useSharedValue(0);
   const buttonScale = useSharedValue(1);
 
   // Focus Effect for Status Bar
@@ -49,6 +68,9 @@ export default function CameraScreen() {
       if (!permission?.granted) {
         requestPermission();
       }
+      // Reset zoom and saved scale on focus so the second open starts fresh
+      savedScale.value = 1;
+      setZoom(0);
       return () => {
         StatusBar.setHidden(false);
         if (recordingTimer.current) {
@@ -97,14 +119,10 @@ export default function CameraScreen() {
   const composedGestures = Gesture.Simultaneous(pinchGesture, doubleTapGesture);
 
   // Core Functions
-  const navigateToEditor = useCallback((uri: string, isVideo: boolean = false) => {
+  const navigateToEditor = useCallback((uri: string) => {
     router.push({
       pathname: '/entry-editor',
-      params: { 
-        photoUri: uri, 
-        ...(isVideo && { isVideo: 'true' }),
-        cameraFacing: facing
-      },
+      params: { photoUri: uri, cameraFacing: facing },
     });
   }, [router, facing]);
 
@@ -114,14 +132,51 @@ export default function CameraScreen() {
       // White flash to mask any preview pause during capture
       flashOpacity.setValue(1);
       RNAnimated.timing(flashOpacity, { toValue: 0, duration: 180, useNativeDriver: true }).start();
-      const photo = await cameraRef.current.takePictureAsync({ 
-        quality: 1.0,
-        skipProcessing: true,
-        mirror: false,
-        exif: true,
-      });
+      const refAny: any = cameraRef.current;
+      const hasAsync = typeof refAny?.takePictureAsync === 'function';
+      const hasSync = typeof refAny?.takePicture === 'function';
+      if (!hasAsync && !hasSync) {
+        try { console.warn('No capture function on camera ref'); } catch {}
+        flashOpacity.setValue(0);
+        return;
+      }
+      const photo = hasAsync
+        ? await refAny.takePictureAsync({ 
+            quality: 1.0,
+            skipProcessing: true,
+            mirror: false,
+            exif: true,
+          })
+        : await refAny.takePicture({ 
+            quality: 1.0,
+            skipProcessing: true,
+            mirror: false,
+            exif: true,
+          });
       if (photo?.uri) {
-        navigateToEditor(photo.uri, false);
+        // In Expo Go/local dev, skip saving to Media Library to avoid permission issues
+        const isExpoGo = Constants?.appOwnership === 'expo' || __DEV__;
+        if (!isExpoGo) {
+          // Save to user's photo library (camera roll) only in standalone/dev-build
+          try {
+            if (MediaLibrary?.requestPermissionsAsync) {
+              const libPerm = await MediaLibrary.requestPermissionsAsync();
+              if (libPerm?.granted) {
+                const asset = await MediaLibrary.createAssetAsync(photo.uri);
+                try {
+                  const albumName = 'TripMemo';
+                  let album = await MediaLibrary.getAlbumAsync(albumName);
+                  if (!album) {
+                    album = await MediaLibrary.createAlbumAsync(albumName, asset, false);
+                  } else {
+                    await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+                  }
+                } catch {}
+              }
+            }
+          } catch {}
+        }
+        navigateToEditor(photo.uri);
       } else {
         // ensure flash is gone
         flashOpacity.setValue(0);
@@ -130,13 +185,16 @@ export default function CameraScreen() {
       flashOpacity.setValue(0);
       console.error('Photo capture failed:', e);
     }
-  }, [navigateToEditor, shutterOpacity]);
+  }, [navigateToEditor, flashOpacity]);
 
-  // removed: video recording (photo-only)
+  // Photo-only: no video recording
 
   // Request camera + mic permissions on first interaction (must be declared before use)
   const ensurePermissions = useCallback(async (): Promise<boolean> => {
     try {
+      // In Expo Go, allow capture without prompting to keep local testing smooth
+      const isExpoGo = Constants?.appOwnership === 'expo' || __DEV__;
+      if (isExpoGo) return true;
       if (!permission?.granted) {
         const { granted } = await requestPermission();
         if (!granted) return false;
@@ -149,8 +207,22 @@ export default function CameraScreen() {
   }, [permission?.granted, requestPermission]);
 
   const handleShutterPress = useCallback(async () => {
+    try { Haptics?.impactAsync?.(Haptics?.ImpactFeedbackStyle?.Medium); } catch {}
+    try { console.log('Shutter pressed'); } catch {}
     const ok = await ensurePermissions();
-    if (!ok || !isCameraReady) return;
+    try { console.log('Permissions ok:', ok); } catch {}
+    if (!ok) return;
+    try {
+      const r: any = cameraRef.current;
+      console.log('isCameraReady:', isCameraReady, 'hasRef:', !!r, 'hasTakePictureAsync:', typeof r?.takePictureAsync === 'function', 'hasTakePicture:', typeof r?.takePicture === 'function');
+    } catch {}
+    if (!isCameraReady) {
+      setTimeout(() => {
+        try { console.log('Retry after delay; ready?', isCameraReady); } catch {}
+        takePicture();
+      }, 200);
+      return;
+    }
     takePicture();
   }, [ensurePermissions, isCameraReady, takePicture]);
 
@@ -176,59 +248,65 @@ export default function CameraScreen() {
   return (
     <View style={styles.fullScreenContainer}>
       {hasCameraPermission && (
-        <CameraView 
-          style={styles.fullScreenCamera} 
-          facing={facing} 
-          flash={flash} 
-          zoom={zoom} 
-          ref={cameraRef}
-          onCameraReady={() => setIsCameraReady(true)}
-        >
-        <GestureDetector gesture={composedGestures}>
-          <View style={styles.gestureArea} />
-        </GestureDetector>
-        
+        <>
+          <CameraView 
+            style={styles.fullScreenCamera} 
+            facing={facing} 
+            flash={flash} 
+            zoom={zoom} 
+            mode="picture"
+            ref={(ref) => {
+              try { console.log('Camera ref set:', !!ref); } catch {}
+              cameraRef.current = ref as unknown as CameraViewRef | null;
+            }}
+            onCameraReady={() => { setIsCameraReady(true); try { console.log('Camera ready'); } catch {} }}
+            onMountError={(e: any) => { setIsCameraReady(false); try { console.warn('Camera mount error', e?.nativeEvent?.message || e); } catch {} }}
+          />
+          {/* Gesture capture overlay (absolute, above camera) */}
+          <GestureDetector gesture={composedGestures}>
+            <View style={styles.gestureArea} />
+          </GestureDetector>
+
+          {/* Controls overlay (absolute, above camera) */}
           <View style={styles.controlsOverlay}>
             {/* Photo-only: no mode toggle */}
-          <View style={styles.topControls}>
-            {/* photo-only: no recording indicator */}
-            <TouchableOpacity style={styles.controlButton} onPress={closeCamera} activeOpacity={0.7}>
-              <Icon name="close" size="xl" color="white" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.bottomControls}>
-            <TouchableOpacity style={styles.controlButton} onPress={toggleFlash} activeOpacity={0.7}>
-              <Icon 
-                name={flash === 'on' ? 'flash' : 'flash-off'} 
-                size="xl" 
-                color={flash === 'on' ? '#FFD700' : 'white'} 
-              />
-            </TouchableOpacity>
-            
-
-            <View style={styles.shutterContainer}>
-              
-              <Animated.View style={[styles.shutterButton, shutterButtonStyle, !isCameraReady && { opacity: 0.6 } ]}>
-                <TouchableOpacity
-                  style={styles.shutterTouchable}
-                  onPress={handleShutterPress}
-                  activeOpacity={1}
-                  disabled={!isCameraReady}
-                >
-                  <View style={styles.shutterButtonInner} />
-                </TouchableOpacity>
-              </Animated.View>
+            <View style={styles.topControls}>
+              {/* photo-only: no recording indicator */}
+              <TouchableOpacity style={styles.controlButton} onPress={closeCamera} activeOpacity={0.7}>
+                <Icon name="close" size="xl" color="white" />
+              </TouchableOpacity>
             </View>
-            
-            <TouchableOpacity style={styles.controlButton} onPress={toggleCameraFacing} activeOpacity={0.7}>
-              <Icon name="refresh" size="xl" color="white" />
-            </TouchableOpacity>
+
+            <View style={styles.bottomControls}>
+              <TouchableOpacity style={styles.controlButton} onPress={toggleFlash} activeOpacity={0.7}>
+                <Icon 
+                  name={flash === 'on' ? 'flash' : 'flash-off'} 
+                  size="xl" 
+                  color={flash === 'on' ? '#FFD700' : 'white'} 
+                />
+              </TouchableOpacity>
+
+              <View style={styles.shutterContainer}>
+                <Animated.View style={[styles.shutterButton, shutterButtonStyle, !isCameraReady && { opacity: 0.6 } ]}>
+                  <TouchableOpacity
+                    style={styles.shutterTouchable}
+                    onPress={handleShutterPress}
+                    activeOpacity={1}
+                  >
+                    <View style={styles.shutterButtonInner} />
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
+
+              <TouchableOpacity style={styles.controlButton} onPress={toggleCameraFacing} activeOpacity={0.7}>
+                <Icon name="refresh" size="xl" color="white" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-        {/* White flash overlay (very quick) */}
-        <RNAnimated.View pointerEvents="none" style={[styles.flashOverlay, { opacity: flashOpacity }]} />
-      </CameraView>
+
+          {/* White flash overlay (very quick) */}
+          <RNAnimated.View pointerEvents="none" style={[styles.flashOverlay, { opacity: flashOpacity }]} />
+        </>
       )}
       {!hasCameraPermission && (
         <View style={styles.permissionOverlay} />
@@ -249,9 +327,11 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   fullScreenCamera: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   flashOverlay: {
     position: 'absolute',
@@ -307,7 +387,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   controlsOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject as any,
     justifyContent: 'space-between',
     padding: 20,
     paddingTop: 60, // Account for status bar

@@ -1,8 +1,19 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType, FlashMode } from 'expo-camera';
+let MediaLibrary: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  MediaLibrary = require('expo-media-library');
+} catch {}
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { Icon } from '../src/components/Icon';
+let Constants: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Constants = require('expo-constants');
+} catch {}
 
 export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
@@ -10,6 +21,8 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
+  const isFocused = useIsFocused();
+  const [isCameraReady, setIsCameraReady] = useState(false);
   
   if (!permission) {
     // Camera permissions are still loading.
@@ -36,16 +49,48 @@ export default function CameraScreen() {
     setFlash(current => (current === 'off' ? 'on' : 'off'));
   }
 
-  const takePicture = async () => {
-    if (cameraRef.current) {
+  const ensurePermissions = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!permission?.granted) {
+        const { granted } = await requestPermission();
+        if (!granted) return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, [permission?.granted, requestPermission]);
+
+  const takePicture = useCallback(async () => {
+    if (!cameraRef.current) return;
+    try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 1.0, // Maximum quality for ultra-sharp photos
-        skipProcessing: false,
+        quality: 1.0,
+        skipProcessing: true,
         mirror: false,
-        exif: true, // Keep EXIF data for best quality
+        exif: true,
       });
-      if (photo) {
-        console.log('Photo taken:', photo.uri);
+      if (photo?.uri) {
+        const isExpoGo = Constants?.appOwnership === 'expo' || __DEV__;
+        if (!isExpoGo) {
+          try {
+            if (MediaLibrary?.requestPermissionsAsync) {
+              const libPerm = await MediaLibrary.requestPermissionsAsync();
+              if (libPerm?.granted) {
+                const asset = await MediaLibrary.createAssetAsync(photo.uri);
+                try {
+                  const albumName = 'TripMemo';
+                  let album = await MediaLibrary.getAlbumAsync(albumName);
+                  if (!album) {
+                    album = await MediaLibrary.createAlbumAsync(albumName, asset, false);
+                  } else {
+                    await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+                  }
+                } catch {}
+              }
+            }
+          } catch {}
+        }
         router.push({
           pathname: '/entry-editor',
           params: { 
@@ -54,8 +99,22 @@ export default function CameraScreen() {
           },
         });
       }
+    } catch (e) {
+      console.error('Photo capture failed:', e);
     }
-  };
+  }, [router, facing]);
+
+  const handleShutterPress = useCallback(async () => {
+    const ok = await ensurePermissions();
+    if (!ok) return;
+    if (!isCameraReady) {
+      setTimeout(() => {
+        if (isCameraReady) takePicture();
+      }, 120);
+      return;
+    }
+    takePicture();
+  }, [ensurePermissions, isCameraReady, takePicture]);
 
   const closeCamera = () => {
     if (router.canGoBack()) {
@@ -67,32 +126,36 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView
-        style={styles.camera}
-        facing={facing}
-        flash={flash}
-        ref={cameraRef}
-      >
-        <View style={styles.controlsOverlay}>
-          <View style={styles.topControls}>
-                <TouchableOpacity style={styles.controlButton} onPress={closeCamera}>
-                    <Icon name="close" size="xl" color="white" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.controlButton} onPress={toggleFlash}>
-                    <Icon name={flash === 'on' ? 'sun' : 'cloud'} size="xl" color="white" />
-                </TouchableOpacity>
-          </View>
-          <View style={styles.bottomControls}>
-            <View style={styles.controlButton} />
-                <TouchableOpacity style={styles.shutterButton} onPress={takePicture}>
-              <View style={styles.shutterButtonInner} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.controlButton} onPress={toggleCameraFacing}>
-                    <Icon name="refresh" size="xl" color="white" />
-                </TouchableOpacity>
-            </View>
-          </View>
-      </CameraView>
+      {isFocused && (
+        <CameraView
+          key={isFocused ? 'focused' : 'blurred'}
+          style={styles.camera}
+          facing={facing}
+          flash={flash}
+          ref={cameraRef}
+          onCameraReady={() => setIsCameraReady(true)}
+        />
+      )}
+      {/* Absolute overlay above camera */}
+      <View style={styles.controlsOverlay}>
+        <View style={styles.topControls}>
+          <TouchableOpacity style={styles.controlButton} onPress={closeCamera}>
+              <Icon name="close" size="xl" color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={toggleFlash}>
+              <Icon name={flash === 'on' ? 'sun' : 'cloud'} size="xl" color="white" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.bottomControls}>
+          <View style={styles.controlButton} />
+          <TouchableOpacity style={[styles.shutterButton, !isCameraReady && { opacity: 0.6 }]} onPress={handleShutterPress} disabled={!isCameraReady}>
+            <View style={styles.shutterButtonInner} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={toggleCameraFacing}>
+              <Icon name="refresh" size="xl" color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 }
@@ -104,7 +167,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   camera: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   buttonContainer: {
     flex: 1,
@@ -123,7 +190,7 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   controlsOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFillObject as any,
     justifyContent: 'space-between',
     padding: 20,
   },
