@@ -69,7 +69,14 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
       others.push({ name: 'Traveller', score: r });
     }
     const you = { name: 'You', score: best };
-    const merged = [...seeded, ...others, you].sort((a, b) => b.score - a.score);
+    // Sort by score desc; if tied, prefer the current user to appear above
+    const merged = [...seeded, ...others, you].sort((a, b) => {
+      const diff = b.score - a.score;
+      if (diff !== 0) return diff;
+      if (a.name === 'You') return -1;
+      if (b.name === 'You') return 1;
+      return 0;
+    });
     const yourIndex = merged.findIndex((r) => r.name === 'You' && r.score === best);
     return { rows: merged, yourRank: yourIndex >= 0 ? yourIndex + 1 : merged.length };
   }, [best]);
@@ -488,41 +495,57 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
         onRequestClose={() => setShowLeaderboard(false)}
       >
         <View style={styles.modalOverlayBackdrop}>
+          <Pressable style={styles.backdropTouchable} onPress={() => setShowLeaderboard(false)} />
           <View style={styles.lbFrameWrap}>
             <Image
-              source={require('../../../public/assets/leaderboard-template (1) (1)_compressed.webp')}
+              source={require('../../../public/assets/leaderboard-template (2)_compressed.webp')}
               style={styles.lbFrameImage}
               contentFit="cover"
               cachePolicy="memory-disk"
             />
-            {/* Close */}
-            <Pressable accessibilityLabel="Close leaderboard" onPress={() => setShowLeaderboard(false)} style={styles.lbCloseBtn}>
-              <Text style={styles.lbCloseText}>×</Text>
-            </Pressable>
             {/* Scrollable middle content */}
-            <ScrollView
-              contentContainerStyle={styles.lbScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {leaderboardData.rows.slice(0, 200).map((row, idx) => {
-                const rank = idx + 1;
-                const isTop1 = rank === 1;
-                const isTop2 = rank === 2;
-                const isTop3 = rank === 3;
-                const isYou = row.name === 'You' && row.score === best;
-                return (
-                  <View key={`lb-${rank}-${row.name}-${row.score}`} style={styles.lbItemRow}>
-                    <View style={[styles.lbRankCircle, { backgroundColor: isTop1 ? '#f5c242' : isTop2 ? '#c9cdd3' : isTop3 ? '#cd8b31' : '#9a5e22' }]}> 
-                      <Text style={[styles.lbRankNum, { color: isTop2 ? '#111' : '#111' }]}>{rank}</Text>
+            <View style={styles.lbContentArea}>
+              <ScrollView
+                contentContainerStyle={styles.lbScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {leaderboardData.rows.slice(0, 200).map((row, idx) => {
+                  const rank = idx + 1;
+                  const isTop1 = rank === 1;
+                  const isTop2 = rank === 2;
+                  const isTop3 = rank === 3;
+                  const isYou = row.name === 'You' && row.score === best;
+                  return (
+                    <View key={`lb-${rank}-${row.name}-${row.score}`} style={[styles.lbItemRow, isYou && styles.lbItemRowYou]}>
+                      <View style={[
+                        styles.lbRankCircle,
+                        { backgroundColor: isTop1 ? '#f5c242' : isTop2 ? '#c9cdd3' : isTop3 ? '#cd8b31' : '#9a5e22' },
+                        isYou && { borderColor: '#f8b323', borderWidth: 3 }
+                      ]}> 
+                        <Text style={styles.lbRankNum}>{rank}</Text>
+                      </View>
+                      <Text numberOfLines={1} style={[styles.lbItemName, { fontWeight: isYou ? '900' : '600' }]}>
+                        {row.name}
+                      </Text>
+                      {isYou && (
+                        <View style={styles.lbYouBadge}>
+                          <Text style={styles.lbYouBadgeText}>YOU</Text>
+                        </View>
+                      )}
+                      <Text style={styles.lbItemScore}>{row.score}</Text>
                     </View>
-                    <Text numberOfLines={1} style={[styles.lbItemName, { fontWeight: isYou ? '800' : '600' }]}>
-                      {row.name}
-                    </Text>
-                    <Text style={styles.lbItemScore}>{row.score}</Text>
-                  </View>
-                );
-              })}
-            </ScrollView>
+                  );
+                })}
+              </ScrollView>
+              {/* Bottom fade overlay */}
+              <LinearGradient
+                colors={[ 'transparent', '#482c1a' ]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                pointerEvents="none"
+                style={styles.lbBottomFade}
+              />
+            </View>
             {/* Bottom banner text */}
             <View pointerEvents="none" style={styles.lbBottomBanner}>
               <Text style={styles.lbBottomBannerText}>{`Your Ranked ${leaderboardData.yourRank}${ordinal(leaderboardData.yourRank)}`}</Text>
@@ -588,15 +611,24 @@ const styles = StyleSheet.create({
   lbCloseBtn: { position: 'absolute', right: 18, top: 18, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
   lbCloseText: { ...TYPOGRAPHY.styles.h3, color: '#fff', fontWeight: '900', lineHeight: 30 },
   // Middle scrollable content container sits within the inner frame area from template
-  lbScrollContent: { paddingTop: 160, paddingBottom: 180, paddingHorizontal: 38 },
-  lbItemRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(154,94,34,0.75)', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, marginBottom: 12 },
-  lbRankCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-  lbRankNum: { ...TYPOGRAPHY.styles.bodySmall, fontWeight: '900' },
+  lbContentArea: { position: 'absolute', left: '7.5%', right: '7.5%', top: '16%', bottom: '14%' },
+  lbScrollContent: { paddingBottom: 8 },
+  lbItemRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(99,51,16,0.82)', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,184,77,0.25)' },
+  lbRankCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 14, borderWidth: 2, borderColor: 'rgba(0,0,0,0.25)' },
+  lbRankNum: { ...TYPOGRAPHY.styles.bodySmall, fontWeight: '900', color: '#111' },
   lbItemName: { ...TYPOGRAPHY.styles.body, color: '#fff', flex: 1 },
-  lbItemScore: { ...TYPOGRAPHY.styles.h4, color: '#fff', fontWeight: '800' },
+  lbItemScore: { ...TYPOGRAPHY.styles.h4, color: '#fff', fontWeight: '900', marginLeft: 14 },
+  lbItemRowYou: { backgroundColor: 'rgba(248,179,35,0.18)', borderColor: 'rgba(248,179,35,0.55)' },
+  lbYouBadge: { marginRight: 10, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: '#f59e0b' },
+  lbYouBadgeText: { ...TYPOGRAPHY.styles.caption, color: '#111', fontWeight: '900' },
   // Bottom banner overlay (text sits over the banner area of the template)
   lbBottomBanner: { position: 'absolute', left: 0, right: 0, bottom: 22, alignItems: 'center' },
   lbBottomBannerText: { ...TYPOGRAPHY.styles.h2, color: '#f8b323', fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3 },
+  // Fade sits flush at the very bottom of the scrollable content area
+  lbBottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 80 },
+  // Stronger, layered backdrop with tap-outside support
+  backdropTouchable: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  modalOverlayBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
 });
 
 

@@ -55,6 +55,14 @@ export default function ProfileTab() {
   const [tripCount, setTripCount] = React.useState<number>(0);
   const [photoCount, setPhotoCount] = React.useState<number>(0);
   const [isGameVisible, setIsGameVisible] = React.useState(false);
+  const [isScrolling, setIsScrolling] = React.useState(false);
+  const parrotBob = React.useRef(new Animated.Value(0)).current;
+  const parrotBobLoopRef = React.useRef<Animated.CompositeAnimation | null>(null);
+  const trippinHoldScale = React.useRef(new Animated.Value(1)).current;
+  const trippinHoldTranslateY = React.useRef(new Animated.Value(0)).current;
+  const trippinShimmer = React.useRef(new Animated.Value(0)).current;
+  const [bestTrippinScore, setBestTrippinScore] = React.useState<number>(0);
+  const TRIPPIN_BEST_KEY = 'trippin_best_score_v1';
 
   // Level badge images removed from XP bar sides
 
@@ -95,9 +103,46 @@ export default function ProfileTab() {
         const state = await getLevelingState();
         const info = xpToNextLevel(state.xp || 0);
         setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp });
+        // Load local best Trippin score for CTA
+        try {
+          const best = await AsyncStorage.getItem(TRIPPIN_BEST_KEY);
+          setBestTrippinScore(best ? Number(best) : 0);
+        } catch {}
       } catch {}
     })();
   }, []);
+
+  // Parrot bobbing loop; pauses during scroll to avoid jank
+  const startParrotBob = React.useCallback(() => {
+    parrotBob.setValue(0);
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(parrotBob, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(parrotBob, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    parrotBobLoopRef.current = anim;
+    anim.start();
+  }, [parrotBob]);
+
+  React.useEffect(() => {
+    if (isScrolling) {
+      if (parrotBobLoopRef.current) parrotBobLoopRef.current.stop();
+    } else {
+      startParrotBob();
+    }
+    return () => { if (parrotBobLoopRef.current) parrotBobLoopRef.current.stop(); };
+  }, [isScrolling, startParrotBob]);
+
+  // Shimmer sweep across the card every ~7s
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(trippinShimmer, { toValue: 1, duration: 6800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(trippinShimmer, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [trippinShimmer]);
 
   const computeUniqueCountries = React.useCallback(async () => {
     try {
@@ -338,7 +383,13 @@ export default function ProfileTab() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SPACING.xxxl + SPACING.xl + SPACING.sm + SPACING.xs + SPACING.xs }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: SPACING.xxxl + SPACING.xl + SPACING.sm + SPACING.xs + SPACING.xs }}
+        onScrollBeginDrag={() => setIsScrolling(true)}
+        onScrollEndDrag={() => setIsScrolling(false)}
+        onMomentumScrollEnd={() => setIsScrolling(false)}
+      >
         <View style={styles.header}>
           <Pressable
             onPress={() => setIsEditProfileVisible(true)}
@@ -395,6 +446,75 @@ export default function ProfileTab() {
           />
         </View>
 
+        {/* Trippin' Game CTA - moved above Missions */}
+        <View style={[styles.section, { marginBottom: SPACING.lg }]}> 
+          <Pressable
+            onPressIn={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              Animated.parallel([
+                Animated.spring(trippinHoldScale, { toValue: 0.98, useNativeDriver: true, tension: 300, friction: 14 }),
+                Animated.spring(trippinHoldTranslateY, { toValue: -1, useNativeDriver: true, tension: 300, friction: 14 }),
+              ]).start();
+            }}
+            onPressOut={() => {
+              Animated.parallel([
+                Animated.spring(trippinHoldScale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 12 }),
+                Animated.spring(trippinHoldTranslateY, { toValue: 0, useNativeDriver: true, tension: 300, friction: 12 }),
+              ]).start();
+            }}
+            onPress={() => setIsGameVisible(true)}
+            accessibilityLabel="Play Trippin – global leaderboard"
+          >
+            <Animated.View style={{ transform: [{ scale: trippinHoldScale }, { translateY: trippinHoldTranslateY }] }}>
+              <LinearGradient
+              colors={[ '#f59e0b', '#ef4444' ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.trippinCard, SHADOWS.xl]}
+            >
+                {/* Shimmer band (diagonal soft glow) */}
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.trippinShimmerBand,
+                    { transform: [{ translateX: trippinShimmer.interpolate({ inputRange: [0, 1], outputRange: [-120, 400] }) }, { rotate: '18deg' }] },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[ 'rgba(255,255,255,0)', 'rgba(255,255,255,0.28)', 'rgba(255,255,255,0)' ]}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={{ flex: 1 }}
+                  />
+                </Animated.View>
+              <View style={styles.trippinContentRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.trippinTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>Play Trippin!</Text>
+                  <Text style={styles.trippinSubtitle}>Compete against other travellers in a global leaderboard</Text>
+                  <View style={styles.trippinCTAButtons}>
+                    <View style={styles.trippinPlayPill}>
+                      <Icon name="game-controller" size="sm" color="#111827" />
+                      <Text style={styles.trippinPlayPillText}>Play Now</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.trippinArtWrap}>
+                  <View style={styles.trippinArtCircleOuter} />
+                  <View style={styles.trippinArtCircle} />
+                    <Animated.View style={[styles.trippinArtShadowWrap, { transform: [{ translateY: parrotBob.interpolate({ inputRange: [0, 1], outputRange: [0, -5] }) }] }]}>
+                    <Image
+                      source={require('../../public/assets/TripMemo-parrot-logo-Photoroom_compressed.webp')}
+                      style={styles.trippinArt}
+                      contentFit="contain"
+                    />
+                    </Animated.View>
+                </View>
+              </View>
+              </LinearGradient>
+            </Animated.View>
+          </Pressable>
+        </View>
+
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Missions</Text>
           <FlatList
@@ -436,11 +556,7 @@ export default function ProfileTab() {
           />
         </View>
 
-        {/* Trippin' Game CTA */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Play</Text>
-          <Button title="Play Trippin’" onPress={() => setIsGameVisible(true)} variant="primary" />
-        </View>
+        {/* Old Trippin CTA removed (replaced by banner above) */}
 
         
         {/* Centered Theme Toggle above footer */}
@@ -597,4 +713,22 @@ const styles = StyleSheet.create({
   modalTitle: { ...TYPOGRAPHY.styles.h3, marginBottom: SPACING.md },
   modalAvatar: { width: 96, height: 96, borderRadius: 48, borderWidth: 2, marginBottom: SPACING.sm },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: SPACING.sm, marginTop: SPACING.md },
+
+  // Trippin CTA styles
+  trippinCard: { borderRadius: 18, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg, paddingTop: SPACING.md, overflow: 'hidden' },
+  trippinContentRow: { flexDirection: 'row', alignItems: 'center' },
+  trippinBadgeRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
+  trippinBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  trippinBadgeText: { ...TYPOGRAPHY.styles.caption, color: '#111827', fontWeight: '800' },
+  trippinTitle: { ...TYPOGRAPHY.styles.h2, color: '#FFFFFF', fontWeight: '900', letterSpacing: 0.3, fontFamily: 'MagnoliaScript', fontSize: 56, lineHeight: 58, marginBottom: SPACING.xs },
+  trippinSubtitle: { ...TYPOGRAPHY.styles.bodySmall, color: 'rgba(255,255,255,0.9)', opacity: 0.9, marginTop: 2, lineHeight: 18 },
+  trippinCTAButtons: { flexDirection: 'row', gap: 8, marginTop: SPACING.md },
+  trippinPlayPill: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
+  trippinPlayPillText: { ...TYPOGRAPHY.styles.buttonSmall, color: '#111827', fontWeight: '900' },
+  trippinArtWrap: { width: 140, height: 140, marginLeft: 12, alignItems: 'center', justifyContent: 'center', transform: [{ translateX: 10 }] },
+  trippinArtCircle: { position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
+  trippinArtCircleOuter: { position: 'absolute', width: 134, height: 134, borderRadius: 67, backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  trippinArtShadowWrap: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
+  trippinArt: { width: 140, height: 140, transform: [{ rotate: '-10deg' }] },
+  trippinShimmerBand: { position: 'absolute', top: -28, bottom: -28, width: 140, backgroundColor: 'transparent', shadowColor: '#ffffff', shadowOpacity: 0.18, shadowRadius: 18 },
 });

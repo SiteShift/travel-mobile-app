@@ -6,17 +6,22 @@ export type LevelingState = {
 
 const STORAGE_KEY = 'leveling_v1_state';
 const XP_PER_LEVEL = 100; // simple linear curve: every 100 XP → next level
+const MAX_LEVEL = 10; // hard cap
 
 export const computeLevelFromXp = (xp: number): number => {
-	if (!Number.isFinite(xp) || xp <= 0) return 1;
-	return Math.floor(xp / XP_PER_LEVEL) + 1;
+    if (!Number.isFinite(xp) || xp <= 0) return 1;
+    const raw = Math.floor(xp / XP_PER_LEVEL) + 1;
+    // Clamp to max level
+    return Math.max(1, Math.min(MAX_LEVEL, raw));
 };
 
 export const xpToNextLevel = (xp: number): { currentLevel: number; currentLevelXp: number; nextLevelXp: number; remaining: number } => {
-	const level = computeLevelFromXp(xp);
-	const currentLevelXp = (level - 1) * XP_PER_LEVEL;
-	const nextLevelXp = level * XP_PER_LEVEL;
-	return { currentLevel: level, currentLevelXp, nextLevelXp, remaining: Math.max(0, nextLevelXp - xp) };
+    const level = computeLevelFromXp(xp);
+    const currentLevelXp = (level - 1) * XP_PER_LEVEL;
+    // At max level, freeze the threshold so the UI shows full bar and no remaining
+    const nextLevelXp = level >= MAX_LEVEL ? currentLevelXp : level * XP_PER_LEVEL;
+    const remaining = level >= MAX_LEVEL ? 0 : Math.max(0, nextLevelXp - xp);
+    return { currentLevel: level, currentLevelXp, nextLevelXp, remaining };
 };
 
 export async function getLevelingState(): Promise<LevelingState> {
