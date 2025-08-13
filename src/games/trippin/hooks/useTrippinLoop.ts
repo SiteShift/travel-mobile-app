@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Easing } from 'react-native';
 import { Pipe, Stamp, TrippinConfig, GameState } from '../types';
 
 export type LoopState = {
@@ -47,6 +46,10 @@ export function useTrippinLoop(
   const lastTsRef = React.useRef<number | null>(null);
   const speedRef = React.useRef<number>(config.speed);
   const gapRef = React.useRef<number>(config.gapHeight);
+
+  // Constants derived from static inputs to avoid recomputation every frame
+  const BIRD_X = React.useMemo(() => Math.round(screenWidth * 0.25), [screenWidth]);
+  const HALF_SIZE = React.useMemo(() => config.birdSize / 2, [config.birdSize]);
 
   const spawnInitial = React.useCallback(() => {
     const startX = screenWidth + config.spawnOffset;
@@ -137,8 +140,9 @@ export function useTrippinLoop(
   const endGame = React.useCallback((finalScore: number) => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
-    setState(s => ({ ...s, state: 'gameover' }));
-    onGameOver?.(finalScore, false);
+    try {
+      onGameOver?.(finalScore, false);
+    } catch {}
   }, [onGameOver]);
 
   const tick = React.useCallback((dt: number) => {
@@ -147,75 +151,91 @@ export function useTrippinLoop(
 
       // Ramp difficulty
       speedRef.current = clamp(speedRef.current + config.speedRampPerSec * dt, config.speed, config.maxSpeed);
-      gapRef.current = clamp(gapRef.current - config.gapShrinkPerSec * dt, config.minGapHeight, config.gapHeight);
+      if (config.gapShrinkPerSec !== 0) {
+        gapRef.current = clamp(
+          gapRef.current - config.gapShrinkPerSec * dt,
+          config.minGapHeight,
+          config.gapHeight
+        );
+      }
 
       // Physics
       let velocityY = clamp(prev.velocityY + config.gravity * dt, -config.terminalVelocity, config.terminalVelocity);
       let birdY = clamp(prev.birdY + velocityY * dt, 0, screenHeight - config.floorPadding);
 
-      // Move pipes and stamps
-      const pipes = prev.pipes.map(p => ({ ...p, x: p.x - speedRef.current * dt }));
-      const stamps = prev.stamps.map(s => ({ ...s, x: s.x - speedRef.current * dt }));
-
-      // Despawn off-screen
-      const alivePipes = pipes.filter(p => p.x + config.pipeWidth > -40);
-      const aliveStamps = stamps.filter(s => s.x > -40);
+      // Move and keep on-screen pipes and stamps using simple for-loops to reduce allocations
+      const currentSpeed = speedRef.current;
+      const pipes: Pipe[] = [];
+      const stamps: Stamp[] = [];
+      for (let i = 0; i < prev.pipes.length; i++) {
+        const p = prev.pipes[i];
+        const newX = p.x - currentSpeed * dt;
+        if (newX + config.pipeWidth > -40) {
+          // retain existing object details, only update x
+          pipes.push(p.scored ? { ...p, x: newX } : { id: p.id, x: newX, gapY: p.gapY, scored: p.scored });
+        }
+      }
+      for (let i = 0; i < prev.stamps.length; i++) {
+        const s = prev.stamps[i];
+        const newX = s.x - currentSpeed * dt;
+        if (newX > -40) {
+          stamps.push(s.taken ? { ...s, x: newX } : { id: s.id, x: newX, y: s.y, taken: s.taken });
+        }
+      }
 
       // Spawn new pipes when last is far enough left
-      const needSpawn = alivePipes.length === 0 || (alivePipes[alivePipes.length - 1].x < screenWidth);
+      const needSpawn = pipes.length === 0 || (pipes[pipes.length - 1].x < screenWidth);
       if (needSpawn) {
-        const lastX = alivePipes.length ? alivePipes[alivePipes.length - 1].x : screenWidth + config.spawnOffset;
+        const lastX = pipes.length ? pipes[pipes.length - 1].x : screenWidth + config.spawnOffset;
         const x = Math.max(lastX + config.pipeSpacing, screenWidth + config.spawnOffset);
         const gapY = Math.round(screenHeight * 0.3 + Math.random() * (screenHeight * 0.4));
-        alivePipes.push({ id: `p_${Date.now()}`, x, gapY });
+        pipes.push({ id: `p_${Date.now()}`, x, gapY });
         if (Math.random() < config.stampChance) {
-          aliveStamps.push({ id: `s_${Date.now()}`, x: x + config.pipeWidth + 24, y: gapY, taken: false });
+          stamps.push({ id: `s_${Date.now()}`, x: x + config.pipeWidth + 24, y: gapY, taken: false });
         }
       }
 
       // Collision + scoring
       let score = prev.score;
       let streak = prev.streak;
-      const birdX = Math.round(screenWidth * 0.25);
-      const half = config.birdSize / 2;
-      const birdTop = birdY - half;
-      const birdBottom = birdY + half;
+      const birdTop = birdY - HALF_SIZE;
+      const birdBottom = birdY + HALF_SIZE;
 
       let collided = false;
-      const newPipes = alivePipes.map(p => {
+      for (let i = 0; i < pipes.length; i++) {
+        const p = pipes[i];
         const pipeLeft = p.x;
         const pipeRight = p.x + config.pipeWidth;
         const gapTop = p.gapY - gapRef.current / 2;
         const gapBottom = p.gapY + gapRef.current / 2;
-        const withinX = birdX + half > pipeLeft && birdX - half < pipeRight;
+        const withinX = BIRD_X + HALF_SIZE > pipeLeft && BIRD_X - HALF_SIZE < pipeRight;
         if (withinX) {
           if (birdTop < gapTop || birdBottom > gapBottom) {
             collided = true;
           }
         }
         // Scoring when we pass the pipe center
-        if (!p.scored && pipeRight < birdX - half) {
+        if (!p.scored && pipeRight < BIRD_X - HALF_SIZE) {
           score += 1;
           const centerDist = Math.abs(birdY - p.gapY);
           if (centerDist < 12) streak += 1; else streak = 0;
-          return { ...p, scored: true };
+          pipes[i] = { ...p, scored: true };
         }
-        return p;
-      });
+      }
 
       // Stamp pickups
       let didCollect = false;
-      const newStamps = aliveStamps.map(s => {
-        if (s.taken) return s;
-        const dx = Math.abs(s.x - birdX);
+      for (let i = 0; i < stamps.length; i++) {
+        const s = stamps[i];
+        if (s.taken) continue;
+        const dx = Math.abs(s.x - BIRD_X);
         const dy = Math.abs(s.y - birdY);
         if (dx < 18 && dy < 18) {
           score += 3;
           didCollect = true;
-          return { ...s, taken: true };
+          stamps[i] = { ...s, taken: true };
         }
-        return s;
-      });
+      }
 
       if (collided) {
         // Hard stop
@@ -228,8 +248,8 @@ export function useTrippinLoop(
         state: 'running',
         birdY,
         velocityY,
-        pipes: newPipes,
-        stamps: newStamps,
+        pipes,
+        stamps,
         score,
         streak,
         elapsed,

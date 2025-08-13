@@ -13,6 +13,7 @@ export default function RootLayout() {
     // New display fonts for Trip Book cover and polaroid caption
     'TimesCondensed': require('../public/assets/Times New Roman MT Condensed Regular.otf'),
     'ZingScriptRust': require('../public/assets/zing.script-rust-semibold-demo-base.otf'),
+    'MagnoliaScript': require('../public/assets/Magnolia Script.otf'),
   });
 
   if (!loaded && !error) {
