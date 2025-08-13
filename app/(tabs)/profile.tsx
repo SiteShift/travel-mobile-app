@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Switch, FlatList, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated, FlatList, Modal, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
@@ -40,6 +40,7 @@ const achievements = [
 export default function ProfileTab() {
   const { colors, isDark, toggleTheme } = useTheme();
   const animatedProgress = React.useRef(new Animated.Value(0)).current;
+  const themeAnim = React.useRef(new Animated.Value(isDark ? 1 : 0)).current;
   const [missions, setMissions] = React.useState<{ id: string; title: string; rewardXp: number; maxProgress: number; progress: number }[]>([]);
   const [xpSummary, setXpSummary] = React.useState<{ level: number; gained: number; span: number }>({ level: 1, gained: 0, span: 100 });
   const [avatarUri, setAvatarUri] = React.useState(user.avatar);
@@ -57,6 +58,16 @@ export default function ProfileTab() {
       useNativeDriver: false,
     }).start();
   }, [xpSummary.gained, xpSummary.span]);
+
+  // Animate theme toggle knob when theme changes
+  React.useEffect(() => {
+    Animated.timing(themeAnim, {
+      toValue: isDark ? 1 : 0,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [isDark]);
 
   React.useEffect(() => {
     (async () => {
@@ -154,7 +165,7 @@ export default function ProfileTab() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SPACING.xxxl + SPACING.xl + SPACING.sm + SPACING.xs + SPACING.xs }}>
         <View style={styles.header}>
           <Pressable
             onPress={() => setIsEditProfileVisible(true)}
@@ -234,28 +245,32 @@ export default function ProfileTab() {
           />
         </View>
 
-        {/* Theme Toggle Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Appearance</Text>
-          <View style={[styles.themeToggleContainer, { backgroundColor: colors.surface.secondary }]}>
-            <View style={styles.themeToggleContent}>
-              <Icon name={isDark ? 'moon' : 'sun'} size="lg" color={colors.primary[500]} />
-              <View style={styles.themeToggleText}>
-                <Text style={[styles.themeToggleTitle, { color: colors.text.primary }]}>
-                  {isDark ? 'Dark Mode' : 'Light Mode'}
-                </Text>
-                <Text style={[styles.themeToggleSubtitle, { color: colors.text.secondary }]}>
-                  Switch between light and dark themes
-                </Text>
-              </View>
-              <Switch
-                value={isDark}
-                onValueChange={toggleTheme}
-                trackColor={{ false: colors.border.secondary, true: colors.primary[500] }}
-                thumbColor={isDark ? '#FFFFFF' : '#FFFFFF'}
-              />
+        
+        {/* Centered Theme Toggle above footer */}
+        <View style={styles.themeToggleWrapper}>
+          <Pressable
+            onPress={toggleTheme}
+            accessibilityLabel="Toggle light or dark mode"
+            style={[
+              styles.themeTogglePill,
+              { backgroundColor: colors.surface.secondary, borderColor: colors.border.secondary }
+            ]}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.themeToggleKnob,
+                {
+                  backgroundColor: isDark ? '#6b7280' : '#f5a66b',
+                  transform: [{ translateX: themeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 66] }) }],
+                },
+              ]}
+            />
+            <View style={styles.themeToggleIconsRow}>
+              <Icon name={'sun'} size="md" color={isDark ? colors.text.tertiary : '#FFFFFF'} />
+              <Icon name={'moon'} size="md" color={isDark ? '#FFFFFF' : colors.text.tertiary} />
             </View>
-          </View>
+          </Pressable>
         </View>
 
         <View style={styles.footer}>
@@ -317,7 +332,7 @@ const styles = StyleSheet.create({
   statValue: { ...TYPOGRAPHY.styles.h3, marginVertical: SPACING.xs },
   statLabel: { ...TYPOGRAPHY.styles.body },
 
-  section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.xl },
+  section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.lg },
   sectionTitle: { ...TYPOGRAPHY.styles.h4, marginBottom: SPACING.md },
   achievementsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16 },
   badgeContainer: { alignItems: 'center', width: '22%' },
@@ -325,28 +340,12 @@ const styles = StyleSheet.create({
   badgeTitle: { ...TYPOGRAPHY.styles.caption, marginTop: SPACING.sm, textAlign: 'center' },
   
   // Theme Toggle Styles
-  themeToggleContainer: {
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-  },
-  themeToggleContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  themeToggleText: {
-    flex: 1,
-  },
-  themeToggleTitle: {
-    ...TYPOGRAPHY.styles.body,
-    fontWeight: '600',
-    marginBottom: SPACING.xs,
-  },
-  themeToggleSubtitle: {
-    ...TYPOGRAPHY.styles.bodySmall,
-  },
+  themeToggleWrapper: { alignItems: 'center', marginTop: SPACING.md, marginBottom: SPACING.md },
+  themeTogglePill: { width: 122, height: 44, borderRadius: 22, padding: 4, borderWidth: 1, justifyContent: 'center' },
+  themeToggleIconsRow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
+  themeToggleKnob: { position: 'absolute', left: 4, width: 48, height: 36, borderRadius: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 3 },
   
-  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: SPACING.lg },
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingTop: SPACING.lg - SPACING.xs, paddingBottom: SPACING.lg },
   footerLink: { ...TYPOGRAPHY.styles.body },
   footerSeparator: { marginHorizontal: SPACING.sm },
   // Missions grid
