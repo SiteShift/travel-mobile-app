@@ -13,6 +13,7 @@ import { SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../src/constants
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import TrippinGame from '../../src/games/trippin/TrippinGame';
 
 // --- MOCK DATA ---
 const user = {
@@ -52,6 +53,7 @@ export default function ProfileTab() {
   const [uniqueCountries, setUniqueCountries] = React.useState<number>(0);
   const [tripCount, setTripCount] = React.useState<number>(0);
   const [photoCount, setPhotoCount] = React.useState<number>(0);
+  const [isGameVisible, setIsGameVisible] = React.useState(false);
 
   // Level badge images removed from XP bar sides
 
@@ -419,6 +421,12 @@ export default function ProfileTab() {
           />
         </View>
 
+        {/* Trippin' Game CTA */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Play</Text>
+          <Button title="Play Trippin’" onPress={() => setIsGameVisible(true)} variant="primary" />
+        </View>
+
         
         {/* Centered Theme Toggle above footer */}
         <View style={styles.themeToggleWrapper}>
@@ -482,6 +490,17 @@ export default function ProfileTab() {
           </View>
         </Modal>
       </ScrollView>
+
+      {/* Trippin' Fullscreen Modal */}
+      <Modal
+        transparent={false}
+        visible={isGameVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setIsGameVisible(false)}
+      >
+        <TrippinGame onClose={() => setIsGameVisible(false)} />
+      </Modal>
     </SafeAreaView>
   );
 }

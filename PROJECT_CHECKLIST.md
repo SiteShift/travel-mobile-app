@@ -698,3 +698,12 @@ Building a premium travel diary mobile app with map-centric design and "Airbnb-l
 ## Recent Update: 2025-08-13 Photo Persistence + Profile Sync
 - [x] Persist trip day photos to stable app storage and sync counts
   ✅ Implemented 2025-08-13: Added file persistence for selected images into `FileSystem.documentDirectory` per-trip/day to prevent disappearing photos when revisiting trips. Ensured every photo add/change/delete and caption save updates `trip_<id>` with `days` and `totalPhotos`, so Profile stats refresh correctly on focus. Located in `src/screens/TripBookScreen.tsx`.
+
+## Recent Update: 2025-08-13 Trippin’ Mini-Game (MVP)
+- [x] Implemented Trippin’ (Flappy-style) mini-game with local high score persistence
+  ✅ Implemented 2025-08-13: Added a polished tap-to-fly arcade game launched from Profile as a fullscreen modal.
+  - Tap impulse, gravity, collision with landmark-style pipes, stamp collectibles (+3)
+  - Score HUD, countdown start, pause/resume, game over with best score
+  - Theme-aware UI, haptics on flap/crash, 60fps loop using requestAnimationFrame
+  - Files: `src/games/trippin/TrippinGame.tsx`, `src/games/trippin/hooks/useTrippinLoop.ts`, `src/games/trippin/types.ts`
+  - Entry: `Play Trippin’` button in `app/(tabs)/profile.tsx`
