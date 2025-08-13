@@ -17,6 +17,7 @@ export default function CreateTripScreen() {
 
   const [title, setTitle] = useState(initialTitle ? String(initialTitle) : '');
   const [description, setDescription] = useState('');
+  const [country, setCountry] = useState('');
   const [startDate, setStartDate] = useState(initialStart ? new Date(initialStart as string) : new Date());
   const [endDate, setEndDate] = useState(initialEnd ? new Date(initialEnd as string) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
   const [isSaving, setIsSaving] = useState(false);
@@ -39,6 +40,10 @@ export default function CreateTripScreen() {
       Alert.alert('Missing Info', 'Please add a title.');
       return;
     }
+    if (!country.trim()) {
+      Alert.alert('Missing Info', 'Please add a location (country).');
+      return;
+    }
     setIsSaving(true);
     try {
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
@@ -59,9 +64,38 @@ export default function CreateTripScreen() {
         coverImage: finalCover,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        country: 'Adventure',
+        country: country.trim(),
       };
       await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(simpleTrip));
+
+      // Leveling + mission progress
+      try {
+        const leveling = require('../src/utils/leveling');
+        await leveling.awardTripCreated();
+        await leveling.progressMission('add_3_trips', 1);
+        // Recompute unique countries and update mission
+        const keys: string[] = await AsyncStorage.getAllKeys();
+        const tripKeys = keys.filter((k: string) => k.startsWith('trip_'));
+        const all = await AsyncStorage.multiGet(tripKeys);
+        const countries = new Set<string>();
+        for (const [, v] of all) {
+          if (!v) continue;
+          try {
+            const parsed = JSON.parse(v);
+            if (parsed?.country && typeof parsed.country === 'string') {
+              countries.add(String(parsed.country).trim());
+            }
+          } catch {}
+        }
+        const uniqueCount = countries.size;
+        const missions = await leveling.getMissions();
+        const m = missions.find((m: any) => m.id === 'visit_5_countries');
+        const currentProgress = m ? m.progress : 0;
+        const delta = Math.max(0, uniqueCount - currentProgress);
+        if (delta > 0) {
+          await leveling.progressMission('visit_5_countries', delta);
+        }
+      } catch {}
 
       // Show loading animation overlay, then wait ~3 seconds before navigating
       Animated.timing(overlayOpacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
@@ -155,6 +189,21 @@ export default function CreateTripScreen() {
                 onFocus={() => setIsTitleFocused(true)}
                 onBlur={() => setIsTitleFocused(false)}
                 // selectionColor applies to both caret and selection highlight on RN
+                selectionColor={BRAND_ORANGE}
+              />
+            </Animated.View>
+
+            {/* Location (Country) */}
+            <Animated.View style={[styles.group, { opacity: fadeTitleGroup }]}> 
+              <Text style={[styles.label, { color: colors.text.primary }]}>Location (Country)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surface.primary, color: colors.text.primary, borderColor: colors.border.primary }, styles.inputDashed]}
+                value={country}
+                onChangeText={setCountry}
+                placeholder="e.g., United States"
+                placeholderTextColor={isDark ? '#9A9A9A' : '#A3A3A3'}
+                autoCapitalize="words"
+                maxLength={56}
                 selectionColor={BRAND_ORANGE}
               />
             </Animated.View>

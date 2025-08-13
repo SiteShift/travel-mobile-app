@@ -71,7 +71,7 @@ export async function getMissions(): Promise<Mission[]> {
 	try {
 		const raw = await AsyncStorage.getItem(MISSIONS_KEY);
 		// default missions
-		const defaults: Mission[] = [
+        const defaults: Mission[] = [
 			{ id: 'share_app', title: 'Share the app', rewardXp: 100, maxProgress: 1, progress: 0 },
 			{ id: 'add_3_trips', title: 'Create 3 trips', rewardXp: 150, maxProgress: 3, progress: 0 },
 			{ id: 'first_trip', title: 'Create your first trip', rewardXp: 50, maxProgress: 1, progress: 0 },
@@ -82,6 +82,8 @@ export async function getMissions(): Promise<Mission[]> {
 			{ id: 'first_caption', title: 'Add your first caption', rewardXp: 20, maxProgress: 1, progress: 0 },
 			{ id: 'weekly_login', title: 'Open the app 7 days in a row', rewardXp: 70, maxProgress: 7, progress: 0 },
 			{ id: 'add_profile_picture', title: 'Add a profile picture', rewardXp: 40, maxProgress: 1, progress: 0 },
+            // New: country exploration mission (progress equals unique countries)
+            { id: 'visit_5_countries', title: 'Visit 5 countries', rewardXp: 150, maxProgress: 5, progress: 0 },
 		];
 		const removedIds = new Set<string>(['map_explorer', 'entry_writer', 'gallery_curator']);
 		if (!raw) {

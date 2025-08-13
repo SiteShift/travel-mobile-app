@@ -11,6 +11,7 @@ import {
   FlatList,
   Modal,
   Alert,
+  Share,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -99,7 +100,8 @@ export default function HomeTab() {
   const [showTripCreationModal, setShowTripCreationModal] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [showTripOptionsModal, setShowTripOptionsModal] = useState(false);
-  const [showEditCoverModal, setShowEditCoverModal] = useState(false);
+  const [showEditTripModal, setShowEditTripModal] = useState(false);
+  const [editInitialData, setEditInitialData] = useState<any>(null);
   const [showLevelsModal, setShowLevelsModal] = useState(false);
   const [carouselLocked, setCarouselLocked] = useState(false);
   const [pendingOptionsTripId, setPendingOptionsTripId] = useState<string | null>(null);
@@ -324,67 +326,123 @@ export default function HomeTab() {
     );
   }, [selectedTripId, trips, updateTripsData]);
 
-  const handleEditCover = useCallback(() => {
+  const handleEditTrip = useCallback(() => {
+    if (!selectedTripId) return;
     setShowTripOptionsModal(false);
-    // Keep selectedTripId for updating the cover later
-    setShowEditCoverModal(true);
-  }, []);
+    const trip = trips.find(t => t.id === selectedTripId);
+    if (!trip) return;
+    setEditInitialData({
+      title: trip.title,
+      description: trip.description || '',
+      image: typeof trip.coverImage === 'string' ? trip.coverImage : (trip.image?.uri || undefined),
+      startDate: trip.startDate || new Date(),
+      endDate: trip.endDate || new Date(),
+      country: trip.country || '',
+    });
+    setShowEditTripModal(true);
+  }, [selectedTripId, trips]);
 
-  const handleCoverImageSelect = useCallback(async (media: MediaItem[]) => {
-    if (!selectedTripId || media.length === 0) return;
-
-    const newCoverImage = media[0].uri;
-    
+  const handleSubmitEditTrip = useCallback(async (updated: {
+    title: string;
+    description: string;
+    image: string;
+    startDate: Date;
+    endDate: Date;
+    country: string;
+  }) => {
+    if (!selectedTripId) return;
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      
-      // Update AsyncStorage
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       const existingData = await AsyncStorage.getItem(`trip_${selectedTripId}`);
-      
       if (existingData) {
         const tripData = JSON.parse(existingData);
-        tripData.coverImage = newCoverImage;
+        tripData.title = updated.title;
+        tripData.description = updated.description;
+        tripData.coverImage = updated.image;
+        // Keep dates as-is; or update if provided
+        tripData.startDate = tripData.startDate || updated.startDate.toISOString();
+        tripData.endDate = tripData.endDate || updated.endDate.toISOString();
+        if (updated.country) tripData.country = updated.country;
         await AsyncStorage.setItem(`trip_${selectedTripId}`, JSON.stringify(tripData));
-        
-        // Update local state
-        setTrips(prevTrips => 
-          prevTrips.map(trip => {
-            if (trip.id === selectedTripId) {
-              return {
-                ...trip,
-                image: { uri: newCoverImage },
-                coverImage: newCoverImage,
-              };
-            }
-            return trip;
-          })
-        );
-
-        setData(prevData => 
-          prevData.map(trip => {
-            if (trip.id === selectedTripId) {
-              return {
-                ...trip,
-                image: { uri: newCoverImage },
-                coverImage: newCoverImage,
-              };
-            }
-            return trip;
-          })
-        );
-
-        console.log('✅ Cover image updated successfully for trip:', selectedTripId);
-        Alert.alert('Success', 'Cover image updated successfully!');
       }
+      // Update local state arrays
+      setTrips(prev => prev.map(t => t.id === selectedTripId ? {
+        ...t,
+        title: updated.title,
+        description: updated.description,
+        image: { uri: updated.image },
+        coverImage: updated.image,
+        country: updated.country || t.country,
+      } : t));
+      setData(prev => prev.map(t => t.id === selectedTripId ? {
+        ...t,
+        title: updated.title,
+        description: updated.description,
+        image: { uri: updated.image },
+        coverImage: updated.image,
+        country: updated.country || t.country,
+      } : t));
+      Alert.alert('Success', 'Trip updated successfully!');
+      // Recompute unique countries and update mission progress
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const keys = await AsyncStorage.getAllKeys();
+        const tripKeys = keys.filter((k: string) => k.startsWith('trip_'));
+        const all = await AsyncStorage.multiGet(tripKeys);
+        const countries = new Set<string>();
+        for (const [, v] of all) {
+          if (!v) continue;
+          try {
+            const parsed = JSON.parse(v);
+            if (parsed?.country && typeof parsed.country === 'string') {
+              countries.add(String(parsed.country).trim());
+            }
+          } catch {}
+        }
+        const uniqueCount = countries.size;
+        const leveling = require('../../src/utils/leveling');
+        const missions = await leveling.getMissions();
+        const m = missions.find((m: any) => m.id === 'visit_5_countries');
+        const currentProgress = m ? m.progress : 0;
+        const delta = Math.max(0, uniqueCount - currentProgress);
+        if (delta > 0) {
+          await leveling.progressMission('visit_5_countries', delta);
+        }
+      } catch {}
     } catch (error) {
-      console.error('❌ Error updating cover image:', error);
-      Alert.alert('Error', 'Failed to update cover image. Please try again.');
+      console.error('❌ Error updating trip:', error);
+      Alert.alert('Error', 'Failed to update trip. Please try again.');
     } finally {
-      setShowEditCoverModal(false);
+      setShowEditTripModal(false);
       setSelectedTripId(null);
+      setEditInitialData(null);
     }
   }, [selectedTripId]);
+
+  const handleShareTrip = useCallback(async () => {
+    try {
+      setShowTripOptionsModal(false);
+      const trip = trips.find(t => t.id === selectedTripId);
+      const tripTitle = trip?.title || 'My Trip';
+      const tripId = selectedTripId || '';
+      const link = `https://traveljournal.app/trip/${tripId}`;
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await Share.share(
+        {
+          title: `Check out my trip: ${tripTitle}`,
+          message: `${tripTitle}\n\n${link}`,
+          url: link, // iOS uses this field
+        },
+        {
+          dialogTitle: `Share ${tripTitle}`,
+          subject: tripTitle,
+        } as any
+      );
+    } catch (error) {
+      console.error('❌ Error sharing trip:', error);
+    }
+  }, [selectedTripId, trips]);
 
   const handleTripCreation = useCallback(async (tripData: {
     title: string;
@@ -392,6 +450,7 @@ export default function HomeTab() {
     image: string;
     startDate: Date;
     endDate: Date;
+    country: string;
   }) => {
     const tripId = `trip-${Date.now()}`;
     
@@ -403,7 +462,7 @@ export default function HomeTab() {
       image: { uri: tripData.image },
       buttonText: 'View Trip',
       gradient: ['rgba(0,0,0,0)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.9)'],
-      country: 'Adventure',
+      country: tripData.country || 'Adventure',
       blurhash: 'LGF5?xYk^6#M@-5c,1J5Or]0Rj',
       dates: {
         start: tripData.startDate.toISOString(),
@@ -426,7 +485,7 @@ export default function HomeTab() {
         coverImage: tripData.image,
         startDate: tripData.startDate.toISOString(),
         endDate: tripData.endDate.toISOString(),
-        country: 'Adventure',
+        country: tripData.country || 'Adventure',
       };
       
       await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(simpleTrip));
@@ -1107,7 +1166,7 @@ export default function HomeTab() {
       <AnimatedBookCreation
         visible={showTripCreationModal}
         onClose={() => setShowTripCreationModal(false)}
-        onCreateTrip={handleTripCreation}
+        onCreateTrip={handleTripCreation as any}
       />
       
       {/* Trip Options Modal */}
@@ -1127,11 +1186,20 @@ export default function HomeTab() {
           <View style={[styles.tripOptionsModal, { backgroundColor: colors.surface.primary }]}>
             <TouchableOpacity 
               style={[styles.tripOptionItem, { borderBottomColor: colors.border.primary }]}
-              onPress={handleEditCover}
+              onPress={handleEditTrip}
             >
-              <Icon name="image" size="md" color={colors.text.primary} />
+              <Icon name="edit" size="md" color={colors.text.primary} />
               <Text style={[styles.tripOptionText, { color: colors.text.primary }]}>
-                Edit Cover
+                Edit Trip
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tripOptionItem, { borderBottomColor: colors.border.primary }]}
+              onPress={handleShareTrip}
+            >
+              <Icon name="share" size="md" color={colors.text.primary} />
+              <Text style={[styles.tripOptionText, { color: colors.text.primary }]}>
+                Share Trip
               </Text>
             </TouchableOpacity>
             
@@ -1148,20 +1216,20 @@ export default function HomeTab() {
         </Pressable>
       </Modal>
       
-      {/* Edit Cover Media Picker */}
-      <MediaPicker
-        visible={showEditCoverModal}
-        onClose={() => {
-          setShowEditCoverModal(false);
-          setSelectedTripId(null);
-        }}
-        onMediaSelect={handleCoverImageSelect}
-        maxSelection={1}
-        allowsEditing={true}
-        includeVideos={false}
-        showCamera={true}
-        showLibrary={true}
+      {/* Edit Trip Modal */}
+      <TripCreationModal
+        visible={showEditTripModal}
+        onClose={() => { setShowEditTripModal(false); setEditInitialData(null); setSelectedTripId(null); }}
+        onCreateTrip={() => {}}
+        mode="edit"
+        headerTitle="Edit Trip"
+        submitLabel="Save"
+        showDates={false}
+        initialData={editInitialData || undefined}
+        onSubmitTrip={handleSubmitEditTrip}
       />
+
+      {/* Native share handled directly via Share API */}
       
       {/* Levels Modal */}
       {renderLevelsModal()}

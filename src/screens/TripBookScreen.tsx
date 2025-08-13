@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { Icon } from '../components/Icon';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
@@ -78,6 +79,34 @@ async function ensureFileUriAsync(originalUri: string): Promise<string> {
   return originalUri;
 }
 
+// Copy an image/video into a stable, app-managed location so it persists across navigations/app restarts.
+// Returns a file:// URI inside the app's documentDirectory. Falls back to the best available URI if copy fails.
+async function persistAssetToTripDir(originalUri: string, tripId: string, day: number): Promise<string> {
+  try {
+    const fileUri = await ensureFileUriAsync(originalUri);
+    const guessedExt = (() => {
+      try {
+        const clean = fileUri.split('?')[0];
+        const ext = clean.includes('.') ? clean.split('.').pop() : '';
+        return (ext || 'jpg').toLowerCase();
+      } catch { return 'jpg'; }
+    })();
+
+    const baseDir = `${FileSystem.documentDirectory}trips/${tripId}/day-${day}/`;
+    try { await FileSystem.makeDirectoryAsync(baseDir, { intermediates: true }); } catch {}
+    const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.${guessedExt}`;
+    const dest = baseDir + filename;
+    try {
+      await FileSystem.copyAsync({ from: fileUri, to: dest });
+      return dest;
+    } catch {
+      return fileUri;
+    }
+  } catch {
+    return originalUri;
+  }
+}
+
 export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   const { colors } = useTheme();
   const router = useRouter();
@@ -91,6 +120,49 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [optionsSheet, setOptionsSheet] = useState<{ visible: boolean; day: number | null; index: number | null }>({ visible: false, day: null, index: null });
   const [captionDrafts, setCaptionDrafts] = useState<Record<string, string>>({});
+  
+  // Persist current dayPhotos into AsyncStorage under trip_<id> using the minimal structure
+  const persistAllDayPhotos = useCallback(async (all: Record<number, DayPhoto[]>) => {
+    try {
+      const effectiveTripId = trip?.id ?? (tripId ? String(tripId) : undefined);
+      if (!effectiveTripId) return;
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const stored = await AsyncStorage.getItem(`trip_${effectiveTripId}`);
+      const base = stored ? JSON.parse(stored) : {};
+      // Build days array using the provided state; fall back to the highest day index if dates are not ready
+      const start = (trip?.startDate instanceof Date ? trip.startDate : (base?.startDate ? new Date(base.startDate) : new Date()));
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const maxDay = Math.max(1, ...Object.keys(all).map(k => Number(k)).filter(n => Number.isFinite(n) && n > 0));
+      const days = [] as any[];
+      for (let i = 1; i <= maxDay; i++) {
+        const date = new Date(start.getTime() + (i - 1) * msPerDay);
+        const list = all[i] || [];
+        const memories = list.map((p) => ({
+          id: p.id,
+          uri: p.uri,
+          caption: p.caption || '',
+          timestamp: new Date().toISOString(),
+          aspectRatio: 1,
+          crop: p.crop,
+        }));
+        days.push({ day: i, date, memories, location: base.country || 'Adventure' });
+      }
+      const totalPhotos = days.reduce((sum: number, d: any) => sum + (Array.isArray(d.memories) ? d.memories.length : 0), 0);
+      const next = {
+        ...base,
+        id: effectiveTripId,
+        title: base.title || trip?.title || base.title,
+        coverImage: base.coverImage || trip?.coverImage || base.coverImage,
+        startDate: base.startDate || (trip?.startDate?.toISOString?.() || base.startDate),
+        endDate: base.endDate || (trip?.endDate?.toISOString?.() || base.endDate),
+        days,
+        totalPhotos,
+      };
+      await AsyncStorage.setItem(`trip_${effectiveTripId}`, JSON.stringify(next));
+    } catch (e) {
+      console.error('TripBookScreen: persistAllDayPhotos error', e);
+    }
+  }, [trip?.id, trip?.title, trip?.coverImage, trip?.startDate, trip?.endDate, tripId]);
 
   // Horizontal pager
   const scrollRef = useRef<ScrollView>(null);
@@ -131,14 +203,28 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         endDate: t.endDate,
       };
       setTrip(normalizedTrip);
-      // Initialize days photos arrays based on duration
-      const days: Record<number, DayPhoto[]> = {};
-      const start = t.startDate ?? new Date();
-      const end = t.endDate ?? start;
-      const msPerDay = 24 * 60 * 60 * 1000;
-      const total = Math.max(1, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / msPerDay) + 1);
-      for (let i = 1; i <= total; i++) days[i] = [];
-      setDayPhotos(days);
+      // Initialize days photos from storage if present, otherwise empty arrays
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const stored = await AsyncStorage.getItem(`trip_${t.id}`);
+        const days: Record<number, DayPhoto[]> = {};
+        const start = t.startDate ?? new Date();
+        const end = t.endDate ?? start;
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const total = Math.max(1, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / msPerDay) + 1);
+        for (let i = 1; i <= total; i++) days[i] = [];
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed?.days)) {
+            for (const d of parsed.days) {
+              const idx = Number(d?.day) || 1;
+              const list = Array.isArray(d?.memories) ? d.memories : [];
+              days[idx] = list.map((m: any) => ({ id: String(m.id || `${Date.now()}`), uri: m.uri, caption: m.caption || '', crop: m.crop || { scale: 1, offsetX: 0, offsetY: 0 } }));
+            }
+          }
+        }
+        setDayPhotos(days);
+      } catch {}
     })();
   }, [tripId]);
 
@@ -150,6 +236,20 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         const AsyncStorage = require('@react-native-async-storage/async-storage').default;
         const v = await AsyncStorage.getItem(`celebrated_trip_${trip.id}`);
         setHasCelebrated(!!v);
+        // Also try to reload any persisted day photos in case we arrived from cold start
+        const stored = await AsyncStorage.getItem(`trip_${trip.id}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed?.days)) {
+            const days: Record<number, DayPhoto[]> = {};
+            for (const d of parsed.days) {
+              const idx = Number(d?.day) || 1;
+              const list = Array.isArray(d?.memories) ? d.memories : [];
+              days[idx] = list.map((m: any) => ({ id: String(m.id || `${Date.now()}`), uri: m.uri, caption: m.caption || '', crop: m.crop || { scale: 1, offsetX: 0, offsetY: 0 } }));
+            }
+            setDayPhotos(days);
+          }
+        }
       } catch {}
       setCelebrationReady(true);
     })();
@@ -223,7 +323,9 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
             ...p,
             caption: captionDrafts[p.id] ?? p.caption ?? '',
           }));
-          return { ...prev, [currentDayNumber]: updated };
+          const next = { ...prev, [currentDayNumber]: updated };
+          persistAllDayPhotos(next);
+          return next;
         });
         // Clear drafts after save
         setCaptionDrafts({});
@@ -255,10 +357,14 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
       if (res.canceled || !res.assets?.length) return;
       const items: DayPhoto[] = [];
       for (const a of res.assets) {
-        const u = await ensureFileUriAsync(a.uri);
+        const u = await persistAssetToTripDir(a.uri, (trip?.id ? String(trip.id) : String(tripId)), day);
         items.push({ id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, uri: u, caption: '', crop: { scale: 1, offsetX: 0, offsetY: 0 } });
       }
-      setDayPhotos(prev => ({ ...prev, [day]: [...(prev[day] || []), ...items] }));
+      setDayPhotos(prev => {
+        const next = { ...prev, [day]: [...(prev[day] || []), ...items] };
+        persistAllDayPhotos(next);
+        return next;
+      });
       // Leveling: award +1 XP per image added
       try {
         const leveling = require('../utils/leveling');
@@ -416,7 +522,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
               <DraggableFlatList
                 data={photos}
                 keyExtractor={(item) => item.id}
-                onDragEnd={({ data }) => setDayPhotos(prev => ({ ...prev, [day]: data }))}
+                onDragEnd={({ data }) => setDayPhotos(prev => { const next = { ...prev, [day]: data as any }; persistAllDayPhotos(next); return next; })}
                 containerStyle={{ flex: 1, width: '100%' }}
                 contentContainerStyle={{
                   paddingTop: headerHeight + 12,
@@ -430,11 +536,13 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                   const handleCaptionChange = (text: string) => {
                     setCaptionDrafts(prev => ({ ...prev, [id]: text }));
                     setDayPhotos(prev => {
-                      const next = [...(prev[day] || [])];
-                      const target = next[index];
+                      const nextDay = [...(prev[day] || [])];
+                      const target = nextDay[index];
                       if (!target) return prev;
-                      next[index] = { ...target, caption: text } as any;
-                      return { ...prev, [day]: next };
+                      nextDay[index] = { ...target, caption: text } as any;
+                      const next = { ...prev, [day]: nextDay };
+                      persistAllDayPhotos(next);
+                      return next;
                     });
                   };
                   const handleCropChange = (partial: Partial<{ scale: number; offsetX: number; offsetY: number }>) => {
@@ -533,20 +641,24 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                     onUpdateCaption={(text) => {
                       setCaptionDrafts(prev => ({ ...prev, [photo.id]: text }));
                       setDayPhotos(prev => {
-                        const next = [...(prev[day] || [])];
-                        const target = next[i];
+                        const nextDay = [...(prev[day] || [])];
+                        const target = nextDay[i];
                         if (!target) return prev;
-                        next[i] = { ...target, caption: text } as any;
-                        return { ...prev, [day]: next };
+                        nextDay[i] = { ...target, caption: text } as any;
+                        const next = { ...prev, [day]: nextDay };
+                        persistAllDayPhotos(next);
+                        return next;
                       });
                     }}
                     onUpdateCrop={(partial) => {
                       setDayPhotos(prev => {
-                        const next = [...(prev[day] || [])];
-                        const target = next[i];
+                        const nextDay = [...(prev[day] || [])];
+                        const target = nextDay[i];
                         if (!target) return prev;
-                        next[i] = { ...target, crop: { ...target.crop, ...partial } } as any;
-                        return { ...prev, [day]: next };
+                        nextDay[i] = { ...target, crop: { ...target.crop, ...partial } } as any;
+                        const next = { ...prev, [day]: nextDay };
+                        persistAllDayPhotos(next);
+                        return next;
                       });
                     }}
                     onOpenOptions={() => setOptionsSheet({ visible: true, day, index: i })}
@@ -655,11 +767,13 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                   try {
                     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: false, quality: 1, exif: true });
                     if (res.canceled || !res.assets?.length) return;
-                    const u = await ensureFileUriAsync(res.assets[0].uri);
-                    setDayPhotos(prev => ({
-                      ...prev,
-                      [d]: (prev[d] || []).map((p, idx) => (idx === i ? { ...p, uri: u, crop: { scale: 1, offsetX: 0, offsetY: 0 } } : p)),
-                    }));
+                    const newUri = trip?.id ? await persistAssetToTripDir(res.assets[0].uri, trip.id, d) : await ensureFileUriAsync(res.assets[0].uri);
+                    setDayPhotos(prev => {
+                      const updatedDay = (prev[d] || []).map((p, idx) => (idx === i ? { ...p, uri: newUri, crop: { scale: 1, offsetX: 0, offsetY: 0 } } : p));
+                      const next = { ...prev, [d]: updatedDay };
+                      persistAllDayPhotos(next);
+                      return next;
+                    });
                   } finally {
                     setOptionsSheet({ visible: false, day: null, index: null });
                   }
@@ -673,7 +787,11 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                 onPress={() => {
                   const d = optionsSheet.day; const i = optionsSheet.index;
                   if (d == null || i == null) return;
-                  setDayPhotos(prev => ({ ...prev, [d]: (prev[d] || []).filter((_, idx) => idx !== i) }));
+                  setDayPhotos(prev => {
+                    const next = { ...prev, [d]: (prev[d] || []).filter((_, idx) => idx !== i) };
+                    persistAllDayPhotos(next);
+                    return next;
+                  });
                   setOptionsSheet({ visible: false, day: null, index: null });
                 }}
               >

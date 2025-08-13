@@ -694,3 +694,7 @@ Building a premium travel diary mobile app with map-centric design and "Airbnb-l
   - Loads trip data from AsyncStorage key `trip_<id>` created by the trip creation flow
 - [x] Add custom fonts globally
   ✅ Implemented 2025-08-10: Registered fonts in `app/_layout.tsx` as `TimesCondensed` and `ZingScriptRust`.
+
+## Recent Update: 2025-08-13 Photo Persistence + Profile Sync
+- [x] Persist trip day photos to stable app storage and sync counts
+  ✅ Implemented 2025-08-13: Added file persistence for selected images into `FileSystem.documentDirectory` per-trip/day to prevent disappearing photos when revisiting trips. Ensured every photo add/change/delete and caption save updates `trip_<id>` with `days` and `totalPhotos`, so Profile stats refresh correctly on focus. Located in `src/screens/TripBookScreen.tsx`.

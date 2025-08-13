@@ -32,12 +32,14 @@ interface TripFormData {
   image: string | null;
   startDate: Date;
   endDate: Date;
+  country: string;
 }
 
 interface TripFormErrors {
   title?: string;
   image?: string;
   dates?: string;
+  country?: string;
 }
 
 interface TripCreationModalProps {
@@ -49,6 +51,21 @@ interface TripCreationModalProps {
     image: string;
     startDate: Date;
     endDate: Date;
+    country: string;
+  }) => void;
+  // Optional edit mode support
+  mode?: 'create' | 'edit';
+  initialData?: Partial<TripFormData>;
+  headerTitle?: string;
+  submitLabel?: string;
+  showDates?: boolean;
+  onSubmitTrip?: (tripData: {
+    title: string;
+    description: string;
+    image: string;
+    startDate: Date;
+    endDate: Date;
+    country: string;
   }) => void;
 }
 
@@ -56,6 +73,12 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
   visible,
   onClose,
   onCreateTrip,
+  mode = 'create',
+  initialData,
+  headerTitle,
+  submitLabel,
+  showDates = true,
+  onSubmitTrip,
 }) => {
   const { colors } = useTheme();
   
@@ -66,6 +89,7 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
     image: null,
     startDate: new Date(),
     endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    country: '',
   });
   
   const [errors, setErrors] = useState<TripFormErrors>({});
@@ -81,21 +105,22 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
   const slideAnim = useRef(new Animated.Value(screenHeight)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
   
-  // Reset form when modal opens/closes
+  // Reset or prefill form when modal opens/closes
   useEffect(() => {
     if (visible) {
       setFormData({
-        title: '',
-        description: '',
-        image: null,
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        title: (initialData?.title ?? ''),
+        description: (initialData?.description ?? ''),
+        image: (initialData?.image ?? null) as string | null,
+        startDate: (initialData?.startDate ?? new Date()),
+        endDate: (initialData?.endDate ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+        country: (initialData?.country ?? ''),
       });
       setErrors({});
       setIsLoading(false);
       setIsImageLoading(false);
     }
-  }, [visible]);
+  }, [visible, initialData]);
   
   // Animate modal in/out
   useEffect(() => {
@@ -150,13 +175,19 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
       newErrors.image = 'Cover photo is required';
     }
     
-    if (formData.startDate >= formData.endDate) {
-      newErrors.dates = 'End date must be after start date';
+    if (!formData.country.trim()) {
+      newErrors.country = 'Location (country) is required';
+    }
+
+    if (showDates) {
+      if (formData.startDate >= formData.endDate) {
+        newErrors.dates = 'End date must be after start date';
+      }
     }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [formData]);
+  }, [formData, showDates]);
   
   // Permission handling
   const requestPermissions = async () => {
@@ -337,9 +368,14 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
         image: formData.image!,
         startDate: formData.startDate,
         endDate: formData.endDate,
+        country: formData.country.trim(),
       };
       
-      onCreateTrip(tripDataToSend);
+      if (onSubmitTrip) {
+        onSubmitTrip(tripDataToSend);
+      } else {
+        onCreateTrip(tripDataToSend);
+      }
       
       onClose();
       console.log('✅ Trip created:', tripDataToSend.title);
@@ -395,7 +431,7 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.primary }]}>
               <Text style={[styles.headerTitle, { color: colors.text.primary }]}>
-                Create Scrapbook
+                {headerTitle || (mode === 'edit' ? 'Edit Trip' : 'Create Scrapbook')}
               </Text>
               
               <TouchableOpacity
@@ -504,6 +540,35 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
                   </Text>
                 )}
               </View>
+
+              {/* Location (Country) */}
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+                  *Location (Country)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: colors.surface.secondary,
+                      color: colors.text.primary,
+                      borderColor: errors.country ? colors.error[500] : colors.border.secondary,
+                    },
+                  ]}
+                  value={formData.country}
+                  onChangeText={(value) => updateFormData('country', value)}
+                  placeholder="e.g., United States"
+                  placeholderTextColor={colors.text.tertiary}
+                  autoCapitalize="words"
+                  maxLength={56}
+                  accessibilityLabel="Trip country"
+                />
+                {errors.country && (
+                  <Text style={[styles.errorText, { color: colors.error[500] }]}>
+                    {errors.country}
+                  </Text>
+                )}
+              </View>
               
               {/* Description */}
               <View style={styles.section}>
@@ -533,98 +598,96 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
               </View>
               
               {/* Trip Dates */}
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-                  *Trip Dates
-                </Text>
-                
-                <View style={styles.dateContainer}>
-                  {/* From Date */}
-                  <View style={styles.dateSection}>
-                    <Text style={[styles.dateLabel, { color: colors.text.secondary }]}>
-                      From
-                    </Text>
-                    <View style={styles.dateRow}>
-                      <TouchableOpacity
-                        style={[styles.dateButton, { backgroundColor: colors.surface.secondary }]}
-                        onPress={() => handleDateSelect('startDate', -1)}
-                      >
-                        <Icon name="left" size="sm" color={colors.text.secondary} />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={[styles.dateDisplay, { 
-                          backgroundColor: colors.surface.secondary,
-                          borderColor: colors.border.secondary,
-                          borderWidth: 1,
-                        }]}
-                        onPress={() => openDatePicker('startDate')}
-                        accessibilityLabel="Select start date"
-                      >
-                        <View style={styles.dateDisplayContent}>
-                          <Text style={[styles.dateText, { color: colors.text.primary }]}>
-                            {formatDate(formData.startDate)}
-                          </Text>
-                          <Icon name="calendar" size="sm" color={colors.text.secondary} />
-                        </View>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity
-                        style={[styles.dateButton, { backgroundColor: colors.surface.secondary }]}
-                        onPress={() => handleDateSelect('startDate', 1)}
-                      >
-                        <Icon name="right" size="sm" color={colors.text.secondary} />
-                      </TouchableOpacity>
+              {showDates && (
+                <View style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+                    *Trip Dates
+                  </Text>
+                  
+                  <View style={styles.dateContainer}>
+                    {/* From Date */}
+                    <View style={styles.dateSection}>
+                      <Text style={[styles.dateLabel, { color: colors.text.secondary }]}>From</Text>
+                      <View style={styles.dateRow}>
+                        <TouchableOpacity
+                          style={[styles.dateButton, { backgroundColor: colors.surface.secondary }]}
+                          onPress={() => handleDateSelect('startDate', -1)}
+                        >
+                          <Icon name="left" size="sm" color={colors.text.secondary} />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={[styles.dateDisplay, { 
+                            backgroundColor: colors.surface.secondary,
+                            borderColor: colors.border.secondary,
+                            borderWidth: 1,
+                          }]}
+                          onPress={() => openDatePicker('startDate')}
+                          accessibilityLabel="Select start date"
+                        >
+                          <View style={styles.dateDisplayContent}>
+                            <Text style={[styles.dateText, { color: colors.text.primary }]}>
+                              {formatDate(formData.startDate)}
+                            </Text>
+                            <Icon name="calendar" size="sm" color={colors.text.secondary} />
+                          </View>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                          style={[styles.dateButton, { backgroundColor: colors.surface.secondary }]}
+                          onPress={() => handleDateSelect('startDate', 1)}
+                        >
+                          <Icon name="right" size="sm" color={colors.text.secondary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    
+                    {/* To Date */}
+                    <View style={styles.dateSection}>
+                      <Text style={[styles.dateLabel, { color: colors.text.secondary }]}>To</Text>
+                      <View style={styles.dateRow}>
+                        <TouchableOpacity
+                          style={[styles.dateButton, { backgroundColor: colors.surface.secondary }]}
+                          onPress={() => handleDateSelect('endDate', -1)}
+                          disabled={new Date(formData.endDate.getTime() - 24 * 60 * 60 * 1000) <= formData.startDate}
+                        >
+                          <Icon name="left" size="sm" color={colors.text.secondary} />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={[styles.dateDisplay, { 
+                            backgroundColor: colors.surface.secondary,
+                            borderColor: colors.border.secondary,
+                            borderWidth: 1,
+                          }]}
+                          onPress={() => openDatePicker('endDate')}
+                          accessibilityLabel="Select end date"
+                        >
+                          <View style={styles.dateDisplayContent}>
+                            <Text style={[styles.dateText, { color: colors.text.primary }]}>
+                              {formatDate(formData.endDate)}
+                            </Text>
+                            <Icon name="calendar" size="sm" color={colors.text.secondary} />
+                          </View>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                          style={[styles.dateButton, { backgroundColor: colors.surface.secondary }]}
+                          onPress={() => handleDateSelect('endDate', 1)}
+                        >
+                          <Icon name="right" size="sm" color={colors.text.secondary} />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                   
-                  {/* To Date */}
-                  <View style={styles.dateSection}>
-                    <Text style={[styles.dateLabel, { color: colors.text.secondary }]}>
-                      To
+                  {errors.dates && (
+                    <Text style={[styles.errorText, { color: colors.error[500] }]}>
+                      {errors.dates}
                     </Text>
-                    <View style={styles.dateRow}>
-                      <TouchableOpacity
-                        style={[styles.dateButton, { backgroundColor: colors.surface.secondary }]}
-                        onPress={() => handleDateSelect('endDate', -1)}
-                        disabled={new Date(formData.endDate.getTime() - 24 * 60 * 60 * 1000) <= formData.startDate}
-                      >
-                        <Icon name="left" size="sm" color={colors.text.secondary} />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={[styles.dateDisplay, { 
-                          backgroundColor: colors.surface.secondary,
-                          borderColor: colors.border.secondary,
-                          borderWidth: 1,
-                        }]}
-                        onPress={() => openDatePicker('endDate')}
-                        accessibilityLabel="Select end date"
-                      >
-                        <View style={styles.dateDisplayContent}>
-                          <Text style={[styles.dateText, { color: colors.text.primary }]}>
-                            {formatDate(formData.endDate)}
-                          </Text>
-                          <Icon name="calendar" size="sm" color={colors.text.secondary} />
-                        </View>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity
-                        style={[styles.dateButton, { backgroundColor: colors.surface.secondary }]}
-                        onPress={() => handleDateSelect('endDate', 1)}
-                      >
-                        <Icon name="right" size="sm" color={colors.text.secondary} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                  )}
                 </View>
-                
-                {errors.dates && (
-                  <Text style={[styles.errorText, { color: colors.error[500] }]}>
-                    {errors.dates}
-                  </Text>
-                )}
-              </View>
+              )}
               
               {/* Bottom spacing */}
               <View style={styles.bottomSpacing} />
@@ -645,7 +708,7 @@ export const TripCreationModal: React.FC<TripCreationModalProps> = ({
                 {isLoading ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
-                  <Text style={styles.bottomCreateButtonText}>Create</Text>
+                  <Text style={styles.bottomCreateButtonText}>{submitLabel || (mode === 'edit' ? 'Save' : 'Create')}</Text>
                 )}
               </TouchableOpacity>
             </View>

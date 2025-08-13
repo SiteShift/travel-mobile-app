@@ -10,6 +10,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Icon } from '../../src/components/Icon';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../src/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 
 // --- MOCK DATA ---
 const user = {
@@ -46,6 +49,9 @@ export default function ProfileTab() {
   const [avatarUri, setAvatarUri] = React.useState(user.avatar);
   const [displayName, setDisplayName] = React.useState(user.name);
   const [isEditProfileVisible, setIsEditProfileVisible] = React.useState(false);
+  const [uniqueCountries, setUniqueCountries] = React.useState<number>(0);
+  const [tripCount, setTripCount] = React.useState<number>(0);
+  const [photoCount, setPhotoCount] = React.useState<number>(0);
 
   // Level badge images removed from XP bar sides
 
@@ -81,6 +87,63 @@ export default function ProfileTab() {
     })();
   }, []);
 
+  const computeUniqueCountries = React.useCallback(async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const tripKeys = keys.filter((k: string) => k.startsWith('trip_'));
+      if (tripKeys.length === 0) {
+        setUniqueCountries(0);
+        return;
+      }
+      const pairs = await AsyncStorage.multiGet(tripKeys);
+      const countries = new Set<string>();
+      for (const [, v] of pairs) {
+        if (!v) continue;
+        try {
+          const parsed = JSON.parse(v);
+          const c = typeof parsed?.country === 'string' ? String(parsed.country).trim() : '';
+          if (c) countries.add(c);
+        } catch {}
+      }
+      setUniqueCountries(countries.size);
+    } catch {
+      setUniqueCountries(0);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    computeUniqueCountries();
+    // Also compute trips/photos on mount
+    (async () => {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        const tripKeys = keys.filter((k: string) => k.startsWith('trip_'));
+        if (tripKeys.length === 0) {
+          setTripCount(0);
+          setPhotoCount(0);
+        } else {
+          const pairs = await AsyncStorage.multiGet(tripKeys);
+          let trips = 0;
+          let photos = 0;
+          for (const [, v] of pairs) {
+            if (!v) continue;
+            try {
+              const parsed = JSON.parse(v);
+              if (parsed?.id && parsed?.title) trips += 1;
+              if (typeof parsed?.totalPhotos === 'number') {
+                photos += parsed.totalPhotos;
+              } else if (Array.isArray(parsed?.days)) {
+                photos += parsed.days.reduce((sum: number, d: any) => sum + (Array.isArray(d?.memories) ? d.memories.length : 0), 0);
+              }
+            } catch {}
+          }
+          setTripCount(trips);
+          setPhotoCount(photos);
+        }
+      } catch {}
+    })();
+  }, [computeUniqueCountries]);
+
   // Refresh on tab focus so new missions appear
   useFocusEffect(
     React.useCallback(() => {
@@ -93,10 +156,29 @@ export default function ProfileTab() {
           if (!active) return;
           setMissions(list);
           setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp });
+          await computeUniqueCountries();
+          // refresh trips/photos too
+          try {
+            const keys = await AsyncStorage.getAllKeys();
+            const tripKeys = keys.filter((k: string) => k.startsWith('trip_'));
+            const pairs = await AsyncStorage.multiGet(tripKeys);
+            let trips = 0; let photos = 0;
+            for (const [, v] of pairs) {
+              if (!v) continue;
+              try {
+                const parsed = JSON.parse(v);
+                if (parsed?.id && parsed?.title) trips += 1;
+                if (typeof parsed?.totalPhotos === 'number') photos += parsed.totalPhotos;
+                else if (Array.isArray(parsed?.days)) photos += parsed.days.reduce((s: number, d: any) => s + (Array.isArray(d?.memories) ? d.memories.length : 0), 0);
+              } catch {}
+            }
+            setTripCount(trips);
+            setPhotoCount(photos);
+          } catch {}
         } catch {}
       })();
       return () => { active = false; };
-    }, [])
+    }, [computeUniqueCountries])
   );
 
   const completeShareMission = async () => {
@@ -142,13 +224,87 @@ export default function ProfileTab() {
     outputRange: ['0%', '100%'],
   });
 
-  const StatBox = ({ icon, value, label }: { icon: string; value: string | number; label: string }) => (
-    <View style={[styles.statBox, { backgroundColor: colors.surface.secondary }]}>
-      <Icon name={icon} size="xl" color={colors.text.tertiary} />
-      <Text style={[styles.statValue, { color: colors.text.primary }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: colors.text.secondary }]}>{label}</Text>
-    </View>
-  );
+  const pulse = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1600, useNativeDriver: true, easing: Easing.inOut(Easing.quad) }),
+        Animated.timing(pulse, { toValue: 0, duration: 1600, useNativeDriver: true, easing: Easing.inOut(Easing.quad) }),
+      ])
+    ).start();
+  }, [pulse]);
+
+  const getNextMilestone = (value: number, milestones: number[]) => {
+    const sorted = [...milestones].sort((a, b) => a - b);
+    const target = sorted.find(m => m > value) ?? sorted[sorted.length - 1];
+    const progress = Math.min(1, value / target);
+    const remaining = Math.max(0, target - value);
+    return { target, progress, remaining };
+  };
+
+  const GamifiedStatCard = ({
+    label,
+    value,
+    icon,
+    gradient,
+    milestones,
+  }: {
+    label: string;
+    value: number;
+    icon: string;
+    gradient: [string, string];
+    milestones: number[];
+  }) => {
+    const { target, progress, remaining } = React.useMemo(() => getNextMilestone(value, milestones), [value, milestones]);
+    const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
+    const bandTranslate = pulse.interpolate({ inputRange: [0, 1], outputRange: [-60, 180] });
+    const holdScale = React.useRef(new Animated.Value(1)).current;
+    const holdTranslateY = React.useRef(new Animated.Value(0)).current;
+
+    const onPressIn = () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Animated.parallel([
+        Animated.spring(holdScale, { toValue: 0.96, useNativeDriver: true, tension: 300, friction: 12 }),
+        Animated.spring(holdTranslateY, { toValue: -2, useNativeDriver: true, tension: 300, friction: 12 }),
+      ]).start();
+    };
+
+    const onPressOut = () => {
+      Animated.parallel([
+        Animated.spring(holdScale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 10 }),
+        Animated.spring(holdTranslateY, { toValue: 0, useNativeDriver: true, tension: 300, friction: 10 }),
+      ]).start();
+    };
+    return (
+      <Animated.View style={[styles.gStatCardWrap, { transform: [{ scale }, { scale: holdScale }, { translateY: holdTranslateY }] }]}> 
+        <Pressable onPressIn={onPressIn} onPressOut={onPressOut} style={{ borderRadius: 16, overflow: 'hidden' }}>
+        <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.gStatCard, SHADOWS.md]}> 
+          {/* Shimmer band */}
+          <Animated.View style={[styles.gShimmerBand, { transform: [{ translateX: bandTranslate }] }]} />
+
+          {/* Icon */}
+          <View style={styles.gHeaderRow}>
+            <View style={[styles.gIconBadge, { backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.35)' }]}> 
+              <Icon name={icon} size="md" color="#FFFFFF" />
+            </View>
+          </View>
+
+          {/* Value */}
+          <Text style={styles.gValue}>{value}</Text>
+          <Text style={styles.gLabel}>{label}</Text>
+
+          {/* Progress to next milestone */}
+          <View style={[styles.gProgressTrack, { backgroundColor: 'rgba(255,255,255,0.25)' }]}> 
+            <View style={[styles.gProgressFill, { width: `${Math.max(6, progress * 100)}%`, backgroundColor: '#FFFFFF' }]} />
+          </View>
+          <Text style={styles.gProgressText}>
+            {remaining === 0 ? 'Milestone reached!' : `${remaining} to ${target}`}
+          </Text>
+        </LinearGradient>
+        </Pressable>
+      </Animated.View>
+    );
+  };
 
   const AchievementBadge = ({ icon, title, unlocked }: { icon: string; title: string; unlocked: boolean }) => (
     <View style={[styles.badgeContainer, { opacity: unlocked ? 1 : 0.4 }]}>
@@ -199,9 +355,27 @@ export default function ProfileTab() {
         </View>
 
         <View style={styles.statsGrid}>
-          <StatBox icon="earth" value={user.stats.countries} label="Countries" />
-          <StatBox icon="briefcase" value={user.stats.trips} label="Trips" />
-          <StatBox icon="camera" value={user.stats.photos} label="Photos" />
+          <GamifiedStatCard
+            label="Countries"
+            value={uniqueCountries}
+            icon="earth"
+            gradient={["#34d399", "#059669"]}
+            milestones={[5, 10, 20, 50]}
+          />
+          <GamifiedStatCard
+            label="Trips"
+            value={tripCount}
+            icon="map"
+            gradient={["#60a5fa", "#2563eb"]}
+            milestones={[3, 10, 25, 50]}
+          />
+          <GamifiedStatCard
+            label="Photos"
+            value={photoCount}
+            icon="camera"
+            gradient={["#f59e0b", "#ef4444"]}
+            milestones={[100, 500, 1000, 5000]}
+          />
         </View>
 
         <View style={styles.section}>
@@ -331,6 +505,18 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, alignItems: 'center', marginHorizontal: SPACING.xs, paddingVertical: SPACING.md, borderRadius: BORDER_RADIUS.md },
   statValue: { ...TYPOGRAPHY.styles.h3, marginVertical: SPACING.xs },
   statLabel: { ...TYPOGRAPHY.styles.body },
+  // Gamified cards
+  gStatCardWrap: { flex: 1, marginHorizontal: SPACING.xs },
+  gStatCard: { borderRadius: 16, padding: SPACING.md, overflow: 'hidden' },
+  gHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
+  gIconBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  gValue: { fontSize: 34, fontWeight: '800', color: '#FFFFFF', marginTop: SPACING.sm, letterSpacing: -0.4 },
+  gLabel: { ...TYPOGRAPHY.styles.caption, color: 'rgba(255,255,255,0.9)', marginTop: -4 },
+  gProgressTrack: { height: 8, borderRadius: 4, marginTop: SPACING.sm, overflow: 'hidden' },
+  gProgressFill: { height: '100%', borderRadius: 4 },
+  gProgressText: { ...TYPOGRAPHY.styles.caption, color: 'rgba(255,255,255,0.9)', marginTop: 6 },
+  gCornerBadge: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  gShimmerBand: { position: 'absolute', top: 0, bottom: 0, width: 80, backgroundColor: 'rgba(255,255,255,0.15)', transform: [{ rotate: '18deg' }] },
 
   section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.lg },
   sectionTitle: { ...TYPOGRAPHY.styles.h4, marginBottom: SPACING.md },
