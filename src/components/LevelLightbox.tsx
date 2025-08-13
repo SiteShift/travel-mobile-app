@@ -53,7 +53,7 @@ const LEVEL8_IMG = require('../../public/assets/Picflow Images Aug 11/level-8.we
 const LEVEL9_IMG = require('../../public/assets/Picflow Images Aug 11/level-9.webp');
 const LEVEL10_IMG = require('../../public/assets/Picflow Images Aug 11/level-10.webp');
 
-const LEVEL_COLOR_MAP: Record<number, any> = {
+const LEVEL_IMAGE_MAP: Record<number, any> = {
   1: LEVEL1_IMG,
   2: LEVEL2_IMG,
   3: LEVEL3_IMG,
@@ -64,6 +64,20 @@ const LEVEL_COLOR_MAP: Record<number, any> = {
   8: LEVEL8_IMG,
   9: LEVEL9_IMG,
   10: LEVEL10_IMG,
+};
+
+// Color accents to match each level badge image (placeholder defaults; will update per your guidance)
+const LEVEL_ACCENT_COLOR: Record<number, string> = {
+  1: '#f97316',
+  2: '#3b82f6',
+  3: '#22c55e',
+  4: '#a855f7',
+  5: '#eab308',
+  6: '#ef4444',
+  7: '#06b6d4',
+  8: '#f59e0b',
+  9: '#10b981',
+  10: '#8b5cf6',
 };
 
 export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, initialIndex = 0 }) => {
@@ -92,7 +106,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     const BLACK_10 = require('../../public/assets/levelbadges-blackedout/level-10-blackedout.webp');
 
     const blackMap: Record<number, any> = {
-      1: LEVEL_COLOR_MAP[1],
+      1: LEVEL_IMAGE_MAP[1],
       2: BLACK_2,
       3: BLACK_3,
       4: BLACK_4,
@@ -106,7 +120,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     const arr: LevelItem[] = [];
     for (let i = 1; i <= 10; i++) {
       const unlocked = i <= userLevel;
-      const src = unlocked ? LEVEL_COLOR_MAP[i] : blackMap[i];
+      const src = unlocked ? LEVEL_IMAGE_MAP[i] : blackMap[i];
       arr.push({ level: i, unlocked, image: src });
     }
     return arr;
@@ -165,15 +179,17 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     const isLocked = !item.unlocked;
     const isUnlocked = !isLocked;
     const isLevelOne = item.level === 1;
+    const accent = LEVEL_ACCENT_COLOR[item.level] || '#f97316';
 
     // XP/progress computation for this page
     let fillRatio = 0;
-    let xpLabel = '0/100';
+    let xpLabel = '0/0';
     try {
       const leveling = require('../utils/leveling');
+      const spanForThisLevel = typeof leveling.xpSpanForLevel === 'function' ? leveling.xpSpanForLevel(item.level) : 100;
       if (item.level < userLevel) {
         fillRatio = 1;
-        xpLabel = '100/100';
+        xpLabel = `${spanForThisLevel}/${spanForThisLevel}`;
       } else if (item.level === userLevel) {
         const { currentLevelXp, nextLevelXp } = leveling.xpToNextLevel(userXp);
         const levelSpan = Math.max(1, nextLevelXp - currentLevelXp);
@@ -182,7 +198,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         xpLabel = `${gained}/${levelSpan}`;
       } else {
         fillRatio = 0;
-        xpLabel = '0/100';
+        xpLabel = `0/${spanForThisLevel}`;
       }
     } catch {}
 
@@ -203,10 +219,10 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             accessibilityLabel={`Level ${item.level}`}
           />
         </Animated.View>
-        {/* Level pill (only show for unlocked level 1) */}
-        {isLevelOne && isUnlocked && (
-          <View style={styles.levelPill}>
-            <Text style={styles.levelPillText}>Level 1</Text>
+        {/* Level pill for all unlocked levels, color matched to badge */}
+        {isUnlocked && (
+          <View style={[styles.levelPill, { backgroundColor: accent + 'B8', borderColor: accent + '8F' }]}> 
+            <Text style={styles.levelPillText}>{`Level ${item.level}`}</Text>
           </View>
         )}
         {/* Locked pill for all locked pages */}
@@ -216,10 +232,10 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
           </View>
         )}
         {/* Info button removed from page; now fixed on card */}
-        {/* XP bar */}
+        {/* XP bar with dynamic color per level */}
         <View style={styles.simpleProgressContainer}>
           <View style={[styles.simpleProgressTrack, isLocked && styles.simpleProgressTrackLocked]}>
-            <View style={[styles.simpleProgressFill, isLocked && styles.simpleProgressFillLocked, { width: PROGRESS_TRACK_WIDTH * fillRatio }]} />
+            <View style={[styles.simpleProgressFill, isLocked && styles.simpleProgressFillLocked, { width: PROGRESS_TRACK_WIDTH * fillRatio, backgroundColor: accent }]} />
           </View>
           <Text style={[styles.xpLabel, isLocked && styles.xpLabelLocked]}>{xpLabel}</Text>
         </View>

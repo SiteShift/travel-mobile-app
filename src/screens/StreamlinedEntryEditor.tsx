@@ -13,6 +13,7 @@ import {
   StatusBar as RNStatusBar,
   KeyboardAvoidingView,
   Keyboard,
+  ScrollView,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -29,7 +30,7 @@ import { Icon } from '../components/Icon';
 import { TripCreationModal } from '../components/TripCreationModal';
 import { MinimalTrip, MinimalMemory } from '../types/tripDetailMinimal';
 import { Image } from 'expo-image';
-import { Video, ResizeMode } from 'expo-av';
+// Removed video support
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -46,13 +47,15 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function StreamlinedEntryEditor() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ photoUri?: string; isVideo?: string; cameraFacing?: string }>();
+  const params = useLocalSearchParams<{ photoUri?: string; cameraFacing?: string }>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [content, setContent] = useState('');
   const [userTrips, setUserTrips] = useState<UserTrip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<UserTrip | null>(null);
+  const [totalDays, setTotalDays] = useState<number>(1);
+  const [selectedDay, setSelectedDay] = useState<number>(1);
   const [showTripDropdown, setShowTripDropdown] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isLoadingTrips, setIsLoadingTrips] = useState(true);
@@ -65,9 +68,7 @@ export default function StreamlinedEntryEditor() {
   const dropdownOpacity = useSharedValue(0);
   const dropdownScale = useSharedValue(0.95);
   
-  const videoRef = useRef<Video>(null);
-
-  const isVideo = params.isVideo === 'true';
+  // Photo only
 
   // Load user trips from AsyncStorage (only trips created from home page)
   useEffect(() => {
@@ -152,6 +153,11 @@ export default function StreamlinedEntryEditor() {
       
       setUserTrips([...userTrips, newTrip]);
       setSelectedTrip(newTrip);
+      // initialize day selection for new trip
+      const msDay = 24 * 60 * 60 * 1000;
+      const total = Math.max(1, Math.floor((tripData.endDate.getTime() - tripData.startDate.getTime()) / msDay) + 1);
+      setTotalDays(total);
+      setSelectedDay(1);
       setShowTripCreationModal(false);
       
       console.log('✅ Trip created:', tripData.title);
@@ -272,18 +278,19 @@ export default function StreamlinedEntryEditor() {
         aspectRatio: 1 // Default aspect ratio, could be calculated from image
       };
       
-      // Find the most recent day (highest day number)
-      const mostRecentDay = minimalTrip.days.reduce((latest, current) => {
-        return current.day > latest.day ? current : latest;
-      }, minimalTrip.days[0]);
-      
-      // Add memory to the most recent day
-      const dayIndex = minimalTrip.days.findIndex((d) => d.day === mostRecentDay.day);
+      // Add memory to selected day (create day if missing)
+      const targetDayNumber = Math.max(1, Math.min(Number.isFinite(selectedDay) ? Number(selectedDay) : 1, 9999));
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const startDate = minimalTrip.startDate instanceof Date ? minimalTrip.startDate : new Date(minimalTrip.startDate);
+      const targetDate = new Date(startDate.getTime() + (targetDayNumber - 1) * msPerDay);
+      const dayIndex = minimalTrip.days.findIndex((d) => Number(d.day) === targetDayNumber);
       if (dayIndex !== -1) {
         minimalTrip.days[dayIndex] = {
           ...minimalTrip.days[dayIndex],
           memories: [...minimalTrip.days[dayIndex].memories, newMemory]
         };
+      } else {
+        minimalTrip.days.push({ day: targetDayNumber, date: targetDate, memories: [newMemory], location: tripData.country || 'Adventure' });
       }
       
       // Update total photos count
@@ -298,20 +305,17 @@ export default function StreamlinedEntryEditor() {
       };
       
       await AsyncStorage.setItem(`trip_${selectedTrip.id}`, JSON.stringify(updatedTripData));
-      
-      console.log('✅ Memory saved to', selectedTrip.title, 'Day', mostRecentDay.day);
-      
-      Alert.alert(
-        "✨ Memory Saved", 
-        `Your moment has been added to "${selectedTrip.title}" on Day ${mostRecentDay.day}.`,
-        [{ text: "Perfect!", onPress: () => router.back() }]
-      );
+      // Mark which trip to focus on when returning home
+      try { await AsyncStorage.setItem('focus_trip_id', String(selectedTrip.id)); } catch {}
+      console.log('✅ Memory saved to', selectedTrip.title, 'Day', targetDayNumber);
+      // Navigate straight back to home
+      router.replace('/(tabs)');
       
     } catch (error) {
       console.error('❌ StreamlinedEntryEditor: Failed to save memory:', error);
       Alert.alert("Error", "Failed to save memory. Please try again.");
     }
-  }, [content, selectedTrip, params.photoUri, router]);
+  }, [content, selectedTrip, params.photoUri, router, selectedDay]);
 
   const toggleTripDropdown = useCallback(() => {
     const newState = !showTripDropdown;
@@ -330,6 +334,43 @@ export default function StreamlinedEntryEditor() {
     setSelectedTrip(trip);
     toggleTripDropdown();
   }, [toggleTripDropdown]);
+
+  // When a trip is selected, compute total days and default day selection
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!selectedTrip?.id) {
+          setTotalDays(1);
+          setSelectedDay(1);
+          return;
+        }
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const raw = await AsyncStorage.getItem(`trip_${selectedTrip.id}`);
+        if (!raw) {
+          setTotalDays(1);
+          setSelectedDay(1);
+          return;
+        }
+        const t = JSON.parse(raw);
+        const msDay = 24 * 60 * 60 * 1000;
+        const start = t?.startDate ? new Date(t.startDate) : new Date();
+        const end = t?.endDate ? new Date(t.endDate) : start;
+        let computed = Math.max(1, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / msDay) + 1);
+        if (Array.isArray(t?.days)) {
+          const maxExisting = t.days.reduce((m: number, d: any) => Math.max(m, Number(d?.day) || 1), 1);
+          computed = Math.max(computed, maxExisting);
+        }
+        setTotalDays(computed);
+        const defaultDay = Array.isArray(t?.days) && t.days.length > 0
+          ? t.days.reduce((m: number, d: any) => Math.max(m, Number(d?.day) || 1), 1)
+          : computed;
+        setSelectedDay(defaultDay);
+      } catch {
+        setTotalDays(1);
+        setSelectedDay(1);
+      }
+    })();
+  }, [selectedTrip?.id]);
 
   // Animated styles
   const inputContainerStyle = useAnimatedStyle(() => ({
@@ -354,17 +395,6 @@ export default function StreamlinedEntryEditor() {
       {/* Full Screen Media */}
         {params.photoUri && (
           <View style={styles.mediaContainer}>
-            {isVideo ? (
-              <Video
-                ref={videoRef}
-                source={{ uri: params.photoUri }}
-                style={styles.media}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay={true}
-                isLooping={true}
-                isMuted={false}
-              />
-            ) : (
             <Image 
               source={{ uri: params.photoUri }} 
               style={[
@@ -373,9 +403,7 @@ export default function StreamlinedEntryEditor() {
               ]}
               contentFit="cover"
             />
-          )}
           
-
           </View>
         )}
 
@@ -414,6 +442,21 @@ export default function StreamlinedEntryEditor() {
                     />
                   )}
                 </Pressable>
+
+                {/* Day Selector */}
+                <View style={styles.daySelectorRow}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {Array.from({ length: Math.max(1, totalDays) }).map((_, i) => {
+                      const d = i + 1;
+                      const isActive = d === selectedDay;
+                      return (
+                        <Pressable key={`day-pill-${d}`} onPress={() => setSelectedDay(d)} style={[styles.dayPill, isActive && styles.dayPillActive]}>
+                          <Text style={[styles.dayPillText, isActive && styles.dayPillTextActive]}>Day {d}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
 
                 {/* Note Input */}
             <TextInput
@@ -608,6 +651,31 @@ const styles = StyleSheet.create({
   saveButtonContainer: {
     marginBottom: 34,
     alignItems: 'center',
+  },
+  daySelectorRow: {
+    marginBottom: 10,
+    flexDirection: 'row',
+  },
+  dayPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    marginRight: 8,
+  },
+  dayPillActive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  dayPillText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dayPillTextActive: {
+    color: '#000000',
   },
   saveButton: {
     width: '100%',

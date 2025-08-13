@@ -67,16 +67,16 @@ The functionaity is complexy so need to be careful.
 
 
 
-[ ] Make the map page pins actually have functionality, and when they click the pin it opens up the view trip page
+[DONE] Make the map page pins actually have functionality, and when they click the pin it opens up the view trip page
 
 
-[ ] Camera needs to be improved. need to remove all video related code. Also when user takes photo it needs to save to their phone. Make sure when they select a trip to add photo it actually adds it
+[DONE] Camera needs to be improved. need to remove all video related code. Also when user takes photo it needs to save to their phone. Make sure when they select a trip to add photo it actually adds it
 
-[ ] Need to make max level 10. On my account im on level 14. Needs to be restricted to 10.
+[DONE] Need to make max level 10. On my account im on level 14. Needs to be restricted to 10.
 
 [ ] Dark mode needs to have orange buttons - also go through all pages to make sure dark mode looks good
 
-[ ] Improve the 'Play Trippin' section on profile and move it above missions.
+[DONE] Improve the 'Play Trippin' section on profile and move it above missions.
 
 [ ] 
 
