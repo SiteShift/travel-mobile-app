@@ -48,6 +48,38 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
   const modalScale = React.useRef(new Animated.Value(0.92)).current;
   const [showLeaderboard, setShowLeaderboard] = React.useState(false);
 
+  // Mock leaderboard data (UI phase). Seeds a few known rows and many travelers,
+  // then inserts the current user's best score, sorts, and computes rank.
+  const leaderboardData = React.useMemo(() => {
+    // Seeded top examples matching design intent
+    const seeded = [
+      { name: 'Max', score: 143 },
+      { name: 'Sam', score: 48 },
+      { name: 'Traveller', score: 32 },
+      { name: 'Traveller', score: 30 },
+      { name: 'Traveller', score: 25 },
+      { name: 'Traveller', score: 22 },
+      { name: 'Traveller', score: 19 },
+      { name: 'Traveller', score: 15 },
+    ];
+    const others: { name: string; score: number }[] = [];
+    for (let i = 0; i < 200; i++) {
+      // Keep within a range so seeded examples remain near top sensibly
+      const r = Math.floor(5 + Math.random() * 135);
+      others.push({ name: 'Traveller', score: r });
+    }
+    const you = { name: 'You', score: best };
+    const merged = [...seeded, ...others, you].sort((a, b) => b.score - a.score);
+    const yourIndex = merged.findIndex((r) => r.name === 'You' && r.score === best);
+    return { rows: merged, yourRank: yourIndex >= 0 ? yourIndex + 1 : merged.length };
+  }, [best]);
+
+  const ordinal = React.useCallback((n: number) => {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+  }, []);
+
   const { state, start, pause, resume, reset, flap } = useTrippinLoop(
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -448,7 +480,7 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
           </View>
         </>
       )}
-      {/* Leaderboard modal */}
+      {/* Leaderboard modal (templated frame with transparent center) */}
       <Modal
         transparent
         animationType="fade"
@@ -456,55 +488,44 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
         onRequestClose={() => setShowLeaderboard(false)}
       >
         <View style={styles.modalOverlayBackdrop}>
-          <View style={[styles.leaderboardCard, { backgroundColor: colors.surface.primary }]}> 
-            <View style={styles.leaderboardHeader}> 
-              <LinearGradient
-                colors={[ '#f59e0b', '#ef4444' ]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.leaderboardHeaderGrad}
-              />
-              <View style={styles.leaderboardHeaderContent}>
-                <Icon library="Ionicons" name="trophy" size={22} color="#ffffff" />
-                <Text style={styles.leaderboardTitle}>Leaderboard</Text>
-              </View>
-              <Pressable onPress={() => setShowLeaderboard(false)} style={styles.leaderboardCloseBtn} accessibilityLabel="Close leaderboard">
-                <Icon library="Ionicons" name="close" size={18} color="#ffffff" />
-              </Pressable>
-            </View>
-            <ScrollView contentContainerStyle={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
-              {(() => {
-                const base = [
-                  { name: 'Traveler A', score: 42 },
-                  { name: 'Explorer B', score: 31 },
-                  { name: 'Nomad C', score: 27 },
-                  { name: 'Adventurer D', score: 19 },
-                  { name: 'Rover E', score: 12 },
-                ];
-                const withYou = [...base, { name: 'You', score: best }];
-                const data = withYou.sort((a, b) => b.score - a.score).slice(0, 10);
-                return data.map((row, idx) => {
-                  const isYou = row.name === 'You' && row.score === best;
-                  return (
-                    <View key={`${row.name}-${idx}-${row.score}`} style={[styles.lbRow, { backgroundColor: isYou ? 'rgba(249,115,22,0.08)' : 'transparent', borderColor: isYou ? 'rgba(249,115,22,0.35)' : 'rgba(0,0,0,0.06)' }]}> 
-                      <View style={[styles.lbRankBadge, { backgroundColor: idx === 0 ? '#F59E0B' : idx === 1 ? '#9CA3AF' : idx === 2 ? '#D97706' : 'rgba(0,0,0,0.08)' }]}>
-                        <Text style={styles.lbRankText}>{idx + 1}</Text>
-                      </View>
-                      <Text style={styles.lbName} numberOfLines={1}>{row.name}</Text>
-                      <View style={styles.lbScorePill}>
-                        <Icon library="Ionicons" name="flame" size={14} color="#ffffff" />
-                        <Text style={styles.lbScoreText}>{row.score}</Text>
-                      </View>
+          <View style={styles.lbFrameWrap}>
+            <Image
+              source={require('../../../public/assets/leaderboard-template (1) (1)_compressed.webp')}
+              style={styles.lbFrameImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+            {/* Close */}
+            <Pressable accessibilityLabel="Close leaderboard" onPress={() => setShowLeaderboard(false)} style={styles.lbCloseBtn}>
+              <Text style={styles.lbCloseText}>×</Text>
+            </Pressable>
+            {/* Scrollable middle content */}
+            <ScrollView
+              contentContainerStyle={styles.lbScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {leaderboardData.rows.slice(0, 200).map((row, idx) => {
+                const rank = idx + 1;
+                const isTop1 = rank === 1;
+                const isTop2 = rank === 2;
+                const isTop3 = rank === 3;
+                const isYou = row.name === 'You' && row.score === best;
+                return (
+                  <View key={`lb-${rank}-${row.name}-${row.score}`} style={styles.lbItemRow}>
+                    <View style={[styles.lbRankCircle, { backgroundColor: isTop1 ? '#f5c242' : isTop2 ? '#c9cdd3' : isTop3 ? '#cd8b31' : '#9a5e22' }]}> 
+                      <Text style={[styles.lbRankNum, { color: isTop2 ? '#111' : '#111' }]}>{rank}</Text>
                     </View>
-                  );
-                });
-              })()}
+                    <Text numberOfLines={1} style={[styles.lbItemName, { fontWeight: isYou ? '800' : '600' }]}>
+                      {row.name}
+                    </Text>
+                    <Text style={styles.lbItemScore}>{row.score}</Text>
+                  </View>
+                );
+              })}
             </ScrollView>
-            <View style={styles.leaderboardFooter}> 
-              <Text style={styles.lbFooterText}>Your best: {best}</Text>
-              <Pressable onPress={() => setShowLeaderboard(false)} style={styles.lbDoneBtn} accessibilityLabel="Done">
-                <Text style={styles.lbDoneText}>Done</Text>
-              </Pressable>
+            {/* Bottom banner text */}
+            <View pointerEvents="none" style={styles.lbBottomBanner}>
+              <Text style={styles.lbBottomBannerText}>{`Your Ranked ${leaderboardData.yourRank}${ordinal(leaderboardData.yourRank)}`}</Text>
             </View>
           </View>
         </View>
@@ -561,6 +582,21 @@ const styles = StyleSheet.create({
   lbFooterText: { ...TYPOGRAPHY.styles.bodySmall, color: '#111827' },
   lbDoneBtn: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, backgroundColor: '#f97316', borderRadius: 999 },
   lbDoneText: { ...TYPOGRAPHY.styles.buttonSmall, color: '#FFFFFF', fontWeight: '800' },
+  // New template-based leaderboard styles
+  lbFrameWrap: { width: '94%', maxWidth: 560, aspectRatio: 658/1130, alignItems: 'center', justifyContent: 'center' },
+  lbFrameImage: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, width: '100%', height: '100%', borderRadius: 16 },
+  lbCloseBtn: { position: 'absolute', right: 18, top: 18, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
+  lbCloseText: { ...TYPOGRAPHY.styles.h3, color: '#fff', fontWeight: '900', lineHeight: 30 },
+  // Middle scrollable content container sits within the inner frame area from template
+  lbScrollContent: { paddingTop: 160, paddingBottom: 180, paddingHorizontal: 38 },
+  lbItemRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(154,94,34,0.75)', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, marginBottom: 12 },
+  lbRankCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  lbRankNum: { ...TYPOGRAPHY.styles.bodySmall, fontWeight: '900' },
+  lbItemName: { ...TYPOGRAPHY.styles.body, color: '#fff', flex: 1 },
+  lbItemScore: { ...TYPOGRAPHY.styles.h4, color: '#fff', fontWeight: '800' },
+  // Bottom banner overlay (text sits over the banner area of the template)
+  lbBottomBanner: { position: 'absolute', left: 0, right: 0, bottom: 22, alignItems: 'center' },
+  lbBottomBannerText: { ...TYPOGRAPHY.styles.h2, color: '#f8b323', fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3 },
 });
 
 
