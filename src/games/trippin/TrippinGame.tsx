@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, Dimensions, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -37,6 +38,9 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
   const [phase, setPhase] = React.useState<GameState>('ready');
   const bgAnim = React.useRef(new Animated.Value(0)).current;
   const birdScale = React.useRef(new Animated.Value(1)).current;
+  const bgMusicRef = React.useRef<Audio.Sound | null>(null);
+  const sfxCoinRef = React.useRef<Audio.Sound | null>(null);
+  const sfxGameOverRef = React.useRef<Audio.Sound | null>(null);
 
   const { state, start, pause, resume, reset, flap } = useTrippinLoop(
     SCREEN_WIDTH,
@@ -46,6 +50,10 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
       // Game over
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setPhase('gameover');
+      try {
+        if (bgMusicRef.current) await bgMusicRef.current.stopAsync();
+        if (sfxGameOverRef.current) await sfxGameOverRef.current.replayAsync();
+      } catch {}
       const prevBest = await AsyncStorage.getItem(BEST_KEY);
       const prev = prevBest ? Number(prevBest) : 0;
       if (finalScore > prev) {
@@ -54,6 +62,11 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
       } else {
         setBest(prev);
       }
+    },
+    async () => {
+      try {
+        if (sfxCoinRef.current) await sfxCoinRef.current.replayAsync();
+      } catch {}
     }
   );
 
@@ -62,6 +75,78 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
       const v = await AsyncStorage.getItem(BEST_KEY);
       setBest(v ? Number(v) : 0);
     })();
+  }, []);
+
+  // Load audio and fade-in background music
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [bg, coin, over] = await Promise.all([
+          Audio.Sound.createAsync(require('../../../public/assets/Tripmemo-game-background-music (1).mp3'), { isLooping: true, volume: 0 }),
+          Audio.Sound.createAsync(require('../../../public/assets/tripmemo-coincollectsound.mp3')),
+          Audio.Sound.createAsync(require('../../../public/assets/tripmemo-gameoversound.mp3')),
+        ]);
+        if (!mounted) {
+          await bg.sound.unloadAsync();
+          await coin.sound.unloadAsync();
+          await over.sound.unloadAsync();
+          return;
+        }
+        bgMusicRef.current = bg.sound;
+        sfxCoinRef.current = coin.sound;
+        sfxGameOverRef.current = over.sound;
+        await bg.sound.playAsync();
+        await bg.sound.setIsLoopingAsync(true);
+        await bg.sound.setVolumeAsync(0);
+        // Fade in over ~800ms
+        const steps = 10;
+        for (let i = 1; i <= steps; i++) {
+          await new Promise(r => setTimeout(r, 80));
+          if (!mounted) break;
+          await bg.sound.setVolumeAsync((i / steps) * 0.4);
+        }
+      } catch {}
+    })();
+    return () => {
+      mounted = false;
+      if (bgMusicRef.current) {
+        bgMusicRef.current.unloadAsync();
+        bgMusicRef.current = null;
+      }
+      if (sfxCoinRef.current) {
+        sfxCoinRef.current.unloadAsync();
+        sfxCoinRef.current = null;
+      }
+      if (sfxGameOverRef.current) {
+        sfxGameOverRef.current.unloadAsync();
+        sfxGameOverRef.current = null;
+      }
+    };
+  }, []);
+
+  const startMusic = React.useCallback(async () => {
+    try {
+      const s = bgMusicRef.current;
+      if (!s) return;
+      await s.setPositionAsync(0);
+      await s.setVolumeAsync(0);
+      await s.playAsync();
+      await s.setIsLoopingAsync(true);
+      const steps = 10;
+      for (let i = 1; i <= steps; i++) {
+        await new Promise(r => setTimeout(r, 70));
+        await s.setVolumeAsync((i / steps) * 0.4);
+      }
+    } catch {}
+  }, []);
+
+  const stopMusic = React.useCallback(async () => {
+    try {
+      if (bgMusicRef.current) {
+        await bgMusicRef.current.stopAsync();
+      }
+    } catch {}
   }, []);
 
   // Background slow pan (left -> right -> left)
@@ -189,7 +274,7 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
 
       {/* HUD */}
       <View style={styles.hudRow}>
-        <Pressable onPress={onClose} accessibilityLabel="Close game" style={[styles.hudBtn, { backgroundColor: colors.surface.secondary, borderColor: colors.border.secondary }]}> 
+        <Pressable onPress={async () => { await stopMusic(); onClose(); }} accessibilityLabel="Close game" style={[styles.hudBtn, { backgroundColor: colors.surface.secondary, borderColor: colors.border.secondary }]}> 
           <Text style={[styles.hudBtnText, { color: colors.text.primary }]}>×</Text>
         </Pressable>
         <View style={styles.hudScoreWrap}>
@@ -232,10 +317,10 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
           <Text style={[styles.overlayTitle, { color: colors.text.primary }]}>Game Over</Text>
           <Text style={[styles.overlaySub, { color: colors.text.secondary }]}>Score {state.score} • Best {best}</Text>
           <View style={styles.overlayActions}>
-            <Pressable onPress={handleRestart} style={[styles.actionBtn, { backgroundColor: colors.primary[500] }]} accessibilityLabel="Play again">
+            <Pressable onPress={async () => { await startMusic(); handleRestart(); }} style={[styles.actionBtn, { backgroundColor: colors.primary[500] }]} accessibilityLabel="Play again">
               <Text style={[styles.actionText, { color: colors.text.inverse }]}>Play Again</Text>
             </Pressable>
-            <Pressable onPress={onClose} style={[styles.actionBtn, { backgroundColor: colors.surface.secondary, borderColor: colors.border.primary, borderWidth: 1 }]} accessibilityLabel="Close">
+            <Pressable onPress={async () => { await stopMusic(); onClose(); }} style={[styles.actionBtn, { backgroundColor: colors.surface.secondary, borderColor: colors.border.primary, borderWidth: 1 }]} accessibilityLabel="Close">
               <Text style={[styles.actionText, { color: colors.text.primary }]}>Close</Text>
             </Pressable>
           </View>

@@ -30,6 +30,7 @@ export function useTrippinLoop(
   screenHeight: number,
   config: TrippinConfig,
   onGameOver?: (finalScore: number, isNewBest: boolean) => void,
+  onStampCollected?: () => void,
 ): LoopApi {
   const [state, setState] = React.useState<LoopState>(() => ({
     state: 'ready',
@@ -203,12 +204,14 @@ export function useTrippinLoop(
       });
 
       // Stamp pickups
+      let didCollect = false;
       const newStamps = aliveStamps.map(s => {
         if (s.taken) return s;
         const dx = Math.abs(s.x - birdX);
         const dy = Math.abs(s.y - birdY);
         if (dx < 18 && dy < 18) {
           score += 3;
+          didCollect = true;
           return { ...s, taken: true };
         }
         return s;
@@ -221,7 +224,7 @@ export function useTrippinLoop(
       }
 
       const elapsed = prev.elapsed + dt;
-      return {
+      const nextState = {
         state: 'running',
         birdY,
         velocityY,
@@ -231,8 +234,14 @@ export function useTrippinLoop(
         streak,
         elapsed,
       };
+      // Fire outside effects after we compute state
+      if (didCollect) {
+        // Call after state update microtask
+        setTimeout(() => onStampCollected?.(), 0);
+      }
+      return nextState;
     });
-  }, [config.birdSize, config.floorPadding, config.gapHeight, config.gapShrinkPerSec, config.gravity, config.maxSpeed, config.pipeSpacing, config.pipeWidth, config.speed, config.speedRampPerSec, config.stampChance, config.terminalVelocity, endGame, screenHeight, screenWidth]);
+  }, [config.birdSize, config.floorPadding, config.gapHeight, config.gapShrinkPerSec, config.gravity, config.maxSpeed, config.pipeSpacing, config.pipeWidth, config.speed, config.speedRampPerSec, config.stampChance, config.terminalVelocity, endGame, onStampCollected, screenHeight, screenWidth]);
 
   // Expose tick for tests
   const tickOnce = React.useCallback((dt: number) => tick(dt), [tick]);
