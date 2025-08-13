@@ -687,7 +687,7 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
             style={[StyleSheet.absoluteFillObject as any, styles.whiteGuard, styles.whiteGuardVisible]}
           />
           <Animated.View style={[StyleSheet.absoluteFillObject as any, styles.dimBackground, dimBackgroundStyle]} pointerEvents="none" />
-          <StatusBar barStyle={(overlayActive || currentState === BookState.OPENING) ? 'dark-content' : 'light-content'} backgroundColor={(overlayActive || currentState === BookState.OPENING) ? '#FFFFFF' : 'transparent'} translucent />
+          <StatusBar barStyle={(overlayActive || currentState === BookState.OPENING) ? 'dark-content' : (isDark ? 'light-content' : 'dark-content')} backgroundColor={(overlayActive || currentState === BookState.OPENING) ? '#FFFFFF' : 'transparent'} translucent />
           
           {/* Close button */}
           <TouchableOpacity 

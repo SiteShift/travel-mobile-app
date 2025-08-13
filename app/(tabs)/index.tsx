@@ -24,7 +24,7 @@ import { Icon } from '../../src/components/Icon';
 import { TripCreationModal } from '../../src/components/TripCreationModal';
 import { AnimatedBookCreation } from '../../src/components/AnimatedBookCreation';
 import { MediaPicker, MediaItem } from '../../src/components/MediaPicker';
-import { FONT_WEIGHTS, SPACING, BORDER_RADIUS, EMOTIONAL_GRADIENTS } from '../../src/constants/theme';
+import { FONT_WEIGHTS, SPACING, BORDER_RADIUS, EMOTIONAL_GRADIENTS, getColors } from '../../src/constants/theme';
 import * as Haptics from 'expo-haptics';
 import { getMockDataForUser } from '../../src/data/mockData';
 
@@ -83,8 +83,10 @@ const BUTTON_HEIGHT = 54;
 export default function HomeTab() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const lightOverrideColors = getColors('light');
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  const [activeModIndex, setActiveModIndex] = useState(0);
   
   // Animation refs for level pill
   const levelPillScale = useRef(new Animated.Value(1)).current;
@@ -93,6 +95,7 @@ export default function HomeTab() {
   const badgeTapShimmer = useRef(new Animated.Value(0)).current;
   const [trips, setTrips] = useState<Trip[]>(createPlaceholderTrips());
   const [data, setData] = useState<Trip[]>([]);
+  const realTrips = React.useMemo(() => trips.filter(t => t.type === 'real'), [trips]);
   const [showTripCreationModal, setShowTripCreationModal] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [showTripOptionsModal, setShowTripOptionsModal] = useState(false);
@@ -424,14 +427,17 @@ export default function HomeTab() {
   
   const onMomentumScrollEnd = useCallback((event: any) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / ITEM_SPACING);
+    const baseLenRaw = trips.length || 1;
+    const baseLen = Math.max(2, baseLenRaw);
+    const modIdx = ((newIndex % baseLen) + baseLen) % baseLen;
+    setActiveModIndex(modIdx);
     if (newIndex <= 1 || newIndex >= data.length - 2) {
-      const targetIndex = trips.length + (newIndex % trips.length);
+      const targetIndex = baseLen + (newIndex % baseLen);
       flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
     }
   }, [data.length, trips.length]);
 
-  const TripCard = React.memo(({ index }: { index: number }) => {
-    const trip = data[index];
+  const TripCardBase = ({ item: trip, index, tripsLength, activeIndexMod }: { item: Trip; index: number; tripsLength: number; activeIndexMod: number }) => {
     if (!trip) return null;
 
     const inputRange = [
@@ -467,6 +473,9 @@ export default function HomeTab() {
     const unifiedTransform = {
       transform: [{ perspective: 1000 }, { rotateY }, { scale }],
     };
+
+    const safeLen = Math.max(2, tripsLength);
+    const isActive = (((index % safeLen) + safeLen) % safeLen) === activeIndexMod;
 
     if (trip.type === 'placeholder') {
       // Anticipation: press scale for the card
@@ -530,12 +539,12 @@ export default function HomeTab() {
                   colors={['#fff0f3', '#fce7f3']}
                   style={styles.plusIconContainer}
                 >
-                  <Icon name="plus" size="xl" color={colors.primary[600]} />
+                  <Icon name="plus" size="xl" color={lightOverrideColors.primary[600]} />
                 </LinearGradient>
-                <Text style={[styles.placeholderTitle, { color: colors.text.primary }]}>
+                <Text style={[styles.placeholderTitle, { color: lightOverrideColors.text.primary }]}>
                   {trip.title}
                 </Text>
-                <Text style={[styles.placeholderSubtitle, { color: colors.text.secondary }]}>
+                <Text style={[styles.placeholderSubtitle, { color: lightOverrideColors.text.secondary }]}>
                   Save your memories
                 </Text>
               </View>
@@ -549,41 +558,70 @@ export default function HomeTab() {
     // Real trip card
     return (
       <View style={styles.itemContainer}>
-        <Animated.View style={[styles.unifiedWrapper, unifiedTransform]}>
+        <Animated.View style={[styles.unifiedWrapper, unifiedTransform]} renderToHardwareTextureAndroid shouldRasterizeIOS>
           {/* Outer right cast shadow on background (behind the book) */}
-          <LinearGradient
-            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.18)", "rgba(0,0,0,0.08)", "rgba(0,0,0,0)"]}
-            locations={[0, 0.18, 0.72, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.outerRightShadow}
-            pointerEvents="none"
-          />
+          {isActive && (
+            <LinearGradient
+              colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.18)", "rgba(0,0,0,0.08)", "rgba(0,0,0,0)"]}
+              locations={[0, 0.18, 0.72, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.outerRightShadow}
+              pointerEvents="none"
+            />
+          )}
           
-          <Pressable style={styles.tripCard} onPress={() => handleTripPress(trip)}>
+          <Pressable
+            style={[styles.tripCard, !isActive && styles.tripCardInactive]}
+            onPress={() => {
+              if (isActive) {
+                handleTripPress(trip);
+              } else {
+                const baseLenRaw = trips.length || 1;
+                const baseLen = Math.max(2, baseLenRaw);
+                const targetIndex = baseLen + (index % baseLen);
+                flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
+                setTimeout(() => handleTripPress(trip), 360);
+              }
+            }}
+          >
             <Image 
               source={trip.image} 
               placeholder={{ blurhash: trip.blurhash }} 
               style={styles.tripImage} 
               contentFit="cover" 
               transition={0} 
+              cachePolicy="memory-disk"
+              priority="high"
             />
-            {/* Subtle inward spine shadow from the left edge */}
-            <LinearGradient
-              colors={["rgba(0,0,0,0.24)", "rgba(0,0,0,0)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.leftInnerShadow}
-              pointerEvents="none"
-            />
-            {/* Book spine overlay on top of the image (no corner rounding) */}
+            {/* Book cover overlay on top of image */}
             <Image
-              source={require('../../public/assets/NEW-trip-shadow-overlay.webp')}
-              style={styles.bookSpineOverlay}
+              source={require('../../public/assets/trip-book-overlay (2).webp')}
+              style={styles.bookCoverOverlay}
               contentFit="cover"
               transition={0}
               pointerEvents="none"
             />
+            {/* Subtle inward spine shadow from the left edge */}
+            {isActive && (
+              <LinearGradient
+                colors={["rgba(0,0,0,0.24)", "rgba(0,0,0,0)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.leftInnerShadow}
+                pointerEvents="none"
+              />
+            )}
+            {/* Book spine overlay on top of the image (no corner rounding) */}
+            {isActive && (
+              <Image
+                source={require('../../public/assets/NEW-trip-shadow-overlay.webp')}
+                style={styles.bookSpineOverlay}
+                contentFit="cover"
+                transition={0}
+                pointerEvents="none"
+              />
+            )}
             {/* Removed outline border */}
             <LinearGradient 
               colors={trip.gradient as any || ['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']} 
@@ -593,10 +631,20 @@ export default function HomeTab() {
             {/* Three-dot menu button */}
             <TouchableOpacity 
               style={styles.tripOptionsButton}
-              onPress={() => handleTripOptions(trip.id)}
+              onPress={() => {
+                if (isActive) {
+                  handleTripOptions(trip.id);
+                } else {
+                  const baseLenRaw = trips.length || 1;
+                  const baseLen = Math.max(2, baseLenRaw);
+                  const targetIndex = baseLen + (index % baseLen);
+                  flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
+                  setTimeout(() => handleTripOptions(trip.id), 360);
+                }
+              }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <View style={[styles.tripOptionsButtonBackground, { backgroundColor: 'rgba(0,0,0,0.2)' }]}>
+              <View style={[styles.tripOptionsButtonBackground, { backgroundColor: 'rgba(0,0,0,0.2)', opacity: isActive ? 1 : 0.7 }]}>
                 <Icon name="ellipsis-horizontal" size="sm" color="rgba(255,255,255,0.8)" />
               </View>
             </TouchableOpacity>
@@ -615,15 +663,35 @@ export default function HomeTab() {
         </Animated.View>
       </View>
     );
+  };
+
+  const TripCard = React.memo(TripCardBase, (prev, next) => {
+    const prevLen = Math.max(2, prev.tripsLength);
+    const nextLen = Math.max(2, next.tripsLength);
+    const prevActive = (((prev.index % prevLen) + prevLen) % prevLen) === prev.activeIndexMod;
+    const nextActive = (((next.index % nextLen) + nextLen) % nextLen) === next.activeIndexMod;
+    return prev.item.id === next.item.id && prevActive === nextActive;
   });
 
   const renderDots = () => {
     if (trips.length === 0) return null;
-    
+    const dots = realTrips.length > 0 ? realTrips : trips;
+    if (dots.length <= 1) {
+      return (
+        <View style={styles.dotsContainer}>
+          <View style={styles.dotsWrapper}>
+            <View style={styles.dotContainer}>
+              <View style={[styles.dot, { opacity: 1 }]} />
+            </View>
+          </View>
+        </View>
+      );
+    }
+    const baseLen = Math.max(2, trips.length); // must align with carousel cycle length (includes placeholders)
     return (
       <View style={styles.dotsContainer}>
         <View style={[styles.dotsWrapper]}>
-          {trips.map((_, index) => {
+          {dots.map((_, index) => {
             const createInputRange = (baseIndex: number) => [
               (baseIndex - 1) * ITEM_SPACING,
               baseIndex * ITEM_SPACING,
@@ -632,8 +700,8 @@ export default function HomeTab() {
 
             const inputRanges = [
               createInputRange(index),
-              createInputRange(index + trips.length),
-              createInputRange(index + trips.length * 2),
+              createInputRange(index + baseLen),
+              createInputRange(index + baseLen * 2),
             ];
 
             const dotOpacity = scrollX.interpolate({
@@ -905,7 +973,9 @@ export default function HomeTab() {
       <Animated.FlatList
         ref={flatListRef}
         data={data}
-        renderItem={({ index }) => <TripCard index={index} />}
+        renderItem={React.useCallback(({ item, index }: { item: Trip; index: number }) => (
+          <TripCard item={item} index={index} tripsLength={trips.length} activeIndexMod={activeModIndex} />
+        ), [])}
         keyExtractor={(item, index) => `${item?.id}-${index}`}
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -928,14 +998,13 @@ export default function HomeTab() {
         style={styles.carousel}
         // Performance optimizations
         initialNumToRender={3}
-        maxToRenderPerBatch={1}
-        windowSize={5}
-        removeClippedSubviews={false}
-        updateCellsBatchingPeriod={100}
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
-          autoscrollToTopThreshold: 10,
-        }}
+        maxToRenderPerBatch={2}
+        windowSize={2}
+        removeClippedSubviews
+        updateCellsBatchingPeriod={50}
+        CellRendererComponent={(props) => (
+          <View {...props} collapsable={false} renderToHardwareTextureAndroid shouldRasterizeIOS />
+        )}
       />
       
       {/* Trip Creation Modal */}
@@ -1166,6 +1235,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
+  tripCardInactive: {
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
+  },
   placeholderCard: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -1256,6 +1330,16 @@ const styles = StyleSheet.create({
     // Match the image’s rounding exactly
     borderRadius: 6,
     zIndex: 4,
+  },
+  // Topmost decorative overlay for book look
+  bookCoverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 6,
+    zIndex: 5,
   },
   // Subtle right-side vertical shadow as tall as the image
   rightShadowOverlay: {

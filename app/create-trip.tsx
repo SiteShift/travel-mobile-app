@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, Animated, StatusBar, InteractionManager } from 'react-native';
+import { useTheme } from '../src/contexts/ThemeContext';
 import LottieView from 'lottie-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +10,7 @@ import { SimpleDateTimePicker } from '../src/components/SimpleDateTimePicker';
 export default function CreateTripScreen() {
   const { imageUri, handoff, title: initialTitle, startDate: initialStart, endDate: initialEnd } = useLocalSearchParams<{ imageUri?: string; handoff?: string; title?: string; startDate?: string; endDate?: string }>();
   const router = useRouter();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const BRAND_ORANGE = '#EF6144';
   const BORDER_GREY = '#E5E7EB';
@@ -114,14 +116,14 @@ export default function CreateTripScreen() {
   }, [showGuard, guardOpacity, contentOpacity]);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background.primary} />
       {/* Instant render: no white overlay */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Animated.View style={[styles.content, { opacity: contentOpacity }]}>
           {/* First-render guard to ensure white is fully painted on first frame */}
           {showGuard && (
-            <Animated.View pointerEvents="none" style={[styles.whiteOverlay, { opacity: guardOpacity }]} />
+            <Animated.View pointerEvents="none" style={[styles.whiteOverlay, { opacity: guardOpacity, backgroundColor: colors.background.primary }]} />
           )}
           {/* Close button */}
           <Animated.View style={[styles.closeButtonWrapper, { top: insets.top + 10, right: 32, opacity: fadeClose }]}> 
@@ -137,18 +139,18 @@ export default function CreateTripScreen() {
           </Animated.View>
 
           <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 64 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <Animated.Text style={[styles.title, { opacity: fadeTitle }]}>Create Book</Animated.Text>
+            <Animated.Text style={[styles.title, { opacity: fadeTitle, color: colors.text.primary }]}>Create Book</Animated.Text>
 
             {/* Cover image selection removed: cover comes from the book creation flow */}
 
             <Animated.View style={[styles.group, { opacity: fadeTitleGroup }]}> 
-              <Text style={styles.label}>Title</Text>
+              <Text style={[styles.label, { color: colors.text.primary }]}>Title</Text>
               <TextInput
-                style={[styles.input, isTitleFocused ? styles.inputFocused : styles.inputDashed]}
+                style={[styles.input, { backgroundColor: colors.surface.primary, color: colors.text.primary, borderColor: colors.border.primary }, isTitleFocused ? { borderColor: '#EF6144' } : styles.inputDashed]}
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Enter your trip name..."
-                placeholderTextColor="#A3A3A3"
+                placeholderTextColor={isDark ? '#9A9A9A' : '#A3A3A3'}
                 maxLength={50}
                 onFocus={() => setIsTitleFocused(true)}
                 onBlur={() => setIsTitleFocused(false)}
@@ -160,36 +162,36 @@ export default function CreateTripScreen() {
             <Animated.View style={[styles.row, { opacity: fadeDatesDesc }]}> 
               <TouchableOpacity
                 activeOpacity={0.9}
-                style={[styles.col, styles.inputLike, startFocusPulse ? styles.inputFocused : styles.inputDashed]}
+                style={[styles.col, styles.inputLike, { backgroundColor: colors.surface.primary, borderColor: colors.border.primary }, startFocusPulse ? { borderColor: '#EF6144' } : styles.inputDashed]}
                 onPress={() => {
                   setStartFocusPulse(true);
                   setTimeout(() => setStartFocusPulse(false), 800);
                 }}
               >
-                <Text style={styles.label}>Start Date</Text>
+                <Text style={[styles.label, { color: colors.text.primary }]}>Start Date</Text>
                 <SimpleDateTimePicker value={startDate} onDateChange={setStartDate} mode="date" />
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.9}
-                style={[styles.col, styles.inputLike, endFocusPulse ? styles.inputFocused : styles.inputDashed]}
+                style={[styles.col, styles.inputLike, { backgroundColor: colors.surface.primary, borderColor: colors.border.primary }, endFocusPulse ? { borderColor: '#EF6144' } : styles.inputDashed]}
                 onPress={() => {
                   setEndFocusPulse(true);
                   setTimeout(() => setEndFocusPulse(false), 800);
                 }}
               >
-                <Text style={styles.label}>End Date</Text>
+                <Text style={[styles.label, { color: colors.text.primary }]}>End Date</Text>
                 <SimpleDateTimePicker value={endDate} onDateChange={setEndDate} mode="date" />
               </TouchableOpacity>
             </Animated.View>
 
             <Animated.View style={[styles.group, { opacity: fadeDatesDesc }]}> 
-              <Text style={styles.label}>Description</Text>
+              <Text style={[styles.label, { color: colors.text.primary }]}>Description</Text>
               <TextInput
-                style={[styles.input, styles.multiline, isDescFocused ? styles.inputFocused : styles.inputDashed]}
+                style={[styles.input, styles.multiline, { backgroundColor: colors.surface.primary, color: colors.text.primary, borderColor: colors.border.primary }, isDescFocused ? { borderColor: '#EF6144' } : styles.inputDashed]}
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Tell your story..."
-                placeholderTextColor="#A3A3A3"
+                placeholderTextColor={isDark ? '#9A9A9A' : '#A3A3A3'}
                 multiline
                 onFocus={() => setIsDescFocused(true)}
                 onBlur={() => setIsDescFocused(false)}
@@ -205,7 +207,7 @@ export default function CreateTripScreen() {
           </ScrollView>
           {/* No media picker here; cover image is supplied by the previous step */}
           {isSaving && (
-            <Animated.View style={[styles.loadingOverlay, { opacity: overlayOpacity }]} pointerEvents="auto">
+            <Animated.View style={[styles.loadingOverlay, { opacity: overlayOpacity, backgroundColor: colors.background.primary }]} pointerEvents="auto">
               <View style={styles.loadingContent}>
                 <LottieView
                   source={require('../public/assets/nhdHuewM5l.json')}
@@ -213,7 +215,7 @@ export default function CreateTripScreen() {
                   loop
                   style={styles.loadingLottie}
                 />
-                <Text style={styles.loadingText}>Creating your Trip...</Text>
+                <Text style={[styles.loadingText, { color: colors.text.primary }]}>Creating your Trip...</Text>
               </View>
             </Animated.View>
           )}

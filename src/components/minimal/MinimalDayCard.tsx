@@ -41,11 +41,11 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
     // Simple circular day indicator
     return (
       <TouchableOpacity
-        style={[
+          style={[
           styles.compactContainer,
           {
-            backgroundColor: isSelected ? '#4A4A4A' : colors.surface.secondary, // Dark grey instead of blue
-            borderColor: isSelected ? '#000000' : '#E5E5E5', // Dark black border for selected
+            backgroundColor: isSelected ? colors.surface.tertiary : colors.surface.secondary,
+            borderColor: isSelected ? colors.border.secondary : colors.border.primary,
           }
         ]}
         onPress={handlePress}
@@ -69,7 +69,7 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
         {
           borderColor: colors.border.secondary,
           borderWidth: 1,
-          backgroundColor: hasMemories ? 'white' : colors.surface.secondary,
+          backgroundColor: colors.surface.secondary,
         }
       ]}
       onPress={handlePress}
@@ -90,7 +90,7 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
               accessible={false}
             />
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.6)']}
+            colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)']}
             style={styles.gradient}
           />
         </>
@@ -113,7 +113,7 @@ const MinimalDayCard: React.FC<MinimalDayCardProps> = memo(({
       {/* Clean info overlay, only for days with memories */}
       {hasMemories && (
         <View style={styles.infoOverlay}>
-          <Text style={[styles.dayLabel, { color: 'white' }]}>
+           <Text style={[styles.dayLabel, { color: '#ffffff' }]}>
             Day {day.day}
           </Text>
           <Text style={styles.photoCount}>

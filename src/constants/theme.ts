@@ -264,32 +264,32 @@ export const DARK_COLORS = {
   
   // Background colors
   background: {
-    primary: '#0f172a',
-    secondary: '#1e293b',
-    tertiary: '#334155',
+    primary: '#121212',
+    secondary: '#1a1a1a',
+    tertiary: '#222222',
   },
   
   // Surface colors
   surface: {
-    primary: '#1e293b',
-    secondary: '#334155',
-    tertiary: '#475569',
+    primary: '#1a1a1a',
+    secondary: '#222222',
+    tertiary: '#2a2a2a',
   },
   
   // Text colors
   text: {
-    primary: '#f8fafc',
-    secondary: '#e2e8f0',
-    tertiary: '#cbd5e1',
-    disabled: '#64748b',
-    inverse: '#0f172a',
+    primary: '#ffffff',
+    secondary: '#e5e5e5',
+    tertiary: '#bdbdbd',
+    disabled: '#8a8a8a',
+    inverse: '#0a0a0a',
   },
   
   // Border colors
   border: {
-    primary: '#334155',
-    secondary: '#475569',
-    tertiary: '#64748b',
+    primary: '#2e2e2e',
+    secondary: '#3a3a3a',
+    tertiary: '#4a4a4a',
   },
 } as const;
 

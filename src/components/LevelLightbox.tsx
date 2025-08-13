@@ -1,9 +1,7 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { Modal, View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, FlatList } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { Icon } from './Icon';
-import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -69,7 +67,7 @@ const LEVEL_COLOR_MAP: Record<number, any> = {
 };
 
 export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, initialIndex = 0 }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [userLevel, setUserLevel] = useState<number>(1);
   const [userXp, setUserXp] = useState<number>(0);
@@ -77,7 +75,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
   const scaleAnim = useRef(new Animated.Value(0.96)).current;
   const listRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
-  const progressX = useRef(new Animated.Value(0)).current; // relative progress within current page
+  // note: removed JS-side per-page progress tracking to enable native-driven scroll
 
   // Build 10 pages: unlock based on user's current level
   const levels: LevelItem[] = useMemo(() => {
@@ -113,15 +111,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     return arr;
   }, [userLevel]);
 
-  // Global connector fill width between pages
-  const connectorFillWidth = useMemo(() => {
-    return progressX.interpolate({
-      inputRange: [0, CARD_WIDTH],
-      outputRange: [0, PROGRESS_TRACK_WIDTH],
-      extrapolate: 'clamp',
-    });
-  }, [progressX]);
-  const currentLevel = levels[Math.min(activeIndex, levels.length - 1)] || levels[0];
+  // keep active index only; avoid extra animated calcs that force JS thread work
 
   useEffect(() => {
     if (visible) {
@@ -139,9 +129,8 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         Animated.timing(opacityAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
         Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, friction: 8, tension: 80 }),
       ]).start();
-      setTimeout(() => {
-        listRef.current?.scrollToIndex({ index: Math.min(initialIndex, levels.length - 1), animated: false });
-      }, 0);
+      // ensure we open on requested index with zero-cost jump
+      listRef.current?.scrollToIndex({ index: Math.min(initialIndex, levels.length - 1), animated: false });
     } else {
       opacityAnim.setValue(0);
       scaleAnim.setValue(0.96);
@@ -154,7 +143,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     setActiveIndex(idx);
   };
 
-  const renderLevelPage = ({ item, index }: { item: LevelItem; index: number }) => {
+  const renderLevelPage = useCallback(({ item, index }: { item: LevelItem; index: number }) => {
     const inputRange = [
       (index - 1) * CARD_WIDTH,
       index * CARD_WIDTH,
@@ -171,11 +160,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
       extrapolate: 'clamp',
     });
     // Progress from this level to the next (0 -> 1 as you swipe right)
-    const toNextProgressWidth = scrollX.interpolate({
-      inputRange: [index * CARD_WIDTH, (index + 1) * CARD_WIDTH],
-      outputRange: [0, PROGRESS_TRACK_WIDTH],
-      extrapolate: 'clamp',
-    });
+    // removed per-swipe connector progress to avoid JS-thread work
     const isLocked = !item.unlocked;
     const isUnlocked = !isLocked;
     const isLevelOne = item.level === 1;
@@ -210,6 +195,10 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             source={item.image}
             style={[styles.simpleBadgeImage]}
             contentFit="contain"
+            recyclingKey={`level-${item.level}`}
+            allowDownscaling
+            priority={index === activeIndex ? 'high' : 'low'}
+            cachePolicy="memory-disk"
             accessibilityLabel={`Level ${item.level}`}
           />
         </Animated.View>
@@ -235,21 +224,27 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         </View>
       </View>
     );
-  };
+  }, [activeIndex, scrollX, userLevel, userXp]);
+
+  // Cap the number of dash/dot rail segments to limit view count and mounting cost
+  const dashSegmentCount = useMemo(() => {
+    const ideal = Math.ceil((CARD_WIDTH * (levels.length - 1)) / 14) * 2;
+    return Math.min(120, Math.max(40, ideal));
+  }, [levels.length]);
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
       <Animated.View style={[styles.backdrop, { opacity: opacityAnim }]} />
       <View style={styles.centerWrap}>
-        <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}> 
+        <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }], backgroundColor: colors.surface.primary }]}> 
           {/* Close */}
-          <TouchableOpacity onPress={onClose} accessibilityLabel="Close levels" style={styles.closeBtn}>
+          <TouchableOpacity onPress={onClose} accessibilityLabel="Close levels" style={[styles.closeBtn, isDark ? { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.12)' } : null]}>
             <Icon name="close" size="md" color="text" />
           </TouchableOpacity>
           {/* Info button retained (optional) */}
 
           {/* Global rails behind badges (single instance across pages) */}
-          <View style={styles.railBar} pointerEvents="none" />
+          <View style={[styles.railBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]} pointerEvents="none" />
           <Animated.View
             pointerEvents="none"
             style={[
@@ -268,7 +263,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
                 { left: 0, right: 0 },
               ]}
             >
-              {Array.from({ length: Math.ceil((CARD_WIDTH * (levels.length - 1)) / 14) * 2 }).map((_, i) =>
+              {Array.from({ length: dashSegmentCount }).map((_, i) =>
                 i % 2 === 0 ? (
                   <View key={`dash-${i}`} style={styles.dashSegment} />
                 ) : (
@@ -290,21 +285,21 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             bounces={false}
             overScrollMode="never"
             snapToAlignment="center"
+            initialScrollIndex={Math.min(initialIndex, levels.length - 1)}
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              {
-                useNativeDriver: false,
-                listener: (e: any) => {
-                  const x = e?.nativeEvent?.contentOffset?.x || 0;
-                  const rel = x - Math.floor(x / CARD_WIDTH) * CARD_WIDTH; // x % CARD_WIDTH
-                  progressX.setValue(rel);
-                },
-              }
+              { useNativeDriver: true }
             )}
+            scrollEventThrottle={16}
             onMomentumScrollEnd={onMomentumEnd}
             getItemLayout={(data, index) => ({ length: CARD_WIDTH, offset: CARD_WIDTH * index, index })}
             contentContainerStyle={{ alignItems: 'center' }}
             style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}
+            initialNumToRender={1}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            removeClippedSubviews
+            decelerationRate="fast"
           />
 
           {/* Progress bar removed as requested */}
@@ -329,7 +324,9 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
                     {
                       opacity: dotOpacity,
                       transform: [{ scale: dotScale }],
-                      backgroundColor: isActive ? (isActiveLocked ? '#000' : '#f97316') : 'rgba(0,0,0,0.2)'
+                      backgroundColor: isActive
+                        ? (isActiveLocked ? (isDark ? '#fff' : '#000') : '#f97316')
+                        : (isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)')
                     },
                   ]}
                 />

@@ -164,8 +164,8 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
       useNativeDriver: true,
     }).start();
     
-    StatusBar.setBarStyle('light-content', true);
-  }, [translateY]);
+    StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content', true);
+  }, [translateY, isDark]);
   
   // Utility Functions
   const requestPermissions = useCallback(async () => {
@@ -1010,12 +1010,12 @@ export default function TripDetailMinimal({ tripId }: TripDetailMinimalProps) {
 const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background.primary,
   },
   
   modal: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background.primary,
     overflow: 'hidden',
   },
   
@@ -1195,12 +1195,12 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: 'transparent',
   },
   scrollContentContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background.primary,
     minHeight: screenHeight,
   },
   
   contentArea: {
-    backgroundColor: '#FFFFFF', // Explicitly white for clean overlap
+    backgroundColor: colors.surface.primary,
     borderTopLeftRadius: BORDER_RADIUS.xxl * 1.5, // Much more rounded
     borderTopRightRadius: BORDER_RADIUS.xxl * 1.5,
     marginTop: -BORDER_RADIUS.xxl * 1.5, // Increased negative margin for more overlap
@@ -1211,7 +1211,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   // Story View
   storyContainer: {
     paddingHorizontal: SPACING.lg,
-    backgroundColor: '#FFFFFF', // Consistent white background
+    backgroundColor: colors.surface.primary,
   },
   
   dayHeader: {
@@ -1280,7 +1280,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   // Grid View
   gridContainer: {
-    backgroundColor: '#FFFFFF', // Consistent white background
+    backgroundColor: colors.surface.primary,
     paddingBottom: SPACING.xl,
   },
   
@@ -1317,7 +1317,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   
   bottomSpacing: {
     height: 100,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface.primary,
   },
   
   // Change Photo Modal Styles
@@ -1333,7 +1333,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderRadius: 14,
     width: screenWidth * 0.65,
     maxWidth: 270,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface.primary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.35,
@@ -1353,14 +1353,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontWeight: '600',
     marginBottom: SPACING.xs,
     textAlign: 'center',
-    color: '#000000',
+    color: colors.text.primary,
   },
   
   changePhotoSubtitle: {
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
-    color: '#666666',
+    color: colors.text.secondary,
   },
   
   changePhotoOptions: {
@@ -1370,7 +1370,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   changePhotoOption: {
     paddingVertical: SPACING.md + 2,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: colors.border.primary,
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: 44,
@@ -1379,6 +1379,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   changePhotoOptionText: {
     fontSize: 17,
     fontWeight: '400',
-    color: '#007AFF',
+    color: colors.primary[500],
   },
 }); 
