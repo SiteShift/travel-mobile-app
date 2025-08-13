@@ -65,42 +65,217 @@ export type Mission = {
 	progress: number;
 };
 
-const MISSIONS_KEY = 'missions_v1_state';
+const MISSIONS_KEY = 'missions_v2_state';
+const MISSION_STAGES_KEY = 'mission_stages_v1';
+const STREAK_KEY = 'app_streak_v1';
+
+type MissionStageState = { stageIndex: number };
+type MissionStagesMap = Record<string, MissionStageState>;
+
+type LadderDef = {
+	thresholds: number[];
+	titleFor: (n: number) => string;
+	rewardFor: (n: number) => number; // reward XP for completing this threshold
+};
+
+const LADDERS: Record<string, LadderDef> = {
+	// Create Trips ladder
+	create_trips: {
+		thresholds: [1, 2, 3, 5, 10, 15, 20, 25, 50, 100],
+		titleFor: (n) => `Create ${n} trip${n > 1 ? 's' : ''}`,
+		rewardFor: (n) => 25 * n,
+	},
+	// Add Photos ladder
+	add_photos: {
+		thresholds: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
+		titleFor: (n) => `Add ${n} photo${n > 1 ? 's' : ''}`,
+		rewardFor: (n) => 1 * n,
+	},
+	// Add Captions ladder
+	add_captions: {
+		thresholds: [1, 5, 10, 25, 50, 100],
+		titleFor: (n) => `Add ${n} caption${n > 1 ? 's' : ''}`,
+		rewardFor: (n) => 2 * n,
+	},
+	// Open app streak ladder
+	open_streak: {
+		thresholds: [1, 3, 5, 7, 10, 20, 30],
+		titleFor: (n) => `Open the app ${n} day${n > 1 ? 's' : ''} in a row` ,
+		rewardFor: (n) => 10 * n,
+	},
+	// Visit Countries ladder
+	visit_countries: {
+		thresholds: [1, 2, 3, 4, 5, 6, 7, 35, 40, 45, 50, 100],
+		titleFor: (n) => `Visit ${n} countr${n === 1 ? 'y' : 'ies'}`,
+		rewardFor: (n) => 20 * n,
+	},
+};
+
+async function getMissionStages(): Promise<MissionStagesMap> {
+	try {
+		const raw = await AsyncStorage.getItem(MISSION_STAGES_KEY);
+		return raw ? JSON.parse(raw) : {};
+	} catch {
+		return {};
+	}
+}
+
+async function setMissionStages(next: MissionStagesMap): Promise<void> {
+	try {
+		await AsyncStorage.setItem(MISSION_STAGES_KEY, JSON.stringify(next));
+	} catch {}
+}
+
+// Daily streak tick; call once per app open/focus
+export async function tickDailyStreak(): Promise<{ current: number; best: number }>{
+	try {
+		const today = new Date();
+		const ymd = today.toISOString().slice(0, 10);
+		const raw = await AsyncStorage.getItem(STREAK_KEY);
+		let current = 0;
+		let best = 0;
+		let last = '';
+		if (raw) {
+			try { ({ current, best, last } = JSON.parse(raw)); } catch {}
+		}
+		if (last === ymd) {
+			// already counted today
+			return { current, best };
+		}
+		let nextCurrent = 1;
+		if (last) {
+			const prev = new Date(last + 'T00:00:00');
+			const diffDays = Math.floor((today.getTime() - prev.getTime()) / (24 * 60 * 60 * 1000));
+			nextCurrent = diffDays === 1 ? current + 1 : 1;
+		}
+		const nextBest = Math.max(best || 0, nextCurrent);
+		await AsyncStorage.setItem(STREAK_KEY, JSON.stringify({ current: nextCurrent, best: nextBest, last: ymd }));
+		return { current: nextCurrent, best: nextBest };
+	} catch {
+		return { current: 0, best: 0 };
+	}
+}
+
+async function computeAppStats(): Promise<{
+	tripCount: number;
+	photoCount: number;
+	captionCount: number;
+	countryCount: number;
+	currentStreak: number;
+}> {
+	try {
+		const keys = await AsyncStorage.getAllKeys();
+		const tripKeys = keys.filter(k => k.startsWith('trip_'));
+		let tripCount = 0;
+		let photoCount = 0;
+		let captionCount = 0;
+		const countries = new Set<string>();
+		if (tripKeys.length) {
+			const pairs = await AsyncStorage.multiGet(tripKeys);
+			for (const [, v] of pairs) {
+				if (!v) continue;
+				try {
+					const t = JSON.parse(v);
+					if (t?.id && t?.title) tripCount += 1;
+					if (typeof t?.country === 'string' && t.country.trim()) countries.add(String(t.country).trim());
+					if (typeof t?.totalPhotos === 'number') {
+						photoCount += t.totalPhotos;
+					} else if (Array.isArray(t?.days)) {
+						for (const d of t.days) {
+							const mems = Array.isArray(d?.memories) ? d.memories : [];
+							photoCount += mems.length;
+							captionCount += mems.reduce((acc: number, m: any) => acc + (m?.caption && String(m.caption).trim() ? 1 : 0), 0);
+						}
+					}
+				} catch {}
+			}
+		}
+		let currentStreak = 0;
+		try {
+			const raw = await AsyncStorage.getItem(STREAK_KEY);
+			if (raw) {
+				const s = JSON.parse(raw);
+				currentStreak = Number(s?.current) || 0;
+			}
+		} catch {}
+		return { tripCount, photoCount, captionCount, countryCount: countries.size, currentStreak };
+	} catch {
+		return { tripCount: 0, photoCount: 0, captionCount: 0, countryCount: 0, currentStreak: 0 };
+	}
+}
+
+// Advance ladder stages based on current computed stats; grants XP on each stage completion.
+export async function updateMissionLadders(): Promise<void> {
+	const stages = await getMissionStages();
+	const stats = await computeAppStats();
+	const metrics: Record<string, number> = {
+		create_trips: stats.tripCount,
+		add_photos: stats.photoCount,
+		add_captions: stats.captionCount,
+		open_streak: stats.currentStreak,
+		visit_countries: stats.countryCount,
+	};
+	let changed = false;
+	for (const key of Object.keys(LADDERS)) {
+		const def = LADDERS[key];
+		const currentStage = stages[key]?.stageIndex ?? 0;
+		let idx = currentStage;
+		let metric = metrics[key] || 0;
+		// Advance multiple stages if metric already exceeds several thresholds
+  while (idx < def.thresholds.length && metric >= def.thresholds[idx]) {
+    // Award XP only when crossing into a new stage beyond the previously stored one
+    if (idx > (stages[key]?.stageIndex ?? 0)) {
+      await addXp(def.rewardFor(def.thresholds[idx]));
+    }
+    idx += 1;
+  }
+		const nextIdx = Math.min(idx, def.thresholds.length - 1);
+		if ((stages[key]?.stageIndex ?? 0) !== nextIdx) {
+			stages[key] = { stageIndex: nextIdx };
+			changed = true;
+		} else if (!stages[key]) {
+			stages[key] = { stageIndex: nextIdx };
+			changed = true;
+		}
+	}
+	if (changed) await setMissionStages(stages);
+}
 
 export async function getMissions(): Promise<Mission[]> {
 	try {
-		const raw = await AsyncStorage.getItem(MISSIONS_KEY);
-		// default missions
-        const defaults: Mission[] = [
+		// Always update streak on mission read
+		await tickDailyStreak();
+		// Ensure ladders are advanced to current stats
+		await updateMissionLadders();
+		const stages = await getMissionStages();
+		const stats = await computeAppStats();
+		const missions: Mission[] = [];
+		// Build ladder missions (one per ladder, at current stage)
+		for (const key of Object.keys(LADDERS)) {
+			const def = LADDERS[key];
+			const stage = Math.min(stages[key]?.stageIndex ?? 0, def.thresholds.length - 1);
+			const target = def.thresholds[stage];
+			const metric = key === 'create_trips' ? stats.tripCount
+				: key === 'add_photos' ? stats.photoCount
+				: key === 'add_captions' ? stats.captionCount
+				: key === 'open_streak' ? stats.currentStreak
+				: key === 'visit_countries' ? stats.countryCount
+				: 0;
+			missions.push({
+				id: `ladder_${key}`,
+				title: def.titleFor(target),
+				rewardXp: def.rewardFor(target),
+				maxProgress: target,
+				progress: Math.min(target, metric),
+			});
+		}
+		// Include simple, one-off missions
+		missions.push(
 			{ id: 'share_app', title: 'Share the app', rewardXp: 100, maxProgress: 1, progress: 0 },
-			{ id: 'add_3_trips', title: 'Create 3 trips', rewardXp: 150, maxProgress: 3, progress: 0 },
-			{ id: 'first_trip', title: 'Create your first trip', rewardXp: 50, maxProgress: 1, progress: 0 },
-			{ id: 'add_10_photos', title: 'Add 10 photos', rewardXp: 30, maxProgress: 10, progress: 0 },
-			{ id: 'add_20_photos', title: 'Add 20 photos', rewardXp: 60, maxProgress: 20, progress: 0 },
-			{ id: 'add_50_photos', title: 'Add 50 photos', rewardXp: 120, maxProgress: 50, progress: 0 },
-			{ id: 'reach_level_3', title: 'Reach Level 3', rewardXp: 200, maxProgress: 1, progress: 0 },
-			{ id: 'first_caption', title: 'Add your first caption', rewardXp: 20, maxProgress: 1, progress: 0 },
-			{ id: 'weekly_login', title: 'Open the app 7 days in a row', rewardXp: 70, maxProgress: 7, progress: 0 },
 			{ id: 'add_profile_picture', title: 'Add a profile picture', rewardXp: 40, maxProgress: 1, progress: 0 },
-            // New: country exploration mission (progress equals unique countries)
-            { id: 'visit_5_countries', title: 'Visit 5 countries', rewardXp: 150, maxProgress: 5, progress: 0 },
-		];
-		const removedIds = new Set<string>(['map_explorer', 'entry_writer', 'gallery_curator']);
-		if (!raw) {
-			await AsyncStorage.setItem(MISSIONS_KEY, JSON.stringify(defaults));
-			return defaults;
-		}
-		const existing: Mission[] = JSON.parse(raw);
-		// Merge in any new defaults that aren't present yet
-		const existingIds = new Set(existing.map(m => m.id));
-		const merged = [...existing];
-		for (const d of defaults) {
-			if (!existingIds.has(d.id)) merged.push(d);
-		}
-		// Remove deprecated missions if present
-		const cleaned = merged.filter(m => !removedIds.has(m.id));
-		await AsyncStorage.setItem(MISSIONS_KEY, JSON.stringify(cleaned));
-		return cleaned;
+		);
+		await AsyncStorage.setItem(MISSIONS_KEY, JSON.stringify(missions));
+		return missions;
 	} catch {
 		return [];
 	}
