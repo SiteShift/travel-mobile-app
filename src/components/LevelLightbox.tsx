@@ -181,24 +181,18 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     const isLevelOne = item.level === 1;
     const accent = LEVEL_ACCENT_COLOR[item.level] || '#f97316';
 
-    // XP/progress computation for this page
+    // XP/progress computation using cumulative targets (0 → 10,000)
     let fillRatio = 0;
     let xpLabel = '0/0';
     try {
       const leveling = require('../utils/leveling');
-      const spanForThisLevel = typeof leveling.xpSpanForLevel === 'function' ? leveling.xpSpanForLevel(item.level) : (typeof leveling.XP_PER_LEVEL === 'number' ? leveling.XP_PER_LEVEL : 100);
-      if (item.level < userLevel) {
-        fillRatio = 1;
-        xpLabel = `${spanForThisLevel}/${spanForThisLevel}`;
-      } else if (item.level === userLevel) {
-        const { currentLevelXp, nextLevelXp } = leveling.xpToNextLevel(userXp);
-        const levelSpan = Math.max(1, nextLevelXp - currentLevelXp);
-        const gained = Math.max(0, Math.min(levelSpan, userXp - currentLevelXp));
-        fillRatio = gained / levelSpan;
-        xpLabel = `${gained}/${levelSpan}`;
+      const target = typeof leveling.getXpTargetForLevel === 'function' ? leveling.getXpTargetForLevel(item.level) : 0;
+      const current = Math.max(0, Math.min(target, userXp || 0));
+      fillRatio = target > 0 ? current / target : 0;
+      if (item.level === 10) {
+        xpLabel = current >= target ? 'Max Level' : `${current}/${target}`;
       } else {
-        fillRatio = 0;
-        xpLabel = `0/${spanForThisLevel}`;
+        xpLabel = `${current}/${target}`;
       }
     } catch {}
 
@@ -237,7 +231,17 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
           <View style={[styles.simpleProgressTrack, isLocked && styles.simpleProgressTrackLocked]}>
             <View style={[styles.simpleProgressFill, isLocked && styles.simpleProgressFillLocked, { width: PROGRESS_TRACK_WIDTH * fillRatio, backgroundColor: accent }]} />
           </View>
-          <Text style={[styles.xpLabel, isLocked && styles.xpLabelLocked]}>{xpLabel}</Text>
+          <Text style={[
+            styles.xpLabel,
+            isLocked ? styles.xpLabelLocked : { color: (LEVEL_ACCENT_COLOR[item.level] || '#f97316') + '99' }
+          ]}>{xpLabel}</Text>
+          {(() => {
+            const status = item.level < userLevel ? 'Completed' : (item.level === userLevel ? 'Current level' : '');
+            if (!status) return null;
+            return (
+              <Text style={styles.statusLabel}>{status}</Text>
+            );
+          })()}
         </View>
       </View>
     );
@@ -245,8 +249,10 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
 
   // Cap the number of dash/dot rail segments to limit view count and mounting cost
   const dashSegmentCount = useMemo(() => {
-    const ideal = Math.ceil((CARD_WIDTH * (levels.length - 1)) / 14) * 2;
-    return Math.min(120, Math.max(40, ideal));
+    const railWidth = CARD_WIDTH * (levels.length - 1);
+    // Average segment width ~ 11px (mix of dash/dot + margins). Add buffer.
+    const ideal = Math.ceil(railWidth / 11) + 20;
+    return Math.min(320, Math.max(80, ideal));
   }, [levels.length]);
 
   return (
@@ -269,7 +275,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
               {
                 width: CARD_WIDTH * levels.length,
                 transform: [
-                  { translateX: Animated.add(Animated.multiply(scrollX, -1), new Animated.Value(CARD_WIDTH * 0.5)) },
+                  { translateX: Animated.multiply(scrollX, -1) },
                 ],
               },
             ]}
@@ -277,7 +283,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             <View
               style={[
                 styles.dashDotRailContainer,
-                { left: 0, right: 0 },
+                { left: CARD_WIDTH / 2, right: CARD_WIDTH / 2 },
               ]}
             >
               {Array.from({ length: dashSegmentCount }).map((_, i) =>
@@ -855,10 +861,19 @@ const styles = StyleSheet.create({
   xpLabel: {
     marginTop: 10,
     fontSize: 20,
-    color: 'rgba(249,115,22,0.5)', // a bit more transparent
+    color: 'rgba(249,115,22,0.5)',
     fontWeight: '800',
   },
   xpLabelLocked: {
+    color: '#9CA3AF',
+  },
+  statusLabel: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '700',
+  },
+  statusLabelLocked: {
     color: '#9CA3AF',
   },
   levelPill: {

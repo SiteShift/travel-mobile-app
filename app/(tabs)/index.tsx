@@ -384,31 +384,17 @@ export default function HomeTab() {
         country: updated.country || t.country,
       } : t));
       Alert.alert('Success', 'Trip updated successfully!');
-      // Recompute unique countries and update mission progress
+      // Update ladders/missions after metadata change (e.g., country)
       try {
-        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-        const keys = await AsyncStorage.getAllKeys();
-        const tripKeys = keys.filter((k: string) => k.startsWith('trip_'));
-        const all = await AsyncStorage.multiGet(tripKeys);
-        const countries = new Set<string>();
-        for (const [, v] of all) {
-          if (!v) continue;
-          try {
-            const parsed = JSON.parse(v);
-            if (parsed?.country && typeof parsed.country === 'string') {
-              countries.add(String(parsed.country).trim());
-            }
-          } catch {}
-        }
-        const uniqueCount = countries.size;
         const leveling = require('../../src/utils/leveling');
-        const missions = await leveling.getMissions();
-        const m = missions.find((m: any) => m.id === 'visit_5_countries');
-        const currentProgress = m ? m.progress : 0;
-        const delta = Math.max(0, uniqueCount - currentProgress);
-        if (delta > 0) {
-          await leveling.progressMission('visit_5_countries', delta);
+        if (typeof leveling.updateMissionLadders === 'function') {
+          await leveling.updateMissionLadders();
         }
+        if (typeof leveling.getMissions === 'function') {
+          await leveling.getMissions();
+        }
+        const state2 = await leveling.getLevelingState();
+        setUserLevel(leveling.computeLevelFromXp(state2.xp));
       } catch {}
     } catch (error) {
       console.error('❌ Error updating trip:', error);
@@ -489,11 +475,16 @@ export default function HomeTab() {
       };
       
       await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(simpleTrip));
-      // Leveling: award XP for creating a trip and progress mission
+      // Leveling: award XP for creating a trip and advance ladders/missions snapshot
       try {
         const leveling = require('../../src/utils/leveling');
         await leveling.awardTripCreated();
-        await leveling.progressMission('add_3_trips', 1);
+        if (typeof leveling.updateMissionLadders === 'function') {
+          await leveling.updateMissionLadders();
+        }
+        if (typeof leveling.getMissions === 'function') {
+          await leveling.getMissions();
+        }
         const state = await leveling.getLevelingState();
         const lvl = leveling.computeLevelFromXp(state.xp);
         setUserLevel(lvl);

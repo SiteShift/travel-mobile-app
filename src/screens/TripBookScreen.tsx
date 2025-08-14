@@ -316,32 +316,33 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
     setIsEditMode(prevEditing => {
       const willBeEditing = !prevEditing;
       if (prevEditing) {
-        // Commit drafts to photos when leaving edit mode
-        setDayPhotos(prev => {
-          const dayArr = prev[currentDayNumber] || [];
-          const updated = dayArr.map(p => ({
-            ...p,
-            caption: captionDrafts[p.id] ?? p.caption ?? '',
-          }));
-          const next = { ...prev, [currentDayNumber]: updated };
-          persistAllDayPhotos(next);
-          // Update mission ladders so caption count is reflected promptly
-          (async () => {
-            try {
-              const leveling = require('../utils/leveling');
-              if (typeof leveling.updateMissionLadders === 'function') {
-                await leveling.updateMissionLadders();
-              }
-            } catch {}
-          })();
-          return next;
-        });
+        // Commit drafts to photos when leaving edit mode, then persist and update ladders in order
+        const prev = dayPhotos;
+        const dayArr = prev[currentDayNumber] || [];
+        const updated = dayArr.map(p => ({ ...p, caption: captionDrafts[p.id] ?? p.caption ?? '' }));
+        const next = { ...prev, [currentDayNumber]: updated };
+        setDayPhotos(next);
+        (async () => {
+          try {
+            await persistAllDayPhotos(next);
+          } catch {}
+          try {
+            const leveling = require('../utils/leveling');
+            if (typeof leveling.updateMissionLadders === 'function') {
+              await leveling.updateMissionLadders();
+            }
+            // Rebuild and persist missions so Profile reads latest immediately
+            if (typeof leveling.getMissions === 'function') {
+              await leveling.getMissions();
+            }
+          } catch {}
+        })();
         // Clear drafts after save
         setCaptionDrafts({});
       }
       return willBeEditing;
     });
-  }, [currentDayNumber, captionDrafts]);
+  }, [currentDayNumber, captionDrafts, dayPhotos, persistAllDayPhotos]);
 
   const currentDayHasPhotos = useMemo(() => {
     const list = dayPhotos[currentDayNumber] || [];
@@ -374,11 +375,16 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
         persistAllDayPhotos(next);
         return next;
       });
-      // Leveling: award +1 XP per image added
+      // Leveling: award +1 XP per image added and refresh ladders/missions snapshot
       try {
         const leveling = require('../utils/leveling');
         await leveling.awardPhotosAdded(items.length);
-        // Optionally update celebration state or header level elsewhere on focus
+        if (typeof leveling.updateMissionLadders === 'function') {
+          await leveling.updateMissionLadders();
+        }
+        if (typeof leveling.getMissions === 'function') {
+          await leveling.getMissions();
+        }
       } catch {}
     } catch (e) {
       console.error('Add photos error', e);
@@ -550,7 +556,18 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                       if (!target) return prev;
                       nextDay[index] = { ...target, caption: text } as any;
                       const next = { ...prev, [day]: nextDay };
-                      persistAllDayPhotos(next);
+                      // Persist first, then recompute ladders/missions so AsyncStorage reflects latest captions
+                      persistAllDayPhotos(next).then(async () => {
+                        try {
+                          const leveling = require('../utils/leveling');
+                          if (typeof leveling.updateMissionLadders === 'function') {
+                            await leveling.updateMissionLadders();
+                          }
+                          if (typeof leveling.getMissions === 'function') {
+                            await leveling.getMissions();
+                          }
+                        } catch {}
+                      });
                       return next;
                     });
                   };
@@ -655,7 +672,18 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                         if (!target) return prev;
                         nextDay[i] = { ...target, caption: text } as any;
                         const next = { ...prev, [day]: nextDay };
-                        persistAllDayPhotos(next);
+                        // Persist first, then recompute ladders/missions
+                        persistAllDayPhotos(next).then(async () => {
+                          try {
+                            const leveling = require('../utils/leveling');
+                            if (typeof leveling.updateMissionLadders === 'function') {
+                              await leveling.updateMissionLadders();
+                            }
+                            if (typeof leveling.getMissions === 'function') {
+                              await leveling.getMissions();
+                            }
+                          } catch {}
+                        });
                         return next;
                       });
                     }}
@@ -777,12 +805,12 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: false, quality: 1, exif: true });
                     if (res.canceled || !res.assets?.length) return;
                     const newUri = trip?.id ? await persistAssetToTripDir(res.assets[0].uri, trip.id, d) : await ensureFileUriAsync(res.assets[0].uri);
-                    setDayPhotos(prev => {
-                      const updatedDay = (prev[d] || []).map((p, idx) => (idx === i ? { ...p, uri: newUri, crop: { scale: 1, offsetX: 0, offsetY: 0 } } : p));
-                      const next = { ...prev, [d]: updatedDay };
-                      persistAllDayPhotos(next);
-                      return next;
-                    });
+                      setDayPhotos(prev => {
+                        const updatedDay = (prev[d] || []).map((p, idx) => (idx === i ? { ...p, uri: newUri, crop: { scale: 1, offsetX: 0, offsetY: 0 } } : p));
+                        const next = { ...prev, [d]: updatedDay };
+                        persistAllDayPhotos(next);
+                        return next;
+                      });
                   } finally {
                     setOptionsSheet({ visible: false, day: null, index: null });
                   }
@@ -793,7 +821,7 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
               <View style={styles.optionsDivider} />
               <TouchableOpacity
                 style={styles.optionsItem}
-                onPress={() => {
+                onPress={async () => {
                   const d = optionsSheet.day; const i = optionsSheet.index;
                   if (d == null || i == null) return;
                   setDayPhotos(prev => {
@@ -801,6 +829,16 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                     persistAllDayPhotos(next);
                     return next;
                   });
+                  // After deletion, refresh ladders/missions so photo counts reflect correctly
+                  try {
+                    const leveling = require('../utils/leveling');
+                    if (typeof leveling.updateMissionLadders === 'function') {
+                      await leveling.updateMissionLadders();
+                    }
+                    if (typeof leveling.getMissions === 'function') {
+                      await leveling.getMissions();
+                    }
+                  } catch {}
                   setOptionsSheet({ visible: false, day: null, index: null });
                 }}
               >

@@ -5,29 +5,52 @@ export type LevelingState = {
 };
 
 const STORAGE_KEY = 'leveling_v1_state';
-export const XP_PER_LEVEL = 100; // simple linear curve: every 100 XP → next level
-const MAX_LEVEL = 10; // hard cap
+export const TOTAL_XP = 10000; // Total XP available across all missions
+export const MAX_LEVEL = 10;
+
+// Progressive level thresholds (cumulative XP required to reach each level)
+// Option B: strictly increasing spans up to L9; preserve L8=5000, L9=8000; L10 final=10000
+// Levels min XP: [0, 200, 500, 1000, 1600, 2400, 3400, 5000, 8000, 10000]
+// Resulting spans: [200, 300, 500, 600, 800, 1000, 1600, 3000, 2000]
+const LEVEL_THRESHOLDS: number[] = [0, 200, 500, 1000, 1600, 2400, 3400, 5000, 8000, TOTAL_XP];
 
 export const computeLevelFromXp = (xp: number): number => {
-    if (!Number.isFinite(xp) || xp <= 0) return 1;
-    const raw = Math.floor(xp / XP_PER_LEVEL) + 1;
-    // Clamp to max level
-    return Math.max(1, Math.min(MAX_LEVEL, raw));
+    const safeXp = Number.isFinite(xp) ? Math.max(0, Math.floor(xp)) : 0;
+    let level = 1;
+    for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i -= 1) {
+        if (safeXp >= LEVEL_THRESHOLDS[i]) { level = i + 1; break; }
+    }
+    return Math.max(1, Math.min(MAX_LEVEL, level));
 };
 
 export const xpToNextLevel = (xp: number): { currentLevel: number; currentLevelXp: number; nextLevelXp: number; remaining: number } => {
     const level = computeLevelFromXp(xp);
-    const currentLevelXp = (level - 1) * XP_PER_LEVEL;
-    // At max level, freeze the threshold so the UI shows full bar and no remaining
-    const nextLevelXp = level >= MAX_LEVEL ? currentLevelXp : level * XP_PER_LEVEL;
-    const remaining = level >= MAX_LEVEL ? 0 : Math.max(0, nextLevelXp - xp);
+    const currentLevelXp = LEVEL_THRESHOLDS[level - 1] || 0;
+    const nextLevelXp = level >= MAX_LEVEL ? LEVEL_THRESHOLDS[MAX_LEVEL - 1] : LEVEL_THRESHOLDS[level];
+    const remaining = level >= MAX_LEVEL ? 0 : Math.max(0, nextLevelXp - Math.max(0, xp));
     return { currentLevel: level, currentLevelXp, nextLevelXp, remaining };
 };
 
-// XP span required to complete a given level (kept linear, but exported so UI like LevelLightbox can query)
+// XP span required to complete a given level
 export const xpSpanForLevel = (level: number): number => {
-  if (!Number.isFinite(level) || level < 1) return XP_PER_LEVEL;
-  return XP_PER_LEVEL;
+  const lv = Number.isFinite(level) ? Math.max(1, Math.min(MAX_LEVEL, Math.floor(level))) : 1;
+  if (lv < MAX_LEVEL) {
+    return (LEVEL_THRESHOLDS[lv] ?? 0) - (LEVEL_THRESHOLDS[lv - 1] ?? 0);
+  }
+  // Level 10 is max level → no further progression span
+  return 0;
+};
+
+// Cumulative thresholds helpers
+export const getMinXpForLevel = (level: number): number => {
+  const lv = Number.isFinite(level) ? Math.max(1, Math.min(MAX_LEVEL, Math.floor(level))) : 1;
+  return LEVEL_THRESHOLDS[lv - 1] ?? 0;
+};
+
+export const getXpTargetForLevel = (level: number): number => {
+  const lv = Number.isFinite(level) ? Math.max(1, Math.min(MAX_LEVEL, Math.floor(level))) : 1;
+  if (lv >= MAX_LEVEL) return TOTAL_XP;
+  return LEVEL_THRESHOLDS[lv] ?? TOTAL_XP;
 };
 
 export async function getLevelingState(): Promise<LevelingState> {
@@ -89,42 +112,113 @@ type LadderDef = {
 	rewardFor: (n: number) => number; // reward XP for completing this threshold
 };
 
+// Target total XP across all ladders + one-offs should be 10,000.
+// One-offs sum to 220, so ladders total to 9,780. Allocate per ladder below.
+const LADDER_TOTALS: Record<string, number> = {
+	create_trips: 1760,
+	add_photos: 1960,
+	add_captions: 1760,
+	open_streak: 390,
+	visit_countries: 2540,
+	achieve_level: 1370,
+};
+
+function buildProgressiveRewards(thresholds: number[], total: number): Record<number, number> {
+	// Progressive weighting by stage index (1..k) to give more XP later
+	// Use exponent > 1 for progression; tune to produce smooth growth
+	const exponent = 1.4;
+	const weights: number[] = thresholds.map((_, i) => Math.pow(i + 1, exponent));
+	const weightSum = weights.reduce((a, b) => a + b, 0);
+	const rawRewards = weights.map(w => (w / (weightSum || 1)) * Math.max(0, total));
+	const rounded = rawRewards.map(v => Math.max(1, Math.round(v)));
+	let diff = Math.max(0, total - rounded.reduce((a, b) => a + b, 0));
+	// Distribute any remainder to later stages to preserve progression
+	for (let i = rounded.length - 1; i >= 0 && diff > 0; i -= 1) {
+		rounded[i] += 1;
+		diff -= 1;
+	}
+	// If we overshot due to rounding, subtract from earliest stages
+	let overshoot = Math.max(0, rounded.reduce((a, b) => a + b, 0) - Math.max(0, total));
+	for (let i = 0; i < rounded.length && overshoot > 0; i += 1) {
+		const take = Math.min(overshoot, Math.max(0, rounded[i] - 1));
+		rounded[i] -= take;
+		overshoot -= take;
+	}
+	const map: Record<number, number> = Object.create(null);
+	thresholds.forEach((t, i) => { map[t] = rounded[i]; });
+	return map;
+}
+
+// Precompute progressive reward maps for each ladder
+const REWARD_MAPS: Record<string, Record<number, number>> = Object.create(null);
+
 const LADDERS: Record<string, LadderDef> = {
 	// Create Trips ladder
 	create_trips: {
-		thresholds: [1, 2, 3, 5, 10, 15, 20, 25, 50, 100],
+    // Match available badge images: 1,2,3,5,10,15,20,25,30,40,50
+    thresholds: [1, 2, 3, 5, 10, 15, 20, 25, 30, 40, 50],
 		titleFor: (n) => `Create ${n} trip${n > 1 ? 's' : ''}`,
-		rewardFor: (n) => 25 * n,
+		rewardFor: (n) => {
+			if (!REWARD_MAPS.create_trips) {
+				REWARD_MAPS.create_trips = buildProgressiveRewards(LADDERS.create_trips.thresholds, LADDER_TOTALS.create_trips);
+			}
+			return REWARD_MAPS.create_trips[n] ?? 1;
+		},
 	},
 	// Add Photos ladder
 	add_photos: {
-    thresholds: [5, 10, 25, 50],
+    thresholds: [5, 10, 25, 50, 100, 250, 500, 1000],
 		titleFor: (n) => `Add ${n} photo${n > 1 ? 's' : ''}`,
-		rewardFor: (n) => 1 * n,
+		rewardFor: (n) => {
+			if (!REWARD_MAPS.add_photos) {
+				REWARD_MAPS.add_photos = buildProgressiveRewards(LADDERS.add_photos.thresholds, LADDER_TOTALS.add_photos);
+			}
+			return REWARD_MAPS.add_photos[n] ?? 1;
+		},
 	},
 	// Add Captions ladder
 	add_captions: {
     thresholds: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
 		titleFor: (n) => `Add ${n} caption${n > 1 ? 's' : ''}`,
-		rewardFor: (n) => 2 * n,
+		rewardFor: (n) => {
+			if (!REWARD_MAPS.add_captions) {
+				REWARD_MAPS.add_captions = buildProgressiveRewards(LADDERS.add_captions.thresholds, LADDER_TOTALS.add_captions);
+			}
+			return REWARD_MAPS.add_captions[n] ?? 1;
+		},
 	},
 	// Open app streak ladder
 	open_streak: {
     thresholds: [3, 5, 7, 10, 30],
-    titleFor: (n) => `${n} Day Streak`,
-		rewardFor: (n) => 10 * n,
+		titleFor: (n) => `${n} Day Streak`,
+		rewardFor: (n) => {
+			if (!REWARD_MAPS.open_streak) {
+				REWARD_MAPS.open_streak = buildProgressiveRewards(LADDERS.open_streak.thresholds, LADDER_TOTALS.open_streak);
+			}
+			return REWARD_MAPS.open_streak[n] ?? 1;
+		},
 	},
 	// Visit Countries ladder
 	visit_countries: {
     thresholds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 25, 50, 100],
 		titleFor: (n) => `Visit ${n} countr${n === 1 ? 'y' : 'ies'}`,
-		rewardFor: (n) => 20 * n,
+		rewardFor: (n) => {
+			if (!REWARD_MAPS.visit_countries) {
+				REWARD_MAPS.visit_countries = buildProgressiveRewards(LADDERS.visit_countries.thresholds, LADDER_TOTALS.visit_countries);
+			}
+			return REWARD_MAPS.visit_countries[n] ?? 1;
+		},
 	},
   // Achieve Level ladder (levels 2 → 10)
   achieve_level: {
     thresholds: [2, 3, 4, 5, 6, 7, 8, 9, 10],
-    titleFor: (n) => `Achieve Level ${n}`,
-    rewardFor: (n) => 50 * n,
+		titleFor: (n) => `Achieve Level ${n}`,
+		rewardFor: (n) => {
+			if (!REWARD_MAPS.achieve_level) {
+				REWARD_MAPS.achieve_level = buildProgressiveRewards(LADDERS.achieve_level.thresholds, LADDER_TOTALS.achieve_level);
+			}
+			return REWARD_MAPS.achieve_level[n] ?? 1;
+		},
   },
 };
 
@@ -187,26 +281,35 @@ async function computeAppStats(): Promise<{
 		let photoCount = 0;
 		let captionCount = 0;
 		const countries = new Set<string>();
-		if (tripKeys.length) {
-			const pairs = await AsyncStorage.multiGet(tripKeys);
-			for (const [, v] of pairs) {
-				if (!v) continue;
-				try {
-					const t = JSON.parse(v);
-					if (t?.id && t?.title) tripCount += 1;
-					if (typeof t?.country === 'string' && t.country.trim()) countries.add(String(t.country).trim());
-					if (typeof t?.totalPhotos === 'number') {
-						photoCount += t.totalPhotos;
-					} else if (Array.isArray(t?.days)) {
-						for (const d of t.days) {
-							const mems = Array.isArray(d?.memories) ? d.memories : [];
-							photoCount += mems.length;
-							captionCount += mems.reduce((acc: number, m: any) => acc + (m?.caption && String(m.caption).trim() ? 1 : 0), 0);
-						}
-					}
-				} catch {}
-			}
-		}
+    if (tripKeys.length) {
+      const pairs = await AsyncStorage.multiGet(tripKeys);
+      for (const [, v] of pairs) {
+        if (!v) continue;
+        try {
+          const t = JSON.parse(v);
+          if (t?.id && t?.title) tripCount += 1;
+          if (typeof t?.country === 'string' && t.country.trim()) countries.add(String(t.country).trim());
+
+          // Photos: prefer fast totalPhotos if present, else sum from days
+          if (typeof t?.totalPhotos === 'number') {
+            photoCount += t.totalPhotos;
+          } else if (Array.isArray(t?.days)) {
+            for (const d of t.days) {
+              const mems = Array.isArray(d?.memories) ? d.memories : [];
+              photoCount += mems.length;
+            }
+          }
+
+          // Captions: always scan days if present, even when totalPhotos is present
+          if (Array.isArray(t?.days)) {
+            for (const d of t.days) {
+              const mems = Array.isArray(d?.memories) ? d.memories : [];
+              captionCount += mems.reduce((acc: number, m: any) => acc + (m?.caption && String(m.caption).trim() ? 1 : 0), 0);
+            }
+          }
+        } catch {}
+      }
+    }
 		let currentStreak = 0;
 		try {
 			const raw = await AsyncStorage.getItem(STREAK_KEY);

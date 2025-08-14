@@ -46,8 +46,9 @@ export default function ProfileTab() {
   const PROFILE_KEY = 'profile_settings_v1';
   const animatedProgress = React.useRef(new Animated.Value(0)).current;
   const themeAnim = React.useRef(new Animated.Value(isDark ? 1 : 0)).current;
+  const themeToggleScale = React.useRef(new Animated.Value(1)).current;
   const [missions, setMissions] = React.useState<{ id: string; title: string; rewardXp: number; maxProgress: number; progress: number }[]>([]);
-  const [xpSummary, setXpSummary] = React.useState<{ level: number; gained: number; span: number }>({ level: 1, gained: 0, span: 100 });
+  const [xpSummary, setXpSummary] = React.useState<{ level: number; gained: number; span: number; totalXp: number }>({ level: 1, gained: 0, span: 100, totalXp: 0 });
   const [avatarUri, setAvatarUri] = React.useState(user.avatar);
   const [displayName, setDisplayName] = React.useState(user.name);
   const [isEditProfileVisible, setIsEditProfileVisible] = React.useState(false);
@@ -97,12 +98,16 @@ export default function ProfileTab() {
     return TRIP_MISSION_BADGES[chosen] || TRIP_MISSION_BADGES[1];
   };
 
-  // Photo mission badge images by target count
+  // Photo mission badge images by target count (extended thresholds)
   const PHOTO_MISSION_BADGES: Record<number, any> = {
-    5: require('../../public/assets/Tripmission-badgeimages/tripmission-5_compressed.webp'),
-    10: require('../../public/assets/Tripmission-badgeimages/tripmission-10_compressed.webp'),
-    25: require('../../public/assets/Tripmission-badgeimages/tripmission-25_compressed.webp'),
-    50: require('../../public/assets/Tripmission-badgeimages/tripmission-50_compressed.webp'),
+    5: require('../../public/assets/tripmemo-addphotomission-badges/addphotosmission-5_compressed.webp'),
+    10: require('../../public/assets/tripmemo-addphotomission-badges/addphotosmission-10_compressed.webp'),
+    25: require('../../public/assets/tripmemo-addphotomission-badges/addphotosmission-25_compressed.webp'),
+    50: require('../../public/assets/tripmemo-addphotomission-badges/addphotosmission-50_compressed.webp'),
+    100: require('../../public/assets/tripmemo-addphotomission-badges/addphotosmission-100_compressed.webp'),
+    250: require('../../public/assets/tripmemo-addphotomission-badges/addphotosmission-250_compressed.webp'),
+    500: require('../../public/assets/tripmemo-addphotomission-badges/addphotosmission-500_compressed.webp'),
+    1000: require('../../public/assets/tripmemo-addphotomission-badges/addphotosmission-1000_compressed.webp'),
   };
 
   const getPhotoMissionBadgeSource = (target: number) => {
@@ -251,6 +256,24 @@ export default function ProfileTab() {
     }).start();
   }, [isDark]);
 
+  const handleThemeTogglePressIn = React.useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Animated.timing(themeToggleScale, {
+      toValue: 0.96,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  }, [themeToggleScale]);
+
+  const handleThemeTogglePressOut = React.useCallback(() => {
+    Animated.spring(themeToggleScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 400,
+      friction: 10,
+    }).start();
+  }, [themeToggleScale]);
+
   React.useEffect(() => {
     (async () => {
       try {
@@ -267,7 +290,7 @@ export default function ProfileTab() {
         setMissions(list);
         const state = await getLevelingState();
         const info = xpToNextLevel(state.xp || 0);
-        setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp });
+        setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp, totalXp: state.xp || 0 });
         // Load local best Trippin score for CTA
         try {
           const best = await AsyncStorage.getItem(TRIPPIN_BEST_KEY);
@@ -338,6 +361,10 @@ export default function ProfileTab() {
       await progressMission('play_trippin', 1);
       const list = await getMissions();
       setMissions(list);
+      // Refresh XP bar immediately after mission XP award
+      const state = await getLevelingState();
+      const info = xpToNextLevel(state.xp || 0);
+      setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp, totalXp: state.xp || 0 });
     } catch {}
   }, [setIsGameVisible, setMissions]);
 
@@ -404,12 +431,20 @@ export default function ProfileTab() {
       let active = true;
       (async () => {
         try {
+          // Force ladders to reflect any changes made off-screen (e.g., captions)
+          try {
+            const leveling = require('../../src/utils/leveling');
+            if (typeof leveling.updateMissionLadders === 'function') {
+              await leveling.updateMissionLadders();
+            }
+          } catch {}
+
           const list = await getMissions();
           const state = await getLevelingState();
           const info = xpToNextLevel(state.xp || 0);
           if (!active) return;
           setMissions(list);
-          setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp });
+          setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp, totalXp: state.xp || 0 });
           await computeUniqueCountries();
           // refresh trips/photos too
           try {
@@ -442,7 +477,7 @@ export default function ProfileTab() {
       setMissions(list);
       const state = await getLevelingState();
       const info = xpToNextLevel(state.xp || 0);
-      setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp });
+      setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp, totalXp: state.xp || 0 });
     } catch {}
   };
 
@@ -450,7 +485,7 @@ export default function ProfileTab() {
     try {
       const state = await getLevelingState();
       const info = xpToNextLevel(state.xp || 0);
-      setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp });
+      setXpSummary({ level: info.currentLevel, gained: (state.xp || 0) - info.currentLevelXp, span: info.nextLevelXp - info.currentLevelXp, totalXp: state.xp || 0 });
     } catch {}
   };
 
@@ -638,7 +673,7 @@ export default function ProfileTab() {
             {`Level ${xpSummary.level}`}
           </Text>
           <Text style={[styles.progressXpSmall, { color: colors.text.secondary }]}>
-            {`${xpSummary.gained}/${xpSummary.span} XP`}
+            {`${xpSummary.totalXp} XP`}
           </Text>
         </View>
 
@@ -924,7 +959,10 @@ export default function ProfileTab() {
         
         {/* Centered Theme Toggle above footer */}
         <View style={styles.themeToggleWrapper}>
+          <Animated.View style={{ transform: [{ scale: themeToggleScale }] }}>
           <Pressable
+            onPressIn={handleThemeTogglePressIn}
+            onPressOut={handleThemeTogglePressOut}
             onPress={toggleTheme}
             accessibilityLabel="Toggle light or dark mode"
             style={[
@@ -947,6 +985,7 @@ export default function ProfileTab() {
               <Icon name={'moon'} size="md" color={isDark ? '#FFFFFF' : colors.text.tertiary} />
             </View>
           </Pressable>
+          </Animated.View>
         </View>
 
         <View style={styles.footer}>
