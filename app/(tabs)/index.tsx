@@ -206,6 +206,7 @@ export default function HomeTab() {
   const [showEditTripModal, setShowEditTripModal] = useState(false);
   const [editInitialData, setEditInitialData] = useState<any>(null);
   const [showLevelsModal, setShowLevelsModal] = useState(false);
+  const [pendingLevelInitialIndex, setPendingLevelInitialIndex] = useState<number | null>(null);
   const [carouselLocked, setCarouselLocked] = useState(false);
   const [pendingOptionsTripId, setPendingOptionsTripId] = useState<string | null>(null);
   const isOptionsPressRef = useRef(false);
@@ -344,6 +345,22 @@ export default function HomeTab() {
         } catch (error) {
           console.error('❌ HomePage: Error loading existing trips:', error);
         }
+
+        // Check pending level-up flag and open LevelLightbox on next visit if present
+        try {
+          const leveling = require('../../src/utils/leveling');
+          if (typeof leveling.getPendingLevelup === 'function') {
+            const pendingLevel: number | null = await leveling.getPendingLevelup();
+            if (pendingLevel && pendingLevel >= 1) {
+              setPendingLevelInitialIndex(Math.max(0, pendingLevel - 1));
+              setShowLevelsModal(true);
+              // Clear flag so it does not recur
+              if (typeof leveling.clearPendingLevelup === 'function') {
+                await leveling.clearPendingLevelup();
+              }
+            }
+          }
+        } catch {}
       };
 
       loadExistingTrips();
@@ -1149,6 +1166,7 @@ export default function HomeTab() {
     setShowLevelsModal(true);
   };
 
+
   const renderLevelIndicator = () => (
     <View style={styles.levelIndicatorContainer}>
       <Animated.View 
@@ -1160,13 +1178,14 @@ export default function HomeTab() {
           },
         ]}
       >
-        <TouchableOpacity 
-          style={[styles.levelIndicatorWrapper, { backgroundColor: colors.surface.tertiary }]}
-          onPress={handleLevelPillPress}
-          onPressIn={handleLevelPillPressIn}
-          onPressOut={handleLevelPillPressOut}
-          activeOpacity={1}
-        >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <TouchableOpacity 
+            style={[styles.levelIndicatorWrapper, { backgroundColor: colors.surface.tertiary }]}
+            onPress={handleLevelPillPress}
+            onPressIn={handleLevelPillPressIn}
+            onPressOut={handleLevelPillPressOut}
+            activeOpacity={1}
+          >
           <View style={styles.levelContent}>
             <View style={styles.levelBadgeContainer}>
               <Image
@@ -1225,7 +1244,8 @@ export default function HomeTab() {
               </Text>
             </View>
           </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     </View>
   );
@@ -1237,8 +1257,16 @@ export default function HomeTab() {
   const renderLevelsModal = () => (
     <LevelLightbox
       visible={showLevelsModal}
-      onClose={() => setShowLevelsModal(false)}
-      initialIndex={Math.max(0, (userLevel || 1) - 1)}
+      onClose={() => {
+        setShowLevelsModal(false);
+        setPendingLevelInitialIndex(null);
+      }}
+      initialIndex={
+        pendingLevelInitialIndex != null
+          ? pendingLevelInitialIndex
+          : Math.max(0, (userLevel || 1) - 1)
+      }
+      celebrateUnlock={pendingLevelInitialIndex != null}
     />
   );
 

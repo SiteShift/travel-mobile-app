@@ -1,8 +1,9 @@
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
-import { Modal, View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, FlatList } from 'react-native';
+import { Modal, View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, FlatList, Easing } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { Icon } from './Icon';
 import { Image } from 'expo-image';
+import LottieView from 'lottie-react-native';
 import * as Haptics from 'expo-haptics';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -68,6 +69,20 @@ const LEVEL_IMAGE_MAP: Record<number, any> = {
   10: LEVEL10_IMG,
 };
 
+// Blacked-out images for reveal base (levels 2..10)
+const BLACKOUT_IMAGE_MAP: Record<number, any> = {
+  1: LEVEL_IMAGE_MAP[1],
+  2: require('../../public/assets/levelbadges-blackedout/level-2-blackedout.webp'),
+  3: require('../../public/assets/levelbadges-blackedout/level-3-blackedout.webp'),
+  4: require('../../public/assets/levelbadges-blackedout/level-4-blackedout.webp'),
+  5: require('../../public/assets/levelbadges-blackedout/level-5-blackedout.webp'),
+  6: require('../../public/assets/levelbadges-blackedout/level-6-blackedout.webp'),
+  7: require('../../public/assets/levelbadges-blackedout/level-7-blackedout.webp'),
+  8: require('../../public/assets/levelbadges-blackedout/level-8-blackedout.webp'),
+  9: require('../../public/assets/levelbadges-blackedout/level-9-blackedout.webp'),
+  10: require('../../public/assets/levelbadges-blackedout/level-10-blackedout.webp'),
+};
+
 // Color accents to match each level badge image (placeholder defaults; will update per your guidance)
 const LEVEL_ACCENT_COLOR: Record<number, string> = {
   1: '#f97316',
@@ -97,7 +112,10 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
   const introGlow = useRef(new Animated.Value(0)).current;
   const sparkleAOpacity = useRef(new Animated.Value(0)).current;
   const sparkleBOpacity = useRef(new Animated.Value(0)).current;
-  // note: removed JS-side per-page progress tracking to enable native-driven scroll
+  const revealImageOpacity = useRef(new Animated.Value(0)).current; // fade-in of color image over blackout base
+  const [showConfetti, setShowConfetti] = useState(false);
+  const confettiOpacity = useRef(new Animated.Value(0)).current;
+  const confettiRef = useRef<LottieView>(null);
 
   // Build 10 pages: unlock based on user's current level
   const levels: LevelItem[] = useMemo(() => {
@@ -158,18 +176,20 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
       if (celebrateUnlock) {
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
         setPagerLocked(true);
-        introScale.setValue(0.88);
+        // Keep base badge static: no intro scale bounce
+        introScale.setValue(1);
         introGlow.setValue(0);
         sparkleAOpacity.setValue(0);
         sparkleBOpacity.setValue(0);
+        revealImageOpacity.setValue(0);
         Animated.sequence([
           Animated.delay(160),
           Animated.parallel([
-            Animated.spring(introScale, { toValue: 1.08, useNativeDriver: true, friction: 6, tension: 120 }),
             Animated.timing(introGlow, { toValue: 1, duration: 380, useNativeDriver: true }),
+            // Start slow reveal: color image opacity from 0 → 1 over blackout base
+            Animated.timing(revealImageOpacity, { toValue: 1, duration: 3500, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
           ]),
           Animated.parallel([
-            Animated.spring(introScale, { toValue: 1, useNativeDriver: true, friction: 7, tension: 100 }),
             Animated.timing(introGlow, { toValue: 0.35, duration: 600, useNativeDriver: true }),
             Animated.sequence([
               Animated.timing(sparkleAOpacity, { toValue: 1, duration: 240, useNativeDriver: true }),
@@ -189,6 +209,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         introGlow.setValue(0);
         sparkleAOpacity.setValue(0);
         sparkleBOpacity.setValue(0);
+        revealImageOpacity.setValue(1);
       }
     } else {
       opacityAnim.setValue(0);
@@ -197,8 +218,30 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
       introGlow.setValue(0);
       sparkleAOpacity.setValue(0);
       sparkleBOpacity.setValue(0);
+      revealImageOpacity.setValue(0);
     }
-  }, [visible, initialIndex, levels.length, opacityAnim, scaleAnim, celebrateUnlock, introScale, introGlow, sparkleAOpacity, sparkleBOpacity]);
+  }, [visible, initialIndex, levels.length, opacityAnim, scaleAnim, celebrateUnlock, introScale, introGlow, sparkleAOpacity, sparkleBOpacity, revealImageOpacity]);
+
+  useEffect(() => {
+    if (!visible || !celebrateUnlock) return;
+    let fired = false;
+    // Start confetti just before the fade completes
+    const THRESHOLD = 0.9;
+    const id = revealImageOpacity.addListener(({ value }) => {
+      if (!fired && value >= THRESHOLD) {
+        fired = true;
+        setShowConfetti(true);
+        confettiOpacity.setValue(0);
+        Animated.timing(confettiOpacity, { toValue: 1, duration: 160, useNativeDriver: true }).start(() => {
+          try { confettiRef.current?.play?.(); } catch {}
+          setTimeout(() => {
+            Animated.timing(confettiOpacity, { toValue: 0, duration: 240, useNativeDriver: true }).start(() => setShowConfetti(false));
+          }, 1600);
+        });
+      }
+    });
+    return () => { try { revealImageOpacity.removeListener(id); } catch {} };
+  }, [visible, celebrateUnlock]);
 
   const onMomentumEnd = (ev: any) => {
     const x = ev.nativeEvent.contentOffset.x;
@@ -222,7 +265,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
       outputRange: [0.97, 1, 0.97],
       extrapolate: 'clamp',
     });
-    const combinedScale = Animated.multiply(characterScale, introScale);
+    const isCelebratedPage = celebrateUnlock && index === initialIndex;
     // Progress from this level to the next (0 -> 1 as you swipe right)
     // removed per-swipe connector progress to avoid JS-thread work
     const isLocked = !item.unlocked;
@@ -250,23 +293,64 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         {/* Rail moved to global position above to avoid duplicates */}
         {/* Segmented connector removed in favor of dash-dot rail */}
         {/* Large centered image slightly nearer to top */}
-        <Animated.View style={[styles.badgeWrap, { transform: [{ translateY: characterTranslateY }, { scale: combinedScale }] }]}> 
+        <Animated.View style={[
+          styles.badgeWrap,
+          {
+            transform: [
+              { translateY: isCelebratedPage ? 0 : characterTranslateY },
+              { scale: isCelebratedPage ? 1 : characterScale },
+            ],
+          },
+        ]}> 
           {/* Intro glow behind badge during celebration */}
           {celebrateUnlock && index === initialIndex && (
             <Animated.View
               style={[styles.ringAmbientGlow, { opacity: introGlow }]}
             />
           )}
-          <Image
-            source={item.image}
-            style={[styles.simpleBadgeImage]}
-            contentFit="contain"
-            recyclingKey={`level-${item.level}`}
-            allowDownscaling
-            priority={index === activeIndex ? 'high' : 'low'}
-            cachePolicy="memory-disk"
-            accessibilityLabel={`Level ${item.level}`}
-          />
+          {celebrateUnlock && index === initialIndex ? (
+            <View style={styles.badgeImageStack}>
+              {/* Base: blacked-out version */}
+              <Image
+                source={BLACKOUT_IMAGE_MAP[item.level] || LEVEL_IMAGE_MAP[item.level]}
+                style={styles.stackedImage}
+                contentFit="contain"
+                recyclingKey={`level-${item.level}-blackout`}
+                allowDownscaling
+                priority={index === activeIndex ? 'high' : 'low'}
+                cachePolicy="memory-disk"
+                accessibilityLabel={`Level ${item.level} (blacked out)`}
+              />
+              {/* Reveal: color image fades in over base with identical size/position */}
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.stackedImage, { opacity: revealImageOpacity }]}
+              >
+                <Image
+                  source={LEVEL_IMAGE_MAP[item.level]}
+                  style={styles.stackedImage}
+                  contentFit="contain"
+                  transition={0}
+                  recyclingKey={`level-${item.level}-color`}
+                  allowDownscaling
+                  priority={index === activeIndex ? 'high' : 'low'}
+                  cachePolicy="memory-disk"
+                  accessibilityLabel={`Level ${item.level}`}
+                />
+              </Animated.View>
+            </View>
+          ) : (
+            <Image
+              source={item.image}
+              style={[styles.simpleBadgeImage]}
+              contentFit="contain"
+              recyclingKey={`level-${item.level}`}
+              allowDownscaling
+              priority={index === activeIndex ? 'high' : 'low'}
+              cachePolicy="memory-disk"
+              accessibilityLabel={`Level ${item.level}`}
+            />
+          )}
           {celebrateUnlock && index === initialIndex && (
             <>
               <Animated.View style={[styles.sparkleA, { opacity: sparkleAOpacity, width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.9)' }]} />
@@ -306,7 +390,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         </View>
       </View>
     );
-  }, [activeIndex, scrollX, userLevel, userXp, celebrateUnlock, initialIndex, introScale, sparkleAOpacity, sparkleBOpacity, introGlow]);
+  }, [activeIndex, scrollX, userLevel, userXp, celebrateUnlock, initialIndex, introScale, sparkleAOpacity, sparkleBOpacity, introGlow, revealImageOpacity]);
 
   // Cap the number of dash/dot rail segments to limit view count and mounting cost
   const dashSegmentCount = useMemo(() => {
@@ -418,6 +502,18 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
               );
             })}
           </View>
+
+          {showConfetti && (
+            <Animated.View pointerEvents="none" style={[styles.confettiOverlay, { opacity: confettiOpacity }]}>
+              <LottieView
+                ref={confettiRef}
+                source={require('../../public/assets/create-trip-celebration.json')}
+                autoPlay={false}
+                loop={false}
+                style={styles.confetti}
+              />
+            </Animated.View>
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -708,6 +804,21 @@ const styles = StyleSheet.create({
     width: BADGE_SIZE,
     height: BADGE_SIZE,
     marginTop: 12,
+  },
+  // Stacked images use identical box to avoid any position drift
+  badgeImageStack: {
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stackedImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
   },
   characterImageLocked: {
     tintColor: '#9CA3AF',
@@ -1019,6 +1130,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.3,
   },
+  revealOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000',
+    borderRadius: BADGE_SIZE / 2,
+  },
   // Connector progress under badge
   progressTrack: {
     marginTop: 26,
@@ -1174,6 +1294,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 22,
     elevation: 14,
+  },
+  confettiOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confetti: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
   },
 });
 
