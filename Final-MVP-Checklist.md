@@ -46,20 +46,18 @@ The functionaity is complexy so need to be careful.
 
 
 
-[ ] Need to adjust levels to make sure people cant level up too slow or too fast. Each level needs more xp points on each. Also on the level lightbox each progress bar needs to be coloured depending on the level image. Only level 1 has 'Level 1' pill in top left corner, all unlocked levels need to have a level pill top left corner - again - with the same colour as badge image - I will explain to use what colour for each level.
+[DONE] Need to adjust levels to make sure people cant level up too slow or too fast. Each level needs more xp points on each. Also on the level lightbox each progress bar needs to be coloured depending on the level image. Only level 1 has 'Level 1' pill in top left corner, all unlocked levels need to have a level pill top left corner - again - with the same colour as badge image - I will explain to use what colour for each level.
 
-[ ] 3 cards - countries, trips and photos - make sure the progress bar below makes sense to levelling sysyem
+[DONE] 3 cards - countries, trips and photos - make sure the progress bar below makes sense to levelling sysyem
 
-[ ] Make sure XP levelling system is fully synced
+[DONE] Make sure XP levelling system is fully synced
 
-
-[ ] 'i' on level lightbox to open another lightbox explaining the levelling system
 
 
 [ ] When you level up - next time you go to home page the level lightbox opens up and there is a slow reveal of the new level badge and some other animations - dopamine hit. Can also add an mp3 sound effect. 
 
 
-[ ] Add custom images for each mission. Mission laders - I have created progressive image badge evolution for each mission.
+[DONE] Add custom images for each mission. Mission laders - I have created progressive image badge evolution for each mission.
 
 
 
@@ -74,7 +72,7 @@ The functionaity is complexy so need to be careful.
 
 [DONE] Need to make max level 10. On my account im on level 14. Needs to be restricted to 10.
 
-[ ] Dark mode needs to have orange buttons - also go through all pages to make sure dark mode looks good
+[DONE] Dark mode needs to have orange buttons - also go through all pages to make sure dark mode looks good
 
 [DONE] Improve the 'Play Trippin' section on profile and move it above missions.
 
@@ -82,7 +80,7 @@ The functionaity is complexy so need to be careful.
 
 [ ] 
 
-[ ] 
+[ ] Add collaboration - so people can share trips and collaborate and both/all of them can add photos.
 
 [ ] Add privacy Policy and terms and service
 
