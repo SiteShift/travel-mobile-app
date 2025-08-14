@@ -325,6 +325,15 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
           }));
           const next = { ...prev, [currentDayNumber]: updated };
           persistAllDayPhotos(next);
+          // Update mission ladders so caption count is reflected promptly
+          (async () => {
+            try {
+              const leveling = require('../utils/leveling');
+              if (typeof leveling.updateMissionLadders === 'function') {
+                await leveling.updateMissionLadders();
+              }
+            } catch {}
+          })();
           return next;
         });
         // Clear drafts after save
