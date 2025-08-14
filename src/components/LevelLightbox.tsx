@@ -3,6 +3,7 @@ import { Modal, View, Text, StyleSheet, Dimensions, TouchableOpacity, Animated, 
 import { useTheme } from '../contexts/ThemeContext';
 import { Icon } from './Icon';
 import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -16,6 +17,7 @@ interface LevelLightboxProps {
   visible: boolean;
   onClose: () => void;
   initialIndex?: number;
+  celebrateUnlock?: boolean;
 }
 
 const CARD_WIDTH = Math.min(screenWidth * 0.9, 420);
@@ -80,7 +82,7 @@ const LEVEL_ACCENT_COLOR: Record<number, string> = {
   10: '#8b5cf6',
 };
 
-export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, initialIndex = 0 }) => {
+export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, initialIndex = 0, celebrateUnlock = false }) => {
   const { colors, isDark } = useTheme();
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [userLevel, setUserLevel] = useState<number>(1);
@@ -90,6 +92,11 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
   const listRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const [pagerLocked, setPagerLocked] = useState(false);
+  // Intro celebrate animation values (applied multiplicatively on current page badge)
+  const introScale = useRef(new Animated.Value(1)).current;
+  const introGlow = useRef(new Animated.Value(0)).current;
+  const sparkleAOpacity = useRef(new Animated.Value(0)).current;
+  const sparkleBOpacity = useRef(new Animated.Value(0)).current;
   // note: removed JS-side per-page progress tracking to enable native-driven scroll
 
   // Build 10 pages: unlock based on user's current level
@@ -146,11 +153,52 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
       ]).start();
       // ensure we open on requested index with zero-cost jump
       listRef.current?.scrollToIndex({ index: Math.min(initialIndex, levels.length - 1), animated: false });
+
+      // Optional celebrate unlock: slow reveal on the target page
+      if (celebrateUnlock) {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        setPagerLocked(true);
+        introScale.setValue(0.88);
+        introGlow.setValue(0);
+        sparkleAOpacity.setValue(0);
+        sparkleBOpacity.setValue(0);
+        Animated.sequence([
+          Animated.delay(160),
+          Animated.parallel([
+            Animated.spring(introScale, { toValue: 1.08, useNativeDriver: true, friction: 6, tension: 120 }),
+            Animated.timing(introGlow, { toValue: 1, duration: 380, useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.spring(introScale, { toValue: 1, useNativeDriver: true, friction: 7, tension: 100 }),
+            Animated.timing(introGlow, { toValue: 0.35, duration: 600, useNativeDriver: true }),
+            Animated.sequence([
+              Animated.timing(sparkleAOpacity, { toValue: 1, duration: 240, useNativeDriver: true }),
+              Animated.timing(sparkleAOpacity, { toValue: 0, duration: 420, useNativeDriver: true }),
+            ]),
+            Animated.sequence([
+              Animated.delay(120),
+              Animated.timing(sparkleBOpacity, { toValue: 1, duration: 240, useNativeDriver: true }),
+              Animated.timing(sparkleBOpacity, { toValue: 0, duration: 420, useNativeDriver: true }),
+            ]),
+          ]),
+        ]).start(() => {
+          setPagerLocked(false);
+        });
+      } else {
+        introScale.setValue(1);
+        introGlow.setValue(0);
+        sparkleAOpacity.setValue(0);
+        sparkleBOpacity.setValue(0);
+      }
     } else {
       opacityAnim.setValue(0);
       scaleAnim.setValue(0.96);
+      introScale.setValue(1);
+      introGlow.setValue(0);
+      sparkleAOpacity.setValue(0);
+      sparkleBOpacity.setValue(0);
     }
-  }, [visible, initialIndex, levels.length, opacityAnim, scaleAnim]);
+  }, [visible, initialIndex, levels.length, opacityAnim, scaleAnim, celebrateUnlock, introScale, introGlow, sparkleAOpacity, sparkleBOpacity]);
 
   const onMomentumEnd = (ev: any) => {
     const x = ev.nativeEvent.contentOffset.x;
@@ -174,6 +222,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
       outputRange: [0.97, 1, 0.97],
       extrapolate: 'clamp',
     });
+    const combinedScale = Animated.multiply(characterScale, introScale);
     // Progress from this level to the next (0 -> 1 as you swipe right)
     // removed per-swipe connector progress to avoid JS-thread work
     const isLocked = !item.unlocked;
@@ -201,7 +250,13 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         {/* Rail moved to global position above to avoid duplicates */}
         {/* Segmented connector removed in favor of dash-dot rail */}
         {/* Large centered image slightly nearer to top */}
-        <Animated.View style={[styles.badgeWrap, { transform: [{ translateY: characterTranslateY }, { scale: characterScale }] }]}> 
+        <Animated.View style={[styles.badgeWrap, { transform: [{ translateY: characterTranslateY }, { scale: combinedScale }] }]}> 
+          {/* Intro glow behind badge during celebration */}
+          {celebrateUnlock && index === initialIndex && (
+            <Animated.View
+              style={[styles.ringAmbientGlow, { opacity: introGlow }]}
+            />
+          )}
           <Image
             source={item.image}
             style={[styles.simpleBadgeImage]}
@@ -212,6 +267,12 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
             cachePolicy="memory-disk"
             accessibilityLabel={`Level ${item.level}`}
           />
+          {celebrateUnlock && index === initialIndex && (
+            <>
+              <Animated.View style={[styles.sparkleA, { opacity: sparkleAOpacity, width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.9)' }]} />
+              <Animated.View style={[styles.sparkleB, { opacity: sparkleBOpacity, width: 12, height: 12, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.85)' }]} />
+            </>
+          )}
         </Animated.View>
         {/* Level pill for all unlocked levels, color matched to badge */}
         {isUnlocked && (
@@ -245,7 +306,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
         </View>
       </View>
     );
-  }, [activeIndex, scrollX, userLevel, userXp]);
+  }, [activeIndex, scrollX, userLevel, userXp, celebrateUnlock, initialIndex, introScale, sparkleAOpacity, sparkleBOpacity, introGlow]);
 
   // Cap the number of dash/dot rail segments to limit view count and mounting cost
   const dashSegmentCount = useMemo(() => {

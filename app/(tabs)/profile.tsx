@@ -491,12 +491,20 @@ export default function ProfileTab() {
 
   const handleChangeAvatar = async () => {
     try {
+      // Ensure media library permission before opening picker
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        return;
+      }
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.9,
-      });
+        selectionLimit: 1 as any,
+        allowsMultipleSelection: false as any,
+        presentationStyle: (ImagePicker as any).UIImagePickerPresentationStyle?.FULL_SCREEN ?? undefined,
+      } as any);
       if (res.canceled || !res.assets?.length) return;
       // Update avatar locally so UI reflects immediately
       const newUri = res.assets[0].uri;
@@ -640,7 +648,16 @@ export default function ProfileTab() {
             />
           </Pressable>
           <View accessibilityLabel="Profile picture">
-            <Image source={{ uri: avatarUri }} style={[styles.avatar, { borderColor: colors.accent[500] }]} />
+            <LinearGradient
+              colors={[colors.accent[500], colors.primary[400]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarRing}
+            >
+              <View style={styles.avatarShadowWrap}>
+                <Image source={{ uri: avatarUri }} style={[styles.avatar, { borderColor: '#FFFFFF' }]} />
+              </View>
+            </LinearGradient>
           </View>
           <Text style={[styles.name, { color: colors.text.primary }]}>{displayName}</Text>
         </View>
@@ -1076,8 +1093,18 @@ export default function ProfileTab() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { alignItems: 'center', paddingVertical: SPACING.lg, paddingHorizontal: SPACING.lg, position: 'relative' },
-  avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 3 },
-  name: { ...TYPOGRAPHY.styles.h2, marginTop: SPACING.md, fontFamily: 'MagnoliaScript', fontSize: 48, lineHeight: 50, letterSpacing: -0.5 },
+  avatarRing: { padding: 3, borderRadius: 62, alignItems: 'center', justifyContent: 'center' },
+  avatarShadowWrap: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 6, borderRadius: 60 },
+  avatar: { width: 116, height: 116, borderRadius: 58, borderWidth: 2 },
+  name: { 
+    ...TYPOGRAPHY.styles.h2, 
+    marginTop: SPACING.sm, 
+    fontFamily: 'MagnoliaScript',
+    textAlign: 'center',
+    fontSize: (TYPOGRAPHY.styles.h2 as any)?.fontSize ? (TYPOGRAPHY.styles.h2 as any).fontSize + 5 : 38,
+    lineHeight: (TYPOGRAPHY.styles.h2 as any)?.lineHeight ? (TYPOGRAPHY.styles.h2 as any).lineHeight + 6 : 42,
+    letterSpacing: -0.7,
+  },
   level: { ...TYPOGRAPHY.styles.body, marginTop: SPACING.xs },
   editProfileBtn: { position: 'absolute', right: SPACING.lg, top: SPACING.lg, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239, 97, 68, 0.12)' },
   

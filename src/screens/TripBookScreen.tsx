@@ -259,15 +259,33 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   // Do not depend on hasCelebrated to avoid a second fade when the flag flips after confetti finishes.
   useEffect(() => {
     if (!trip || !celebrationReady) return;
+    // If already celebrated (i.e., not first view), render instantly with no fades
+    if (hasCelebrated) {
+      titleOpacity.setValue(1);
+      dateOpacity.setValue(1);
+      imageOpacity.setValue(1);
+      descOpacity.setValue(1);
+      arrowOpacity.setValue(1);
+      return;
+    }
+
+    // First view: start from zero and animate cinematically
     titleOpacity.setValue(0);
     dateOpacity.setValue(0);
     imageOpacity.setValue(0);
     descOpacity.setValue(0);
     arrowOpacity.setValue(0);
 
-    Animated.timing(titleOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start(() => {
-      Animated.timing(dateOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start(() => {
-        Animated.timing(imageOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start(({ finished }) => {
+    // Use slower, cinematic fade on first view; faster on subsequent views
+    const DURATION_TITLE = 450;
+    const DURATION_DATE = 450;
+    const DURATION_IMAGE = 500;
+    const DURATION_DESC = 450;
+    const DURATION_ARROW = 450;
+
+    Animated.timing(titleOpacity, { toValue: 1, duration: DURATION_TITLE, useNativeDriver: true }).start(() => {
+      Animated.timing(dateOpacity, { toValue: 1, duration: DURATION_DATE, useNativeDriver: true }).start(() => {
+        Animated.timing(imageOpacity, { toValue: 1, duration: DURATION_IMAGE, useNativeDriver: true }).start(({ finished }) => {
           if (finished) {
             // Trigger the celebration right after the image settles (only once per trip)
             if (!hasCelebrated) {
@@ -276,8 +294,8 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
           }
           // Continue with description and arrow fades
           Animated.sequence([
-            Animated.timing(descOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
-            Animated.timing(arrowOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+            Animated.timing(descOpacity, { toValue: 1, duration: DURATION_DESC, useNativeDriver: true }),
+            Animated.timing(arrowOpacity, { toValue: 1, duration: DURATION_ARROW, useNativeDriver: true }),
           ]).start();
         });
       });
@@ -1366,5 +1384,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
 });
+
 
 

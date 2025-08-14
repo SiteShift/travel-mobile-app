@@ -7,6 +7,7 @@ export type LevelingState = {
 const STORAGE_KEY = 'leveling_v1_state';
 export const TOTAL_XP = 10000; // Total XP available across all missions
 export const MAX_LEVEL = 10;
+const PENDING_LEVELUP_KEY = 'pending_levelup_v1';
 
 // Progressive level thresholds (cumulative XP required to reach each level)
 // Option B: strictly increasing spans up to L9; preserve L8=5000, L9=8000; L10 final=10000
@@ -74,8 +75,16 @@ async function setLevelingState(next: LevelingState): Promise<void> {
 export async function addXp(amount: number): Promise<LevelingState> {
 	if (!Number.isFinite(amount) || amount === 0) return getLevelingState();
 	const current = await getLevelingState();
+	const prevLevel = computeLevelFromXp(current.xp || 0);
 	const next = { xp: Math.max(0, current.xp + amount) };
 	await setLevelingState(next);
+	// If user crossed a level boundary, set a pending level-up flag for next app focus
+	try {
+		const newLevel = computeLevelFromXp(next.xp || 0);
+		if (newLevel > prevLevel) {
+			await AsyncStorage.setItem(PENDING_LEVELUP_KEY, JSON.stringify({ level: newLevel, createdAt: Date.now() }));
+		}
+	} catch {}
 	return next;
 }
 
@@ -442,8 +451,25 @@ export async function progressMission(id: string, delta: number = 1): Promise<Mi
 
 export async function resetLeveling(): Promise<void> {
 	try {
-		await AsyncStorage.multiRemove([STORAGE_KEY, MISSIONS_KEY]);
+		await AsyncStorage.multiRemove([STORAGE_KEY, MISSIONS_KEY, PENDING_LEVELUP_KEY]);
 	} catch {}
+}
+
+// Pending level-up helpers
+export async function getPendingLevelup(): Promise<number | null> {
+	try {
+		const raw = await AsyncStorage.getItem(PENDING_LEVELUP_KEY);
+		if (!raw) return null;
+		const obj = JSON.parse(raw);
+		const lvl = Number(obj?.level);
+		return Number.isFinite(lvl) && lvl >= 1 && lvl <= MAX_LEVEL ? lvl : null;
+	} catch {
+		return null;
+	}
+}
+
+export async function clearPendingLevelup(): Promise<void> {
+	try { await AsyncStorage.removeItem(PENDING_LEVELUP_KEY); } catch {}
 }
 
 

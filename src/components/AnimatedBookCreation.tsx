@@ -500,6 +500,9 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
       return;
     }
 
+    // Dismiss keyboard before leaving the form to avoid it persisting into the next transition
+    try { Keyboard.dismiss(); } catch {}
+
     setIsLoading(true);
     
     try {
@@ -689,14 +692,16 @@ export const AnimatedBookCreation: React.FC<AnimatedBookCreationProps> = ({
           <Animated.View style={[StyleSheet.absoluteFillObject as any, styles.dimBackground, dimBackgroundStyle]} pointerEvents="none" />
           <StatusBar barStyle={(overlayActive || currentState === BookState.OPENING) ? 'dark-content' : (isDark ? 'light-content' : 'dark-content')} backgroundColor={(overlayActive || currentState === BookState.OPENING) ? '#FFFFFF' : 'transparent'} translucent />
           
-          {/* Close button */}
-          <TouchableOpacity 
-            style={styles.closeButton} 
-            onPress={handleClose}
-            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-          >
-            <Icon name="close" size="xl" color="white" />
-          </TouchableOpacity>
+          {/* Close button hidden during opening/overlay phases */}
+          {!(overlayActive || currentState === BookState.OPENING) && (
+            <TouchableOpacity 
+              style={styles.closeButton} 
+              onPress={handleClose}
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            >
+              <Icon name="close" size="xl" color="white" />
+            </TouchableOpacity>
+          )}
         
                 <View style={styles.container}>
           <View style={styles.perspectiveWrapper}>

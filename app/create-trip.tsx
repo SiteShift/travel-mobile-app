@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, Animated, StatusBar, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, Animated, StatusBar, InteractionManager, Keyboard } from 'react-native';
 import { useTheme } from '../src/contexts/ThemeContext';
 import LottieView from 'lottie-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -36,6 +36,8 @@ export default function CreateTripScreen() {
   const contentOpacity = useRef(new Animated.Value(handoff === '1' ? 0 : 1)).current;
 
   const handleCreate = async () => {
+    // Ensure keyboard is dismissed before starting the save/animation flow
+    try { Keyboard.dismiss(); } catch {}
     if (!title.trim()) {
       Alert.alert('Missing Info', 'Please add a title.');
       return;
@@ -160,17 +162,19 @@ export default function CreateTripScreen() {
             <Animated.View pointerEvents="none" style={[styles.whiteOverlay, { opacity: guardOpacity, backgroundColor: colors.background.primary }]} />
           )}
           {/* Close button */}
-          <Animated.View style={[styles.closeButtonWrapper, { top: insets.top + 10, right: 32, opacity: fadeClose }]}> 
-            <TouchableOpacity
-              onPress={() => router.replace('/(tabs)')}
-              activeOpacity={0.8}
-              accessibilityLabel="Close"
-              style={styles.closeButtonPlain}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={styles.closeButtonPlainText}>×</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          {!isSaving && (
+            <Animated.View style={[styles.closeButtonWrapper, { top: insets.top + 10, right: 32, opacity: fadeClose }]}> 
+              <TouchableOpacity
+                onPress={() => router.replace('/(tabs)')}
+                activeOpacity={0.8}
+                accessibilityLabel="Close"
+                style={styles.closeButtonPlain}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.closeButtonPlainText}>×</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
 
           <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 64 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Animated.Text style={[styles.title, { opacity: fadeTitle, color: colors.text.primary }]}>Create Book</Animated.Text>
@@ -264,7 +268,7 @@ export default function CreateTripScreen() {
                   loop
                   style={styles.loadingLottie}
                 />
-                <Text style={[styles.loadingText, { color: colors.text.primary }]}>Creating your Trip...</Text>
+                <Text style={[styles.loadingText, { color: colors.text.secondary, opacity: 0.4 }]}>Creating your Trip...</Text>
               </View>
             </Animated.View>
           )}
