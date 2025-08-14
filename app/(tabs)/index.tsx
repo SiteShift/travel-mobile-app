@@ -17,6 +17,16 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 import { Easing } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate as raInterpolate,
+  Extrapolate,
+  withTiming,
+  Easing as ReanimatedEasing,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { LevelLightbox } from '../../src/components/LevelLightbox';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -81,12 +91,105 @@ const ITEM_SPACING = screenWidth * 0.72;
 const CARD_HEIGHT = screenHeight * 0.62;
 const BUTTON_HEIGHT = 54;
 
+// Fixed 5-dot pager (no layout shifts). Always renders 5 dots, centered on active.
+const Dots = React.memo(function Dots({
+  dotsCount,
+  baseLen,
+  scrollX,
+  ITEM_SPACING,
+  isDark,
+  activeIndexMod,
+}: {
+  dotsCount: number;
+  baseLen: number;
+  scrollX: SharedValue<number>;
+  ITEM_SPACING: number;
+  isDark: boolean;
+  activeIndexMod: number;
+}) {
+  // If only one trip, render single dot
+  if (dotsCount <= 1) {
+    return (
+      <View style={styles.dotsContainer}>
+        <View style={styles.dotsWrapper}>
+          <View style={styles.dotContainer}>
+            <View style={[styles.dot, { opacity: 1 }]} />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  const DotNode = ({ flat, isDark }: { flat: number[]; isDark: boolean }) => {
+    const dotStyle = useAnimatedStyle(() => {
+      const scale = raInterpolate(scrollX.value, flat, [1, 1.4, 1, 1, 1.4, 1, 1, 1.4, 1], Extrapolate.CLAMP);
+      const opacity = raInterpolate(scrollX.value, flat, [0.5, 1, 0.5, 0.5, 1, 0.5, 0.5, 1, 0.5], Extrapolate.CLAMP);
+      return {
+        opacity,
+        transform: [{ scale }],
+      };
+    });
+    const activeStyle = useAnimatedStyle(() => {
+      const scale = raInterpolate(scrollX.value, flat, [1, 1.4, 1, 1, 1.4, 1, 1, 1.4, 1], Extrapolate.CLAMP);
+      const opacity = raInterpolate(scrollX.value, flat, [0, 1, 0, 0, 1, 0, 0, 1, 0], Extrapolate.CLAMP);
+      return {
+        opacity,
+        transform: [{ scale }],
+      };
+    });
+    return (
+      <View style={styles.dotContainer}>
+        <Reanimated.View style={[styles.dot, { backgroundColor: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }, dotStyle]} />
+        <Reanimated.View style={[styles.activeDot, activeStyle]}>
+          <LinearGradient
+            colors={isDark ? ['#ffffff', '#e5e5e5'] : ['#000000', '#333333']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.dotGradient}
+          />
+        </Reanimated.View>
+      </View>
+    );
+  };
+
+  const nodes = React.useMemo(() => {
+    const offsets = [-2, -1, 0, 1, 2];
+    const wrap = (i: number, m: number) => ((i % m) + m) % m;
+    const createForOffset = (offset: number) => {
+      const baseIndex = wrap(activeIndexMod + offset, baseLen);
+      const createInputRange = (idx: number) => [
+        (idx - 1) * ITEM_SPACING,
+        idx * ITEM_SPACING,
+        (idx + 1) * ITEM_SPACING,
+      ];
+      const inputRanges = [
+        createInputRange(baseIndex),
+        createInputRange(baseIndex + baseLen),
+        createInputRange(baseIndex + baseLen * 2),
+      ];
+      const flat = inputRanges.flat();
+      return { key: offset, flat };
+    };
+    return offsets.map(createForOffset);
+  }, [activeIndexMod, baseLen, ITEM_SPACING]);
+
+  return (
+    <View style={styles.dotsContainer}>
+      <View style={styles.dotsWrapper}>
+        {nodes.map((n) => (
+          <DotNode key={n.key} flat={n.flat} isDark={isDark} />
+        ))}
+      </View>
+    </View>
+  );
+});
+
 export default function HomeTab() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const lightOverrideColors = getColors('light');
-  const flatListRef = useRef<FlatList>(null);
-  const scrollX = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef<any>(null);
+  const scrollX = useSharedValue(0);
   const [activeModIndex, setActiveModIndex] = useState(0);
   
   // Animation refs for level pill
@@ -115,6 +218,14 @@ export default function HomeTab() {
   const createFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMomentumScrollingRef = useRef(false);
   const suppressNextPressRef = useRef(false);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollX.value = event.contentOffset.x;
+    },
+  });
+  const CellRenderer: React.ComponentType<any> = (props) => (
+    <View {...props} collapsable={false} />
+  );
   
   // Get user level data
   const userData = getMockDataForUser('user1');
@@ -241,7 +352,7 @@ export default function HomeTab() {
   useEffect(() => {
     if (data.length > 0) {
       const initialOffset = trips.length * ITEM_SPACING;
-      scrollX.setValue(initialOffset);
+      scrollX.value = initialOffset;
       setTimeout(() => {
         flatListRef.current?.scrollToOffset({
           offset: initialOffset,
@@ -251,6 +362,24 @@ export default function HomeTab() {
     }
     StatusBar.setBarStyle(isDark ? 'light-content' : 'dark-content', true);
   }, [data, trips.length, isDark]);
+
+  // Cleanup any pending timers on unmount to avoid orphaned callbacks
+  useEffect(() => {
+    return () => {
+      if (pendingOptionsTimerRef.current) {
+        clearTimeout(pendingOptionsTimerRef.current);
+        pendingOptionsTimerRef.current = null;
+      }
+      if (navigateFallbackTimerRef.current) {
+        clearTimeout(navigateFallbackTimerRef.current);
+        navigateFallbackTimerRef.current = null;
+      }
+      if (createFallbackTimerRef.current) {
+        clearTimeout(createFallbackTimerRef.current);
+        createFallbackTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Ensure carousel is re-enabled when trip options modal closes
   useEffect(() => {
@@ -556,33 +685,17 @@ export default function HomeTab() {
       (index + 1) * ITEM_SPACING,
     ];
 
-    const rotateY = scrollX.interpolate({ 
-      inputRange, 
-      outputRange: ['40deg', '0deg', '-40deg'], 
-      extrapolate: 'clamp' 
+    const animatedCardStyle = useAnimatedStyle(() => {
+      const rotateYDeg = raInterpolate(scrollX.value, inputRange, [40, 0, -40], Extrapolate.CLAMP);
+      const scaleVal = raInterpolate(scrollX.value, inputRange, [0.8, 1, 0.8], Extrapolate.CLAMP);
+      return {
+        transform: [
+          { perspective: 1000 },
+          { rotateY: `${rotateYDeg}deg` },
+          { scale: scaleVal },
+        ],
+      };
     });
-    
-    const scale = scrollX.interpolate({ 
-      inputRange, 
-      outputRange: [0.8, 1, 0.8], 
-      extrapolate: 'clamp' 
-    });
-    
-    const buttonOpacity = scrollX.interpolate({ 
-      inputRange, 
-      outputRange: [0, 1, 0], 
-      extrapolate: 'clamp' 
-    });
-    
-    const buttonTranslateY = scrollX.interpolate({ 
-      inputRange, 
-      outputRange: [50, 0, 50], 
-      extrapolate: 'clamp' 
-    });
-
-    const unifiedTransform = {
-      transform: [{ perspective: 1000 }, { rotateY }, { scale }],
-    };
 
     const safeLen = Math.max(2, tripsLength);
     const indexMod = (((index % safeLen) + safeLen) % safeLen);
@@ -592,13 +705,12 @@ export default function HomeTab() {
 
     if (trip.type === 'placeholder') {
       // Anticipation: press scale for the card
-      const pressScale = useRef(new Animated.Value(1)).current;
+      const pressScale = useSharedValue(1);
+      const pressScaleStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: pressScale.value }],
+      }));
       const onPressIn = () => {
-        Animated.timing(pressScale, {
-          toValue: 0.98,
-          duration: 90,
-          useNativeDriver: true,
-        }).start();
+        pressScale.value = withTiming(0.98, { duration: 90, easing: ReanimatedEasing.linear });
         if (isMomentumScrollingRef.current) {
           suppressNextPressRef.current = true;
           // Stop momentum immediately and keep current item centered
@@ -609,11 +721,7 @@ export default function HomeTab() {
         }
       };
       const onPressOut = () => {
-        Animated.timing(pressScale, {
-          toValue: 1,
-          duration: 110,
-          useNativeDriver: true,
-        }).start();
+        pressScale.value = withTiming(1, { duration: 110, easing: ReanimatedEasing.linear });
       };
       const cardPress = () => {
         if (isActive) {
@@ -636,7 +744,11 @@ export default function HomeTab() {
       };
         return (
           <View style={styles.itemContainer}>
-            <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[styles.unifiedWrapper, unifiedTransform, { transform: [...(unifiedTransform as any).transform, { scale: pressScale }] }]}> 
+            <Reanimated.View 
+              renderToHardwareTextureAndroid={isActive || isNearActive}
+              shouldRasterizeIOS={isActive || isNearActive}
+              style={[styles.unifiedWrapper, animatedCardStyle, pressScaleStyle]}
+            > 
               <Pressable 
                 style={[
                   styles.tripCard, 
@@ -692,7 +804,7 @@ export default function HomeTab() {
               </View>
             </Pressable>
               
-          </Animated.View>
+            </Reanimated.View>
         </View>
       );
     }
@@ -700,18 +812,12 @@ export default function HomeTab() {
     // Real trip card
     return (
       <View style={styles.itemContainer}>
-        <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[styles.unifiedWrapper, unifiedTransform]}>
-          {/* Outer right cast shadow on background (behind the book) */}
-          {isActive && (
-            <LinearGradient
-              colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.18)", "rgba(0,0,0,0.08)", "rgba(0,0,0,0)"]}
-              locations={[0, 0.18, 0.72, 1]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.outerRightShadow}
-              pointerEvents="none"
-            />
-          )}
+        <Reanimated.View 
+          renderToHardwareTextureAndroid={isActive || isNearActive}
+          shouldRasterizeIOS={isActive || isNearActive}
+          style={[styles.unifiedWrapper, animatedCardStyle]}
+        >
+          {/* Right cast shadow removed per request */}
           
           <Pressable 
             style={[styles.tripCard, !isActive && styles.tripCardInactive]}
@@ -759,24 +865,47 @@ export default function HomeTab() {
               priority={isActive || isNearActive ? 'high' : 'low'}
               recyclingKey={trip.id}
             />
-            {/* Book cover overlay on top of image */}
-            <Image
-              source={require('../../public/assets/trip-book-overlay (2).webp')}
-              style={styles.bookCoverOverlay}
-              contentFit="cover"
-              transition={0}
-              pointerEvents="none"
-            />
-            {/* Subtle inward spine shadow from the left edge */}
-            {isActive && (
-              <LinearGradient
-                colors={["rgba(0,0,0,0.24)", "rgba(0,0,0,0)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.leftInnerShadow}
-                pointerEvents="none"
-              />
+            {(isActive || isNearActive) && (
+              <>
+                <LinearGradient
+                  colors={["rgba(0,0,0,0.18)", "rgba(0,0,0,0)"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.overlayLeftFeather}
+                  pointerEvents="none"
+                />
+                <View
+                  pointerEvents="none"
+                  style={styles.overlayDarkLine}
+                />
+                <View
+                  pointerEvents="none"
+                  style={styles.overlayLightLine}
+                />
+
+                {/* Inset bevel */}
+                <View pointerEvents="none" style={styles.overlayInset} />
+                <View pointerEvents="none" style={styles.overlayInsetLightTL} />
+                <View pointerEvents="none" style={styles.overlayInsetDarkBR} />
+
+                {/* Top highlight and bottom shadow bars */}
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.10)", "rgba(255,255,255,0)"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.overlayTopHighlight}
+                  pointerEvents="none"
+                />
+                <LinearGradient
+                  colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.10)"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.overlayBottomShadow}
+                  pointerEvents="none"
+                />
+              </>
             )}
+            {/* Left spine gradient removed per request */}
             {/* Removed outline border */}
             <LinearGradient 
               colors={trip.gradient as any || ['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']} 
@@ -829,7 +958,7 @@ export default function HomeTab() {
           </Pressable>
           
           {/* Removed 'View Trip' floating button for cleaner look */}
-        </Animated.View>
+        </Reanimated.View>
       </View>
     );
   };
@@ -849,85 +978,16 @@ export default function HomeTab() {
   const renderDots = () => {
     if (trips.length === 0) return null;
     const dots = realTrips.length > 0 ? realTrips : trips;
-    if (dots.length <= 1) {
-      return (
-        <View style={styles.dotsContainer}>
-          <View style={styles.dotsWrapper}>
-            <View style={styles.dotContainer}>
-              <View style={[styles.dot, { opacity: 1 }]} />
-            </View>
-          </View>
-        </View>
-      );
-    }
-    const baseLen = Math.max(2, trips.length); // must align with carousel cycle length (includes placeholders)
+    const baseLen = Math.max(2, trips.length);
     return (
-      <View style={styles.dotsContainer}>
-        <View style={[styles.dotsWrapper]}>
-          {dots.map((_, index) => {
-            const createInputRange = (baseIndex: number) => [
-              (baseIndex - 1) * ITEM_SPACING,
-              baseIndex * ITEM_SPACING,
-              (baseIndex + 1) * ITEM_SPACING,
-            ];
-
-            const inputRanges = [
-              createInputRange(index),
-              createInputRange(index + baseLen),
-              createInputRange(index + baseLen * 2),
-            ];
-
-            const dotOpacity = scrollX.interpolate({
-              inputRange: inputRanges.flat(),
-              outputRange: [0.5, 1, 0.5, 0.5, 1, 0.5, 0.5, 1, 0.5],
-              extrapolate: 'clamp',
-            });
-
-            const dotScale = scrollX.interpolate({
-              inputRange: inputRanges.flat(),
-              outputRange: [1, 1.4, 1, 1, 1.4, 1, 1, 1.4, 1],
-              extrapolate: 'clamp',
-            });
-
-            const activeDotOpacity = scrollX.interpolate({
-              inputRange: inputRanges.flat(),
-              outputRange: [0, 1, 0, 0, 1, 0, 0, 1, 0],
-              extrapolate: 'clamp',
-            });
-
-            return (
-              <View key={index} style={styles.dotContainer}>
-                <Animated.View
-                  style={[
-                    styles.dot,
-                    {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
-                      opacity: dotOpacity,
-                      transform: [{ scale: dotScale }],
-                    },
-                  ]}
-                />
-                <Animated.View
-                  style={[
-                    styles.activeDot,
-                    {
-                      opacity: activeDotOpacity,
-                      transform: [{ scale: dotScale }],
-                    },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={isDark ? ['#ffffff', '#e5e5e5'] : ['#000000', '#333333']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.dotGradient}
-                  />
-                </Animated.View>
-              </View>
-            );
-          })}
-        </View>
-      </View>
+      <Dots
+        dotsCount={dots.length}
+        baseLen={baseLen}
+        scrollX={scrollX}
+        ITEM_SPACING={ITEM_SPACING}
+        isDark={isDark}
+        activeIndexMod={activeModIndex}
+      />
     );
   };
 
@@ -1143,7 +1203,7 @@ export default function HomeTab() {
       {/* Level Indicator */}
       {renderLevelIndicator()}
 
-      <Animated.FlatList
+      <Reanimated.FlatList
         ref={flatListRef}
         data={data}
         renderItem={React.useCallback(({ item, index }: { item: Trip; index: number }) => (
@@ -1167,10 +1227,7 @@ export default function HomeTab() {
           // If there was no momentum phase after drag, clear the flag to allow immediate tap
           if (!isMomentumScrollingRef.current) suppressNextPressRef.current = false;
         }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }], 
-          { useNativeDriver: true }
-        )}
+        onScroll={scrollHandler}
         scrollEventThrottle={16}
         getItemLayout={(data, index) => ({ 
           length: ITEM_SPACING, 
@@ -1184,9 +1241,6 @@ export default function HomeTab() {
         windowSize={2}
         removeClippedSubviews
         updateCellsBatchingPeriod={50}
-        CellRendererComponent={(props) => (
-          <View {...props} collapsable={false} renderToHardwareTextureAndroid shouldRasterizeIOS />
-        )}
       />
       
       {/* Trip Creation Modal */}
@@ -1534,6 +1588,92 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: 6,
     zIndex: 5,
+  },
+  // Programmatic overlay pieces
+  overlayLeftFeather: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 18,
+    borderTopLeftRadius: 6,
+    borderBottomLeftRadius: 6,
+    zIndex: 5,
+  },
+  overlayDarkLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 8,
+    width: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    opacity: 0.8,
+    zIndex: 5,
+  },
+  overlayLightLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 10,
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    opacity: 0.7,
+    zIndex: 5,
+  },
+  overlayInset: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: 6 - 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.04)',
+    zIndex: 5,
+  },
+  overlayInsetLightTL: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: 6 - 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+    zIndex: 6,
+  },
+  overlayInsetDarkBR: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: 6 - 2,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.14)',
+    zIndex: 6,
+  },
+  overlayTopHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 10,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+    zIndex: 4,
+  },
+  overlayBottomShadow: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 12,
+    borderBottomLeftRadius: 6,
+    borderBottomRightRadius: 6,
+    zIndex: 4,
   },
   // Subtle right-side vertical shadow as tall as the image
   rightShadowOverlay: {
