@@ -549,7 +549,6 @@ export default function ProfileTab() {
     gradient: [string, string];
     milestones: number[];
   }) => {
-    const { target, progress, remaining } = React.useMemo(() => getNextMilestone(value, milestones), [value, milestones]);
     const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
     const bandTranslate = pulse.interpolate({ inputRange: [0, 1], outputRange: [-60, 180] });
     const holdScale = React.useRef(new Animated.Value(1)).current;
@@ -587,13 +586,7 @@ export default function ProfileTab() {
           <Text style={styles.gValue}>{value}</Text>
           <Text style={styles.gLabel}>{label}</Text>
 
-          {/* Progress to next milestone */}
-          <View style={[styles.gProgressTrack, { backgroundColor: 'rgba(255,255,255,0.25)' }]}> 
-            <View style={[styles.gProgressFill, { width: `${Math.max(6, progress * 100)}%`, backgroundColor: '#FFFFFF' }]} />
-          </View>
-          <Text style={styles.gProgressText}>
-            {remaining === 0 ? 'Milestone reached!' : `${remaining} to ${target}`}
-          </Text>
+          {/* Progress elements removed per request */}
         </LinearGradient>
         </Pressable>
       </Animated.View>
@@ -1084,7 +1077,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { alignItems: 'center', paddingVertical: SPACING.lg, paddingHorizontal: SPACING.lg, position: 'relative' },
   avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 3 },
-  name: { ...TYPOGRAPHY.styles.h2, marginTop: SPACING.md },
+  name: { ...TYPOGRAPHY.styles.h2, marginTop: SPACING.md, fontFamily: 'MagnoliaScript', fontSize: 48, lineHeight: 50, letterSpacing: -0.5 },
   level: { ...TYPOGRAPHY.styles.body, marginTop: SPACING.xs },
   editProfileBtn: { position: 'absolute', right: SPACING.lg, top: SPACING.lg, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239, 97, 68, 0.12)' },
   
