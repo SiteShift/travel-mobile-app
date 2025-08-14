@@ -216,6 +216,9 @@ export default function HomeTab() {
   const navigateFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingCreateTripId, setPendingCreateTripId] = useState<string | null>(null);
   const createFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCreateIdRef = useRef<string | null>(null);
+  const pendingNavigateIdRef = useRef<string | null>(null);
+  const pendingOptionsIdRef = useRef<string | null>(null);
   const isMomentumScrollingRef = useRef(false);
   const suppressNextPressRef = useRef(false);
   const scrollHandler = useAnimatedScrollHandler({
@@ -386,6 +389,7 @@ export default function HomeTab() {
     if (!showTripOptionsModal) {
       setCarouselLocked(false);
       setPendingOptionsTripId(null);
+      pendingOptionsIdRef.current = null;
       if (pendingOptionsTimerRef.current) {
         clearTimeout(pendingOptionsTimerRef.current);
         pendingOptionsTimerRef.current = null;
@@ -637,7 +641,7 @@ export default function HomeTab() {
     const modIdx = ((newIndex % baseLen) + baseLen) % baseLen;
     setActiveModIndex(modIdx);
     // Only recentre if we are near edges AND not in the middle of a user action
-    if (!pendingNavigateTripId && !pendingOptionsTripId) {
+    if (!pendingNavigateTripId && !pendingOptionsTripId && !pendingCreateTripId) {
       if (newIndex <= 1 || newIndex >= data.length - 2) {
         const targetIndex = baseLen + (newIndex % baseLen);
         flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
@@ -651,6 +655,7 @@ export default function HomeTab() {
       if (targetBaseIndex !== -1 && targetBaseIndex === modIdx) {
         const tripId = pendingOptionsTripId;
         setPendingOptionsTripId(null);
+        pendingOptionsIdRef.current = null;
         handleTripOptions(tripId);
       }
     }
@@ -661,6 +666,7 @@ export default function HomeTab() {
       if (targetBaseIndex !== -1 && targetBaseIndex === modIdx) {
         const tripId = pendingNavigateTripId;
         setPendingNavigateTripId(null);
+        pendingNavigateIdRef.current = null;
         if (navigateFallbackTimerRef.current) { clearTimeout(navigateFallbackTimerRef.current); navigateFallbackTimerRef.current = null; }
         router.push(`/trip/${tripId}`);
       }
@@ -670,6 +676,7 @@ export default function HomeTab() {
       const targetBaseIndex = trips.findIndex(t => t.id === pendingCreateTripId);
       if (targetBaseIndex !== -1 && targetBaseIndex === modIdx) {
         setPendingCreateTripId(null);
+        pendingCreateIdRef.current = null;
         if (createFallbackTimerRef.current) { clearTimeout(createFallbackTimerRef.current); createFallbackTimerRef.current = null; }
         handleCreateTrip();
       }
@@ -730,12 +737,14 @@ export default function HomeTab() {
         } else {
           // Snap to this card and open create modal once centered
           setPendingCreateTripId(trip.id);
+          pendingCreateIdRef.current = trip.id;
           flatListRef.current?.scrollToIndex({ index, animated: true });
           // Fallback if momentum end doesn't trigger
           if (createFallbackTimerRef.current) clearTimeout(createFallbackTimerRef.current);
           const targetId = trip.id;
           createFallbackTimerRef.current = setTimeout(() => {
-            if (pendingCreateTripId === targetId) {
+            if (pendingCreateIdRef.current === targetId) {
+              pendingCreateIdRef.current = null;
               setPendingCreateTripId(null);
               handleCreateTrip();
             }
@@ -751,22 +760,8 @@ export default function HomeTab() {
             > 
               <Pressable 
                 style={[
-                  styles.tripCard, 
-                  styles.placeholderCard, 
-                  { 
-                    backgroundColor: 'transparent',
-                    // No border, no rounding, no clipping behind image
-                    borderColor: 'transparent',
-                    borderWidth: 0,
-                    borderRadius: 0,
-                    overflow: 'visible',
-                    // Make shadow very subtle for placeholder
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 6,
-                    elevation: 3,
-                  }
+                  styles.tripCard,
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' },
                 ]} 
               onPress={() => {
                 if (suppressNextPressRef.current) {
@@ -779,22 +774,58 @@ export default function HomeTab() {
               onPressOut={onPressOut}
               accessibilityLabel="Add Trip"
             >
-              {/* Blank book image replacing dotted outline */}
-                <Image 
-                  source={require('../../public/assets/Blank-trip-image.webp')}
-                  style={[StyleSheet.absoluteFillObject as any, { borderRadius: 0 }]}
-                  contentFit="cover"
-                  transition={200}
-                />
+              {(isActive || isNearActive) && (
+                <>
+                  <LinearGradient
+                    colors={["rgba(0,0,0,0.18)", "rgba(0,0,0,0)"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.overlayLeftFeather}
+                    pointerEvents="none"
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={styles.overlayDarkLine}
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={styles.overlayLightLine}
+                  />
+
+                  {/* Inset bevel */}
+                  <View pointerEvents="none" style={styles.overlayInset} />
+                  <View pointerEvents="none" style={styles.overlayInsetLightTL} />
+                  <View pointerEvents="none" style={styles.overlayInsetDarkBR} />
+
+                  {/* Top highlight and bottom shadow bars */}
+                  <LinearGradient
+                    colors={["rgba(255,255,255,0.10)", "rgba(255,255,255,0)"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.overlayTopHighlight}
+                    pointerEvents="none"
+                  />
+                  <LinearGradient
+                    colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.10)"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.overlayBottomShadow}
+                    pointerEvents="none"
+                  />
+                </>
+              )}
+              {/* bottom fade removed for placeholder */}
+              {null}
 
               {/* Centered overlay content */}
               <View style={[styles.placeholderContent, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
-                <LinearGradient
-                  colors={['#fff0f3', '#fce7f3']}
-                  style={styles.plusIconContainer}
-                >
+                {/* subtle themed background for plus icon */}
+                <View style={[
+                  styles.plusIconContainer,
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.072)' : 'rgba(0,0,0,0.086)', shadowOpacity: 0 }
+                ] }>
                   <Icon name="plus" size="xl" color={lightOverrideColors.primary[600]} />
-                </LinearGradient>
+                </View>
                 <Text style={[styles.placeholderTitle, { color: lightOverrideColors.text.primary }]}>
                   {trip.title}
                 </Text>
@@ -831,13 +862,15 @@ export default function HomeTab() {
                 handleTripPress(trip);
               } else {
                 setPendingNavigateTripId(trip.id);
+                pendingNavigateIdRef.current = trip.id;
                 // Snap to the tapped absolute index to avoid long spins across loops
                 flatListRef.current?.scrollToIndex({ index, animated: true });
                 // Fallback: navigate if momentum end doesn't fire
                 if (navigateFallbackTimerRef.current) clearTimeout(navigateFallbackTimerRef.current);
                 const tripId = trip.id;
                 navigateFallbackTimerRef.current = setTimeout(() => {
-                  if (pendingNavigateTripId === tripId) {
+                  if (pendingNavigateIdRef.current === tripId) {
+                    pendingNavigateIdRef.current = null;
                     setPendingNavigateTripId(null);
                     router.push(`/trip/${tripId}`);
                   }
@@ -926,12 +959,14 @@ export default function HomeTab() {
                 } else {
                   // If not active, snap to this card and open once centered
                   setPendingOptionsTripId(trip.id);
+                  pendingOptionsIdRef.current = trip.id;
                   flatListRef.current?.scrollToIndex({ index, animated: true });
                   // Fallback in case momentum end doesn't fire
                   if (pendingOptionsTimerRef.current) clearTimeout(pendingOptionsTimerRef.current);
                   const targetId = trip.id;
                   pendingOptionsTimerRef.current = setTimeout(() => {
-                    if (pendingOptionsTripId === targetId) {
+                    if (pendingOptionsIdRef.current === targetId) {
+                      pendingOptionsIdRef.current = null;
                       setPendingOptionsTripId(null);
                       handleTripOptions(targetId);
                     }
