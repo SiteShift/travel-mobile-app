@@ -259,13 +259,31 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
   // Do not depend on hasCelebrated to avoid a second fade when the flag flips after confetti finishes.
   useEffect(() => {
     if (!trip || !celebrationReady) return;
-    // If already celebrated (i.e., not first view), render instantly with no fades
+    // If already celebrated (i.e., not first view), fade in smoothly (same pacing as first view, no confetti)
     if (hasCelebrated) {
-      titleOpacity.setValue(1);
-      dateOpacity.setValue(1);
-      imageOpacity.setValue(1);
-      descOpacity.setValue(1);
-      arrowOpacity.setValue(1);
+      // Subsequent openings: smooth, cinematic staggered fade top-to-bottom
+      titleOpacity.setValue(0);
+      dateOpacity.setValue(0);
+      imageOpacity.setValue(0);
+      descOpacity.setValue(0);
+      arrowOpacity.setValue(0);
+
+      const DURATION_TITLE = 450;
+      const DURATION_DATE = 450;
+      const DURATION_IMAGE = 500;
+      const DURATION_DESC = 450;
+      const DURATION_ARROW = 450;
+
+      Animated.timing(titleOpacity, { toValue: 1, duration: DURATION_TITLE, useNativeDriver: true }).start(() => {
+        Animated.timing(dateOpacity, { toValue: 1, duration: DURATION_DATE, useNativeDriver: true }).start(() => {
+          Animated.timing(imageOpacity, { toValue: 1, duration: DURATION_IMAGE, useNativeDriver: true }).start(({ finished }) => {
+            Animated.sequence([
+              Animated.timing(descOpacity, { toValue: 1, duration: DURATION_DESC, useNativeDriver: true }),
+              Animated.timing(arrowOpacity, { toValue: 1, duration: DURATION_ARROW, useNativeDriver: true }),
+            ]).start();
+          });
+        });
+      });
       return;
     }
 
@@ -564,15 +582,18 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                 }}
                 extraData={dayPhotos[day]}
                 showsVerticalScrollIndicator={false} 
-                renderItem={({ item, index, drag, isActive }: RenderItemParams<any>) => {
+                renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<DayPhoto>) => {
                   const id = item.id as string;
+                  const idxFromGetIndex = typeof getIndex === 'function' ? getIndex() : undefined;
+                  const computedIndex = idxFromGetIndex ?? photos.findIndex((p) => p.id === item.id);
+                  const safeIndex = computedIndex < 0 ? 0 : computedIndex;
                   const handleCaptionChange = (text: string) => {
                     setCaptionDrafts(prev => ({ ...prev, [id]: text }));
                     setDayPhotos(prev => {
                       const nextDay = [...(prev[day] || [])];
-                      const target = nextDay[index];
+                      const target = nextDay[safeIndex];
                       if (!target) return prev;
-                      nextDay[index] = { ...target, caption: text } as any;
+                      nextDay[safeIndex] = { ...target, caption: text } as any;
                       const next = { ...prev, [day]: nextDay };
                       // Persist first, then recompute ladders/missions so AsyncStorage reflects latest captions
                       persistAllDayPhotos(next).then(async () => {
@@ -592,23 +613,23 @@ export default function TripBookScreen({ tripId }: TripBookScreenProps) {
                   const handleCropChange = (partial: Partial<{ scale: number; offsetX: number; offsetY: number }>) => {
                     setDayPhotos(prev => {
                       const next = [...(prev[day] || [])];
-                      const target = next[index];
+                      const target = next[safeIndex];
                       if (!target) return prev;
-                      next[index] = { ...target, crop: { ...target.crop, ...partial } } as any;
+                      next[safeIndex] = { ...target, crop: { ...target.crop, ...partial } } as any;
                       return { ...prev, [day]: next };
                     });
                   };
                   return (
                     <DayPhotoPolaroid
                       photo={item}
-                      index={index}
+                      index={safeIndex}
                       editMode
                       dragging={!!isActive}
                       draftCaption={captionDrafts[id] ?? item.caption ?? ''}
                       onUpdateCaption={handleCaptionChange}
                       onUpdateCrop={handleCropChange}
                       onStartDrag={() => { Haptics.selectionAsync(); drag(); }}
-                      onOpenOptions={() => setOptionsSheet({ visible: true, day, index })}
+                      onOpenOptions={() => setOptionsSheet({ visible: true, day, index: safeIndex })}
                     />
                   );
                 }}

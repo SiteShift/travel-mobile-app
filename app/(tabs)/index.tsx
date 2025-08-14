@@ -12,6 +12,7 @@ import {
   Modal,
   Alert,
   Share,
+  InteractionManager,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -558,23 +559,34 @@ export default function HomeTab() {
 
   const handleShareTrip = useCallback(async () => {
     try {
-      setShowTripOptionsModal(false);
       const trip = trips.find(t => t.id === selectedTripId);
       const tripTitle = trip?.title || 'My Trip';
       const tripId = selectedTripId || '';
       const link = `https://traveljournal.app/trip/${tripId}`;
+
+      // Close options modal first to avoid presenting while dismissing another modal
+      setShowTripOptionsModal(false);
+
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      await Share.share(
-        {
-          title: `Check out my trip: ${tripTitle}`,
-          message: `${tripTitle}\n\n${link}`,
-          url: link, // iOS uses this field
-        },
-        {
-          dialogTitle: `Share ${tripTitle}`,
-          subject: tripTitle,
-        } as any
-      );
+
+      // Present share sheet after interactions complete to avoid modal-dismiss race
+      InteractionManager.runAfterInteractions(() => {
+        setTimeout(() => {
+          Share.share(
+            {
+              title: `Check out my trip: ${tripTitle}`,
+              message: `${tripTitle}\n\n${link}`,
+              url: link, // iOS uses this field
+            },
+            {
+              dialogTitle: `Share ${tripTitle}`,
+              subject: tripTitle,
+            } as any
+          ).catch((error) => {
+            console.error('❌ Error sharing trip:', error);
+          });
+        }, 80);
+      });
     } catch (error) {
       console.error('❌ Error sharing trip:', error);
     }
