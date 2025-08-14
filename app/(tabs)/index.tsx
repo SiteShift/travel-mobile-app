@@ -226,9 +226,7 @@ export default function HomeTab() {
       scrollX.value = event.contentOffset.x;
     },
   });
-  const CellRenderer: React.ComponentType<any> = (props) => (
-    <View {...props} collapsable={false} />
-  );
+  const CellRenderer: React.ComponentType<any> | undefined = undefined;
   
   // Get user level data
   const userData = getMockDataForUser('user1');
@@ -645,6 +643,8 @@ export default function HomeTab() {
       if (newIndex <= 1 || newIndex >= data.length - 2) {
         const targetIndex = baseLen + (newIndex % baseLen);
         flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
+        // Keep shared scrollX in perfect sync with the immediate jump to avoid 1-frame desync
+        scrollX.value = targetIndex * ITEM_SPACING;
       }
     }
 
@@ -716,6 +716,24 @@ export default function HomeTab() {
       const pressScaleStyle = useAnimatedStyle(() => ({
         transform: [{ scale: pressScale.value }],
       }));
+      // Nudge placeholder neighbors slightly outward to reduce visual overlap during any transient desync
+      const neighborNudgeStyle = useAnimatedStyle(() => {
+        const delta = (index * ITEM_SPACING - scrollX.value) / ITEM_SPACING;
+        const translateX = raInterpolate(
+          delta,
+          [-1, -0.5, 0, 0.5, 1],
+          [-22, -14, 0, 14, 22],
+          Extrapolate.CLAMP
+        );
+        const absDelta = Math.abs(delta);
+        const squash = raInterpolate(
+          absDelta,
+          [0, 1],
+          [1, 0.86],
+          Extrapolate.CLAMP
+        );
+        return { transform: [{ translateX }, { scale: squash }] };
+      });
       const onPressIn = () => {
         pressScale.value = withTiming(0.98, { duration: 90, easing: ReanimatedEasing.linear });
         if (isMomentumScrollingRef.current) {
@@ -751,12 +769,13 @@ export default function HomeTab() {
           }, 900);
         }
       };
+        const wrapperZIndex = isActive ? 3 : isNearActive ? 2 : 1;
         return (
           <View style={styles.itemContainer}>
             <Reanimated.View 
               renderToHardwareTextureAndroid={isActive || isNearActive}
               shouldRasterizeIOS={isActive || isNearActive}
-              style={[styles.unifiedWrapper, animatedCardStyle, pressScaleStyle]}
+              style={[styles.unifiedWrapper, animatedCardStyle, pressScaleStyle, neighborNudgeStyle, { zIndex: wrapperZIndex }]}
             > 
               <Pressable 
                 style={[
@@ -841,12 +860,13 @@ export default function HomeTab() {
     }
 
     // Real trip card
+    const wrapperZIndex = isActive ? 3 : isNearActive ? 2 : 1;
     return (
       <View style={styles.itemContainer}>
         <Reanimated.View 
           renderToHardwareTextureAndroid={isActive || isNearActive}
           shouldRasterizeIOS={isActive || isNearActive}
-          style={[styles.unifiedWrapper, animatedCardStyle]}
+          style={[styles.unifiedWrapper, animatedCardStyle, { zIndex: wrapperZIndex }]}
         >
           {/* Right cast shadow removed per request */}
           
@@ -1232,8 +1252,7 @@ export default function HomeTab() {
       {/* TripMemo Brand */}
       {renderTripMemo()}
 
-      {/* Dots Indicator */}
-      {renderDots()}
+      {/* Dots Indicator removed per request */}
 
       {/* Level Indicator */}
       {renderLevelIndicator()}
@@ -1245,6 +1264,7 @@ export default function HomeTab() {
           <TripCard item={item} index={index} tripsLength={trips.length} activeIndexMod={activeModIndex} />
         ), [trips.length, activeModIndex])}
         keyExtractor={(item, index) => `${item?.id}-${index}`}
+        // CellRendererComponent intentionally omitted (type not exposed on Reanimated.FlatList)
         horizontal
         showsHorizontalScrollIndicator={false}
         snapToInterval={ITEM_SPACING}
