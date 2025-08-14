@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, Dimensions, Animated, Easing, Modal, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import Stump from './components/Stump';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,6 +13,18 @@ import { useTrippinLoop } from './hooks/useTrippinLoop';
 import { GameState, TrippinConfig } from './types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Deterministic tiny hash to vary stump cosmetics by pipe id without extra state
+function hashIdToUnit(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+  }
+  // Convert to 0..1
+  const u = (h >>> 0) / 4294967295;
+  return u;
+}
 
 const CONFIG: TrippinConfig = {
   gravity: 1800,
@@ -115,6 +128,15 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
       } catch {}
     }
   );
+
+  // Animated world translation to reduce per-element style churn
+  const worldTranslateX = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    worldTranslateX.setValue(-state.worldX);
+  }, [state.worldX, worldTranslateX]);
+
+  // Cache for visual seeds per pipe id to avoid recomputing hash every render
+  const pipeSeedCache = React.useRef<Map<string, number>>(new Map());
 
   React.useEffect(() => {
     (async () => {
@@ -321,65 +343,46 @@ export default function TrippinGame({ onClose }: { onClose: () => void }) {
           />
         </Animated.View>
 
-        {/* Pipes */}
+        {/* Pipes as tree stumps */}
+        <Animated.View pointerEvents="none" renderToHardwareTextureAndroid shouldRasterizeIOS style={{ transform: [{ translateX: worldTranslateX }] }}>
         {state.pipes.map(p => {
           const gapTop = p.gapY - CONFIG.gapHeight / 2;
           const gapBottom = p.gapY + CONFIG.gapHeight / 2;
+          const topHeight = gapTop;
+          const bottomHeight = SCREEN_HEIGHT - gapBottom;
+          const worldLeft = p.x - state.worldX;
+          if (worldLeft < -CONFIG.pipeWidth - 120 || worldLeft > SCREEN_WIDTH + 240) {
+            return null;
+          }
+          // Deterministic cosmetic variations (cached by id)
+          let u = pipeSeedCache.current.get(p.id);
+          if (u == null) { u = hashIdToUnit(p.id); pipeSeedCache.current.set(p.id, u); }
+          // Precompute variations (still used by SVG Stump component internally if needed in future)
           return (
             <React.Fragment key={p.id}>
-              {/* Top pipe (3D orange) */}
-              <LinearGradient
-                colors={[ '#fbbf24', '#f59e0b', '#f97316' ]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={{ position: 'absolute', left: p.x, top: 0, width: CONFIG.pipeWidth, height: gapTop, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, ...SHADOWS.lg, shouldRasterizeIOS: true, renderToHardwareTextureAndroid: true }}
-                pointerEvents="none"
-              />
-              {/* Cylindrical highlights/shadows */}
-              <View style={{ position: 'absolute', left: p.x + 4, top: 0, width: 6, height: gapTop, backgroundColor: 'rgba(255,255,255,0.25)', borderBottomLeftRadius: 6, shouldRasterizeIOS: true, renderToHardwareTextureAndroid: true }} pointerEvents="none" />
-              <View style={{ position: 'absolute', left: p.x + CONFIG.pipeWidth - 8 - 4, top: 0, width: 8, height: gapTop, backgroundColor: 'rgba(0,0,0,0.18)', borderBottomRightRadius: 6, shouldRasterizeIOS: true, renderToHardwareTextureAndroid: true }} pointerEvents="none" />
-              {/* Top pipe rim */}
-              <LinearGradient
-                colors={[ '#fde68a', '#fbbf24' ]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={{ position: 'absolute', left: p.x - 6, top: gapTop - 16, width: CONFIG.pipeWidth + 12, height: 16, borderTopLeftRadius: 8, borderTopRightRadius: 8, ...SHADOWS.md, shouldRasterizeIOS: true, renderToHardwareTextureAndroid: true }}
-                pointerEvents="none"
-              />
-              {/* Bottom pipe (3D orange) */}
-              <LinearGradient
-                colors={[ '#fbbf24', '#f59e0b', '#f97316' ]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={{ position: 'absolute', left: p.x, top: gapBottom, width: CONFIG.pipeWidth, height: SCREEN_HEIGHT - gapBottom, borderTopLeftRadius: 8, borderTopRightRadius: 8, ...SHADOWS.lg, shouldRasterizeIOS: true, renderToHardwareTextureAndroid: true }}
-                pointerEvents="none"
-              />
-              <View style={{ position: 'absolute', left: p.x + 4, top: gapBottom, width: 6, height: SCREEN_HEIGHT - gapBottom, backgroundColor: 'rgba(255,255,255,0.25)', shouldRasterizeIOS: true, renderToHardwareTextureAndroid: true }} pointerEvents="none" />
-              <View style={{ position: 'absolute', left: p.x + CONFIG.pipeWidth - 8 - 4, top: gapBottom, width: 8, height: SCREEN_HEIGHT - gapBottom, backgroundColor: 'rgba(0,0,0,0.18)', shouldRasterizeIOS: true, renderToHardwareTextureAndroid: true }} pointerEvents="none" />
-              {/* Bottom pipe rim */}
-              <LinearGradient
-                colors={[ '#fde68a', '#fbbf24' ]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={{ position: 'absolute', left: p.x - 6, top: gapBottom, width: CONFIG.pipeWidth + 12, height: 16, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, ...SHADOWS.md, shouldRasterizeIOS: true, renderToHardwareTextureAndroid: true }}
-                pointerEvents="none"
-              />
+              {/* SVG-based stumps for minimal layers */}
+              <Stump x={p.x} y={0} width={CONFIG.pipeWidth} height={topHeight} position="top" seed={u} />
+              <Stump x={p.x} y={gapBottom} width={CONFIG.pipeWidth} height={bottomHeight} position="bottom" seed={u} />
             </React.Fragment>
           );
         })}
-
-        {/* Stamps (coin image) */}
-        {state.stamps.map(s => (
-          <Image
-            key={s.id}
-            source={require('../../../public/assets/TripMemo-coin_compressed.webp')}
-            style={{ position: 'absolute', left: s.x - 14, top: s.y - 14, width: 28, height: 28, opacity: s.taken ? 0.25 : 1, ...SHADOWS.sm }}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            priority="high"
-            recyclingKey="coin"
-          />
-        ))}
+        {/* Stamps follow same world transform */}
+        {state.stamps.map(s => {
+          const worldLeft = s.x - state.worldX;
+          if (worldLeft < -40 || worldLeft > SCREEN_WIDTH + 160) return null;
+          return (
+            <Image
+              key={s.id}
+              source={require('../../../public/assets/TripMemo-coin_compressed.webp')}
+              style={{ position: 'absolute', left: s.x - 14, top: s.y - 14, width: 28, height: 28, opacity: s.taken ? 0.25 : 1, ...SHADOWS.sm }}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+              priority="high"
+              recyclingKey="coin"
+            />
+          );
+        })}
+        </Animated.View>
       </View>
 
       {/* HUD */}
@@ -588,7 +591,7 @@ const styles = StyleSheet.create({
   newBestText: { ...TYPOGRAPHY.styles.caption, color: '#22c55e', fontWeight: '800' },
   leaderboardButtonWrap: { width: '92%', maxWidth: 520, marginTop: SPACING.xxxl * 1.8, marginBottom: SPACING.xxxl },
   leaderboardButtonImage: { width: '100%', height: 76, borderRadius: 16, overflow: 'hidden' },
-  modalOverlayBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
+  // Backdrop for leaderboard modal
   leaderboardCard: { width: '92%', maxWidth: 520, borderRadius: BORDER_RADIUS.xl, overflow: 'hidden', ...SHADOWS.xl },
   leaderboardHeader: { height: 64, justifyContent: 'center' },
   leaderboardHeaderGrad: { ...StyleSheet.absoluteFillObject, borderTopLeftRadius: BORDER_RADIUS.xl, borderTopRightRadius: BORDER_RADIUS.xl },

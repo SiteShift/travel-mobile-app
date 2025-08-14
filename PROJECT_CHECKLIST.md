@@ -707,3 +707,5 @@ Building a premium travel diary mobile app with map-centric design and "Airbnb-l
   - Theme-aware UI, haptics on flap/crash, 60fps loop using requestAnimationFrame
   - Files: `src/games/trippin/TrippinGame.tsx`, `src/games/trippin/hooks/useTrippinLoop.ts`, `src/games/trippin/types.ts`
   - Entry: `Play Trippin’` button in `app/(tabs)/profile.tsx`
+  - [x] Tree stump obstacle visuals for pipes
+    ✅ Implemented 2025-08-13: Replaced generic pipes with wood stump-themed obstacles using warm bark gradients, subtle grooves, light wood caps with growth rings, and deterministic knots/moss accents per pipe id for uniqueness. Purely visual change in render layer with no logic modifications; performance preserved. File: `src/games/trippin/TrippinGame.tsx`.

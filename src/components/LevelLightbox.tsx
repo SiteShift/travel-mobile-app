@@ -186,7 +186,7 @@ export const LevelLightbox: React.FC<LevelLightboxProps> = ({ visible, onClose, 
     let xpLabel = '0/0';
     try {
       const leveling = require('../utils/leveling');
-      const spanForThisLevel = typeof leveling.xpSpanForLevel === 'function' ? leveling.xpSpanForLevel(item.level) : 100;
+      const spanForThisLevel = typeof leveling.xpSpanForLevel === 'function' ? leveling.xpSpanForLevel(item.level) : (typeof leveling.XP_PER_LEVEL === 'number' ? leveling.XP_PER_LEVEL : 100);
       if (item.level < userLevel) {
         fillRatio = 1;
         xpLabel = `${spanForThisLevel}/${spanForThisLevel}`;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Animated, FlatList, Modal, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated, FlatList, Modal, Easing, Share, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
@@ -13,7 +13,7 @@ import { SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../src/constants
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import TrippinGame from '../../src/games/trippin/TrippinGame';
+const TrippinGameLazy = React.lazy(() => import('../../src/games/trippin/TrippinGame'));
 
 // --- MOCK DATA ---
 const user = {
@@ -51,6 +51,8 @@ export default function ProfileTab() {
   const [avatarUri, setAvatarUri] = React.useState(user.avatar);
   const [displayName, setDisplayName] = React.useState(user.name);
   const [isEditProfileVisible, setIsEditProfileVisible] = React.useState(false);
+  const [tempName, setTempName] = React.useState<string>('');
+  const [isSavingProfile, setIsSavingProfile] = React.useState<boolean>(false);
   const [uniqueCountries, setUniqueCountries] = React.useState<number>(0);
   const [tripCount, setTripCount] = React.useState<number>(0);
   const [photoCount, setPhotoCount] = React.useState<number>(0);
@@ -66,9 +68,172 @@ export default function ProfileTab() {
 
   // Level badge images removed from XP bar sides
 
+  // Trip mission badge images by target count
+  const TRIP_MISSION_BADGES: Record<number, any> = {
+    1: require('../../public/assets/Tripmission-badgeimages/tripmission-1_compressed.webp'),
+    2: require('../../public/assets/Tripmission-badgeimages/tripmission-2_compressed.webp'),
+    3: require('../../public/assets/Tripmission-badgeimages/tripmission-3_compressed.webp'),
+    5: require('../../public/assets/Tripmission-badgeimages/tripmission-5_compressed.webp'),
+    10: require('../../public/assets/Tripmission-badgeimages/tripmission-10_compressed.webp'),
+    15: require('../../public/assets/Tripmission-badgeimages/tripmission-15_compressed.webp'),
+    20: require('../../public/assets/Tripmission-badgeimages/tripmission-20_compressed.webp'),
+    25: require('../../public/assets/Tripmission-badgeimages/tripmission-25_compressed.webp'),
+    30: require('../../public/assets/Tripmission-badgeimages/tripmission-30_compressed.webp'),
+    40: require('../../public/assets/Tripmission-badgeimages/tripmission-40_compressed.webp'),
+    50: require('../../public/assets/Tripmission-badgeimages/tripmission-50_compressed.webp'),
+  };
+
+  const getTripMissionBadgeSource = (target: number) => {
+    if (TRIP_MISSION_BADGES[target]) return TRIP_MISSION_BADGES[target];
+    // Fallback: pick the nearest lower available badge, or 1 as last resort
+    const available = Object.keys(TRIP_MISSION_BADGES)
+      .map((k) => Number(k))
+      .sort((a, b) => a - b);
+    let chosen = available[0];
+    for (const v of available) {
+      if (v <= target) chosen = v;
+      else break;
+    }
+    return TRIP_MISSION_BADGES[chosen] || TRIP_MISSION_BADGES[1];
+  };
+
+  // Photo mission badge images by target count
+  const PHOTO_MISSION_BADGES: Record<number, any> = {
+    5: require('../../public/assets/Tripmission-badgeimages/tripmission-5_compressed.webp'),
+    10: require('../../public/assets/Tripmission-badgeimages/tripmission-10_compressed.webp'),
+    25: require('../../public/assets/Tripmission-badgeimages/tripmission-25_compressed.webp'),
+    50: require('../../public/assets/Tripmission-badgeimages/tripmission-50_compressed.webp'),
+  };
+
+  const getPhotoMissionBadgeSource = (target: number) => {
+    if (PHOTO_MISSION_BADGES[target]) return PHOTO_MISSION_BADGES[target];
+    const available = Object.keys(PHOTO_MISSION_BADGES)
+      .map((k) => Number(k))
+      .sort((a, b) => a - b);
+    let chosen = available[0];
+    for (const v of available) {
+      if (v <= target) chosen = v;
+      else break;
+    }
+    return PHOTO_MISSION_BADGES[chosen] || PHOTO_MISSION_BADGES[5];
+  };
+
+  // Visit countries mission badge images by target count
+  const VISIT_COUNTRIES_BADGES: Record<number, any> = {
+    1: require('../../public/assets/visitcountry-missionbadges/visitcountry-1_compressed.webp'),
+    2: require('../../public/assets/visitcountry-missionbadges/visitcountry-2_compressed.webp'),
+    3: require('../../public/assets/visitcountry-missionbadges/visitcountry-3_compressed.webp'),
+    4: require('../../public/assets/visitcountry-missionbadges/visitcountry-4_compressed.webp'),
+    5: require('../../public/assets/visitcountry-missionbadges/visitcountry-5_compressed.webp'),
+    6: require('../../public/assets/visitcountry-missionbadges/visitcountry-6_compressed.webp'),
+    7: require('../../public/assets/visitcountry-missionbadges/visitcountry-7_compressed.webp'),
+    8: require('../../public/assets/visitcountry-missionbadges/visitcountry-8_compressed.webp'),
+    9: require('../../public/assets/visitcountry-missionbadges/visitcountry-9_compressed.webp'),
+    10: require('../../public/assets/visitcountry-missionbadges/visitcountry-10_compressed.webp'),
+    15: require('../../public/assets/visitcountry-missionbadges/visitcountry-15_compressed.webp'),
+    25: require('../../public/assets/visitcountry-missionbadges/visitcountry-25_compressed.webp'),
+    50: require('../../public/assets/visitcountry-missionbadges/visitcountry-50_compressed.webp'),
+    100: require('../../public/assets/visitcountry-missionbadges/visitcountry-100_compressed.webp'),
+  };
+
+  const getVisitCountriesBadgeSource = (target: number) => {
+    if (VISIT_COUNTRIES_BADGES[target]) return VISIT_COUNTRIES_BADGES[target];
+    const available = Object.keys(VISIT_COUNTRIES_BADGES)
+      .map((k) => Number(k))
+      .sort((a, b) => a - b);
+    let chosen = available[0];
+    for (const v of available) {
+      if (v <= target) chosen = v;
+      else break;
+    }
+    return VISIT_COUNTRIES_BADGES[chosen] || VISIT_COUNTRIES_BADGES[1];
+  };
+
+  // One-off mission: Add a profile picture badge
+  const ADD_PROFILE_PICTURE_BADGE = require('../../public/assets/addprofilepicture-missionbadge_compressed.webp');
+  const SHARE_APP_BADGE = require('../../public/assets/tripmemo-sharetheappmission_compressed.webp');
+  const PLAY_TRIPPIN_BADGE = require('../../public/assets/playtrippin-mission_compressed.webp');
+
+  // Day streak mission badges
+  const DAY_STREAK_BADGES: Record<number, any> = {
+    3: require('../../public/assets/daystreakmission-badges/daystreakmission-3_compressed.webp'),
+    5: require('../../public/assets/daystreakmission-badges/daystreakmission-5_compressed.webp'),
+    7: require('../../public/assets/daystreakmission-badges/daystreakmission-7_compressed.webp'),
+    10: require('../../public/assets/daystreakmission-badges/daystreakmission-10_compressed.webp'),
+    30: require('../../public/assets/daystreakmission-badges/daystreakmission-30_compressed.webp'),
+  };
+
+  const getDayStreakBadgeSource = (target: number) => {
+    if (DAY_STREAK_BADGES[target]) return DAY_STREAK_BADGES[target];
+    const available = Object.keys(DAY_STREAK_BADGES)
+      .map((k) => Number(k))
+      .sort((a, b) => a - b);
+    let chosen = available[0];
+    for (const v of available) {
+      if (v <= target) chosen = v;
+      else break;
+    }
+    return DAY_STREAK_BADGES[chosen] || DAY_STREAK_BADGES[3];
+  };
+
+  // Level achievement badges (levels 1-10)
+  const LEVEL_BADGES: Record<number, any> = {
+    1: require('../../public/assets/Trip Memo Level Badges for home page/level-1-level-badge_compressed.webp'),
+    2: require('../../public/assets/Trip Memo Level Badges for home page/level-2-level-badge_compressed.webp'),
+    3: require('../../public/assets/Trip Memo Level Badges for home page/level-3-level-badge_compressed.webp'),
+    4: require('../../public/assets/Trip Memo Level Badges for home page/level-4-level-badge_compressed.webp'),
+    5: require('../../public/assets/Trip Memo Level Badges for home page/level-5-level-badge_compressed.webp'),
+    6: require('../../public/assets/Trip Memo Level Badges for home page/level-6-level-badge_compressed.webp'),
+    7: require('../../public/assets/Trip Memo Level Badges for home page/level-7-level-badge_compressed.webp'),
+    8: require('../../public/assets/Trip Memo Level Badges for home page/level-8-level-badge_compressed.webp'),
+    9: require('../../public/assets/Trip Memo Level Badges for home page/level-9-level-badge_compressed.webp'),
+    10: require('../../public/assets/Trip Memo Level Badges for home page/level-10-level-badge_compressed.webp'),
+  };
+
+  const getLevelBadgeSource = (level: number) => {
+    if (LEVEL_BADGES[level]) return LEVEL_BADGES[level];
+    const available = Object.keys(LEVEL_BADGES)
+      .map((k) => Number(k))
+      .sort((a, b) => a - b);
+    let chosen = available[0];
+    for (const v of available) {
+      if (v <= level) chosen = v;
+      else break;
+    }
+    return LEVEL_BADGES[chosen] || LEVEL_BADGES[1];
+  };
+
+  // Caption mission badges by target count
+  const CAPTION_MISSION_BADGES: Record<number, any> = {
+    1: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-1_compressed.webp'),
+    5: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-5_compressed.webp'),
+    10: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-10_compressed.webp'),
+    25: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-25_compressed.webp'),
+    50: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-50_compressed.webp'),
+    100: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-100_compressed.webp'),
+    250: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-250_compressed.webp'),
+    500: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-500_compressed.webp'),
+    1000: require('../../public/assets/writecaptions-mission-images/writecaptions-mission-image-1000_compressed.webp'),
+  };
+
+  const getCaptionMissionBadgeSource = (target: number) => {
+    if (CAPTION_MISSION_BADGES[target]) return CAPTION_MISSION_BADGES[target];
+    const available = Object.keys(CAPTION_MISSION_BADGES)
+      .map((k) => Number(k))
+      .sort((a, b) => a - b);
+    let chosen = available[0];
+    for (const v of available) {
+      if (v <= target) chosen = v;
+      else break;
+    }
+    return CAPTION_MISSION_BADGES[chosen] || CAPTION_MISSION_BADGES[1];
+  };
+
   React.useEffect(() => {
     // Animate XP bar based on current level progress
-    const pct = xpSummary.span > 0 ? Math.max(0, Math.min(100, (xpSummary.gained / xpSummary.span) * 100)) : 0;
+    const pct = xpSummary.span > 0
+      ? Math.max(0, Math.min(100, (xpSummary.gained / xpSummary.span) * 100))
+      : 100; // At max level (span === 0), show a full bar
     Animated.timing(animatedProgress, {
       toValue: pct,
       duration: 600,
@@ -112,6 +277,13 @@ export default function ProfileTab() {
     })();
   }, []);
 
+  // Initialize edit form state when opening the modal
+  React.useEffect(() => {
+    if (isEditProfileVisible) {
+      setTempName(displayName);
+    }
+  }, [isEditProfileVisible, displayName]);
+
   // Parrot bobbing loop; pauses during scroll to avoid jank
   const startParrotBob = React.useCallback(() => {
     parrotBob.setValue(0);
@@ -143,6 +315,31 @@ export default function ProfileTab() {
       ])
     ).start();
   }, [trippinShimmer]);
+
+  // Stable handlers for Trippin CTA
+  const handleTrippinPressIn = React.useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Animated.parallel([
+      Animated.spring(trippinHoldScale, { toValue: 0.98, useNativeDriver: true, tension: 300, friction: 14 }),
+      Animated.spring(trippinHoldTranslateY, { toValue: -1, useNativeDriver: true, tension: 300, friction: 14 }),
+    ]).start();
+  }, [trippinHoldScale, trippinHoldTranslateY]);
+
+  const handleTrippinPressOut = React.useCallback(() => {
+    Animated.parallel([
+      Animated.spring(trippinHoldScale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 12 }),
+      Animated.spring(trippinHoldTranslateY, { toValue: 0, useNativeDriver: true, tension: 300, friction: 12 }),
+    ]).start();
+  }, [trippinHoldScale, trippinHoldTranslateY]);
+
+  const handleTrippinPress = React.useCallback(async () => {
+    setIsGameVisible(true);
+    try {
+      await progressMission('play_trippin', 1);
+      const list = await getMissions();
+      setMissions(list);
+    } catch {}
+  }, [setIsGameVisible, setMissions]);
 
   const computeUniqueCountries = React.useCallback(async () => {
     try {
@@ -304,7 +501,7 @@ export default function ProfileTab() {
     return { target, progress, remaining };
   };
 
-  const GamifiedStatCard = ({
+  const GamifiedStatCardBase = ({
     label,
     value,
     icon,
@@ -342,7 +539,7 @@ export default function ProfileTab() {
         <Pressable onPressIn={onPressIn} onPressOut={onPressOut} style={{ borderRadius: 16, overflow: 'hidden' }}>
         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.gStatCard, SHADOWS.md]}> 
           {/* Shimmer band */}
-          <Animated.View style={[styles.gShimmerBand, { transform: [{ translateX: bandTranslate }] }]} />
+          <Animated.View pointerEvents="none" style={[styles.gShimmerBand, { transform: [{ translateX: bandTranslate }] }]} />
 
           {/* Icon */}
           <View style={styles.gHeaderRow}>
@@ -367,6 +564,18 @@ export default function ProfileTab() {
       </Animated.View>
     );
   };
+
+  const GamifiedStatCard = React.memo(GamifiedStatCardBase, (prev, next) => {
+    if (prev.label !== next.label) return false;
+    if (prev.icon !== next.icon) return false;
+    if (prev.value !== next.value) return false;
+    if (prev.gradient[0] !== next.gradient[0] || prev.gradient[1] !== next.gradient[1]) return false;
+    if (prev.milestones.length !== next.milestones.length) return false;
+    for (let i = 0; i < prev.milestones.length; i += 1) {
+      if (prev.milestones[i] !== next.milestones[i]) return false;
+    }
+    return true;
+  });
 
   const AchievementBadge = ({ icon, title, unlocked }: { icon: string; title: string; unlocked: boolean }) => (
     <View style={[styles.badgeContainer, { opacity: unlocked ? 1 : 0.4 }]}>
@@ -410,8 +619,19 @@ export default function ProfileTab() {
 
         <View style={styles.progressSection}>
           <View style={styles.progressRow}> 
-            <View style={[styles.progressBarContainer]}> 
-              <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
+            <View style={[styles.progressOuter, { borderColor: colors.primary[200] }]}> 
+              <View style={[styles.progressBarContainer]}> 
+                <Animated.View style={[styles.progressBar, { width: progressWidth }]}> 
+                  <View pointerEvents="none" style={styles.progressStripes}>
+                    {React.useMemo(() => Array.from({ length: 28 }).map((_, i) => (
+                      <View
+                        key={`xp-stripe-${i}`}
+                        style={[styles.progressStripe, { left: i * 14 }]}
+                      />
+                    )), [])}
+                  </View>
+                </Animated.View>
+              </View>
             </View>
           </View>
           <Text style={[styles.progressLevelTitle, { color: colors.text.primary }]}>
@@ -423,47 +643,48 @@ export default function ProfileTab() {
         </View>
 
         <View style={styles.statsGrid}>
-          <GamifiedStatCard
-            label="Countries"
-            value={uniqueCountries}
-            icon="earth"
-            gradient={["#34d399", "#059669"]}
-            milestones={[5, 10, 20, 50]}
-          />
-          <GamifiedStatCard
-            label="Trips"
-            value={tripCount}
-            icon="map"
-            gradient={["#60a5fa", "#2563eb"]}
-            milestones={[3, 10, 25, 50]}
-          />
-          <GamifiedStatCard
-            label="Photos"
-            value={photoCount}
-            icon="camera"
-            gradient={["#f59e0b", "#ef4444"]}
-            milestones={[100, 500, 1000, 5000]}
-          />
+          {(() => {
+            const countriesGradient = React.useMemo(() => ["#34d399", "#059669"] as [string, string], []);
+            const tripsGradient = React.useMemo(() => ["#60a5fa", "#2563eb"] as [string, string], []);
+            const photosGradient = React.useMemo(() => ["#f59e0b", "#ef4444"] as [string, string], []);
+            const countriesMilestones = React.useMemo(() => [5, 10, 20, 50], []);
+            const tripsMilestones = React.useMemo(() => [3, 10, 25, 50], []);
+            const photosMilestones = React.useMemo(() => [100, 500, 1000, 5000], []);
+            return (
+              <>
+                <GamifiedStatCard
+                  label="Countries"
+                  value={uniqueCountries}
+                  icon="earth"
+                  gradient={countriesGradient}
+                  milestones={countriesMilestones}
+                />
+                <GamifiedStatCard
+                  label="Trips"
+                  value={tripCount}
+                  icon="map"
+                  gradient={tripsGradient}
+                  milestones={tripsMilestones}
+                />
+                <GamifiedStatCard
+                  label="Photos"
+                  value={photoCount}
+                  icon="camera"
+                  gradient={photosGradient}
+                  milestones={photosMilestones}
+                />
+              </>
+            );
+          })()}
         </View>
 
         {/* Trippin' Game CTA - moved above Missions */}
         <View style={[styles.section, { marginBottom: SPACING.lg }]}> 
           <Pressable
-            onPressIn={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              Animated.parallel([
-                Animated.spring(trippinHoldScale, { toValue: 0.98, useNativeDriver: true, tension: 300, friction: 14 }),
-                Animated.spring(trippinHoldTranslateY, { toValue: -1, useNativeDriver: true, tension: 300, friction: 14 }),
-              ]).start();
-            }}
-            onPressOut={() => {
-              Animated.parallel([
-                Animated.spring(trippinHoldScale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 12 }),
-                Animated.spring(trippinHoldTranslateY, { toValue: 0, useNativeDriver: true, tension: 300, friction: 12 }),
-              ]).start();
-            }}
-            onPress={() => setIsGameVisible(true)}
-            accessibilityLabel="Play Trippin – global leaderboard"
+            onPressIn={handleTrippinPressIn}
+            onPressOut={handleTrippinPressOut}
+            onPress={handleTrippinPress}
+            accessibilityLabel="Play Trippin – global game"
           >
             <Animated.View style={{ transform: [{ scale: trippinHoldScale }, { translateY: trippinHoldTranslateY }] }}>
               <LinearGradient
@@ -490,7 +711,7 @@ export default function ProfileTab() {
               <View style={styles.trippinContentRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.trippinTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>Play Trippin!</Text>
-                  <Text style={styles.trippinSubtitle}>Compete against other travellers in a global leaderboard</Text>
+                  <Text style={styles.trippinSubtitle}>Compete against other travellers in a global game</Text>
                   <View style={styles.trippinCTAButtons}>
                     <View style={styles.trippinPlayPill}>
                       <Icon name="game-controller" size="sm" color="#111827" />
@@ -506,6 +727,8 @@ export default function ProfileTab() {
                       source={require('../../public/assets/TripMemo-parrot-logo-Photoroom_compressed.webp')}
                       style={styles.trippinArt}
                       contentFit="contain"
+                      cachePolicy={'memory-disk'}
+                      priority="high"
                     />
                     </Animated.View>
                 </View>
@@ -517,33 +740,173 @@ export default function ProfileTab() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Missions</Text>
+          {/* Share the app – full-width tile on top row */}
+          {(() => {
+            const shareMission = React.useMemo(() => missions.find(m => m.id === 'share_app'), [missions]);
+            if (!shareMission) return null;
+            const pct = shareMission.maxProgress > 0 ? Math.min(1, (shareMission.progress || 0) / shareMission.maxProgress) : 0;
+            const isDone = pct >= 1;
+            const handleShareApp = async () => {
+              try {
+                const result = await Share.share({
+                  message: 'Loving TripMemo! Check out this travel journal app.',
+                  url: 'https://tripmemo.app',
+                  title: 'TripMemo – Travel Journal',
+                });
+                if (result?.action === Share.sharedAction) {
+                  await completeShareMission();
+                }
+              } catch {}
+            };
+            return (
+              <View style={[styles.shareMissionTile, { backgroundColor: colors.surface.secondary, borderWidth: 2, borderColor: colors.surface.tertiary }]}>
+                {/* Completed pill removed; "Completed!" text shown below instead */}
+                <View style={styles.shareMissionLeft}>
+                  <Image
+                    source={SHARE_APP_BADGE}
+                    style={{ width: 100, height: 100 }}
+                    cachePolicy={'memory-disk'}
+                    contentFit="contain"
+                    accessibilityLabel="Share the app badge"
+                  />
+                </View>
+                <View style={styles.shareMissionRight}>
+                  <Text style={[styles.missionTitleCenter, { textAlign: 'left', color: colors.text.primary }]} numberOfLines={2}>
+                    {shareMission.title}
+                  </Text>
+                  {isDone ? (
+                    <Text style={[styles.missionMetaCenter, { textAlign: 'left', color: '#22C55E', fontWeight: '800' }]}>Completed!</Text>
+                  ) : (
+                    <>
+                      <Text style={[styles.missionMetaCenter, { textAlign: 'left', color: colors.text.secondary }]}>
+                        {`+${shareMission.rewardXp} XP • ${shareMission.progress}/${shareMission.maxProgress}`}
+                      </Text>
+                      <View style={[styles.missionBarTrackSmall, { marginTop: SPACING.xs }]}>
+                        <View style={[styles.missionBarFill, { width: `${pct * 100}%` }]} />
+                      </View>
+                    </>
+                  )}
+                  {shareMission.progress < shareMission.maxProgress && (
+                    <View style={{ marginTop: SPACING.sm }}>
+                      <Button title="Share" onPress={handleShareApp} variant="primary" style={{ backgroundColor: '#f59e0b' }} />
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })()}
           <FlatList
-            data={missions}
+            data={React.useMemo(() => missions.filter(m => m.id !== 'share_app'), [missions])}
             keyExtractor={(item) => item.id}
             numColumns={2}
             scrollEnabled={false}
             columnWrapperStyle={{ justifyContent: 'space-between' }}
             ItemSeparatorComponent={() => <View style={{ height: SPACING.md }} />}
-            renderItem={({ item: m, index }) => {
+            initialNumToRender={6}
+            renderItem={React.useCallback(({ item: m, index }: { item: { id: string; title: string; rewardXp: number; maxProgress: number; progress: number }; index: number }) => {
               const pct = m.maxProgress > 0 ? Math.min(1, (m.progress || 0) / m.maxProgress) : 0;
               const iconName = m.id === 'share_app' ? 'share' : m.id.includes('photos') ? 'camera' : m.id.includes('map') ? 'map' : m.id.includes('entry') ? 'edit' : 'award';
               const isDone = pct >= 1;
               return (
                 <View style={styles.missionTileWrap}>
-                  <View style={[styles.missionTile, { backgroundColor: colors.surface.secondary }]}>
-                    {isDone && (
-                      <View style={[styles.missionDonePill, { backgroundColor: '#22C55E' }]}> 
-                        <Text style={styles.missionDonePillText}>Done</Text>
+                  <View style={[styles.missionTile, { backgroundColor: colors.surface.secondary, borderWidth: 2, borderColor: colors.surface.tertiary }]}>
+                    {/* Completed pill removed; "Completed!" text shown below instead */}
+                    {m.id === 'ladder_create_trips' ? (
+                      <View style={{ marginBottom: SPACING.sm }}>
+                        <Image
+                          source={getTripMissionBadgeSource(m.maxProgress)}
+                          style={{ width: 84, height: 84 }}
+                          cachePolicy={'memory-disk'}
+                          contentFit="contain"
+                          accessibilityLabel={`Create ${m.maxProgress} trip badge`}
+                        />
+                      </View>
+                    ) : m.id === 'ladder_add_photos' ? (
+                      <View style={{ marginBottom: SPACING.sm }}>
+                        <Image
+                          source={getPhotoMissionBadgeSource(m.maxProgress)}
+                          style={{ width: 84, height: 84 }}
+                          cachePolicy={'memory-disk'}
+                          contentFit="contain"
+                          accessibilityLabel={`Add ${m.maxProgress} photos badge`}
+                        />
+                      </View>
+                    ) : m.id === 'ladder_visit_countries' ? (
+                      <View style={{ marginBottom: SPACING.sm }}>
+                        <Image
+                          source={getVisitCountriesBadgeSource(m.maxProgress)}
+                          style={{ width: 84, height: 84 }}
+                          cachePolicy={'memory-disk'}
+                          contentFit="contain"
+                          accessibilityLabel={`Visit ${m.maxProgress} countries badge`}
+                        />
+                      </View>
+                    ) : m.id === 'ladder_add_captions' ? (
+                      <View style={{ marginBottom: SPACING.sm }}>
+                        <Image
+                          source={getCaptionMissionBadgeSource(m.maxProgress)}
+                          style={{ width: 84, height: 84 }}
+                          cachePolicy={'memory-disk'}
+                          contentFit="contain"
+                          accessibilityLabel={`Add ${m.maxProgress} captions badge`}
+                        />
+                      </View>
+                    ) : m.id === 'add_profile_picture' ? (
+                      <View style={{ marginBottom: SPACING.sm }}>
+                        <Image
+                          source={ADD_PROFILE_PICTURE_BADGE}
+                          style={{ width: 84, height: 84 }}
+                          cachePolicy={'memory-disk'}
+                          contentFit="contain"
+                          accessibilityLabel={`Add a profile picture badge`}
+                        />
+                      </View>
+                    ) : m.id === 'ladder_open_streak' ? (
+                      <View style={{ marginBottom: SPACING.sm }}>
+                        <Image
+                          source={getDayStreakBadgeSource(m.maxProgress)}
+                          style={{ width: 84, height: 84 }}
+                          cachePolicy={'memory-disk'}
+                          contentFit="contain"
+                          accessibilityLabel={`${m.maxProgress} day streak badge`}
+                        />
+                      </View>
+                    ) : m.id === 'ladder_achieve_level' ? (
+                      <View style={{ marginBottom: SPACING.sm }}>
+                        <Image
+                          source={getLevelBadgeSource(m.maxProgress)}
+                          style={{ width: 84, height: 84 }}
+                          cachePolicy={'memory-disk'}
+                          contentFit="contain"
+                          accessibilityLabel={`Achieve Level ${m.maxProgress} badge`}
+                        />
+                      </View>
+                    ) : m.id === 'play_trippin' ? (
+                      <View style={{ marginBottom: SPACING.sm }}>
+                        <Image
+                          source={PLAY_TRIPPIN_BADGE}
+                          style={{ width: 84, height: 84 }}
+                          cachePolicy={'memory-disk'}
+                          contentFit="contain"
+                          accessibilityLabel={`Play Trippin badge`}
+                        />
+                      </View>
+                    ) : (
+                      <View style={[styles.missionIconCircleLg, { backgroundColor: 'rgba(239, 97, 68, 0.12)' }]}> 
+                        <Icon name={iconName} size="xl" color={'#EF6144'} />
                       </View>
                     )}
-                    <View style={[styles.missionIconCircleLg, { backgroundColor: 'rgba(239, 97, 68, 0.12)' }]}> 
-                      <Icon name={iconName} size="xl" color={'#EF6144'} />
-                    </View>
                     <Text style={[styles.missionTitleCenter, { color: colors.text.primary }]} numberOfLines={2}>{m.title}</Text>
-                    <Text style={[styles.missionMetaCenter, { color: colors.text.secondary }]}>{`+${m.rewardXp} XP • ${m.progress}/${m.maxProgress}`}</Text>
-                    <View style={styles.missionBarTrackSmall}>
-                      <View style={[styles.missionBarFill, { width: `${pct * 100}%` }]} />
-                    </View>
+                    {isDone ? (
+                      <Text style={[styles.missionMetaCenter, { color: '#22C55E', fontWeight: '800' }]}>Completed!</Text>
+                    ) : (
+                      <>
+                        <Text style={[styles.missionMetaCenter, { color: colors.text.secondary }]}>{`+${m.rewardXp} XP • ${m.progress}/${m.maxProgress}`}</Text>
+                        <View style={styles.missionBarTrackSmall}>
+                          <View style={[styles.missionBarFill, { width: `${pct * 100}%` }]} />
+                        </View>
+                      </>
+                    )}
                     {m.id === 'share_app' && m.progress < m.maxProgress && (
                       <View style={{ marginTop: SPACING.xs }}>
                         <Button title="Share" onPress={completeShareMission} variant="primary" />
@@ -552,7 +915,7 @@ export default function ProfileTab() {
                   </View>
                 </View>
               );
-            }}
+            }, [colors])}
           />
         </View>
 
@@ -593,44 +956,72 @@ export default function ProfileTab() {
         </View>
 
         {/* Edit Profile Modal */}
-        <Modal
-          transparent
-          visible={isEditProfileVisible}
-          animationType="fade"
-          onRequestClose={() => setIsEditProfileVisible(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={[styles.modalCard, { backgroundColor: colors.surface.primary }]}> 
-              <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Edit Profile</Text>
-              <View style={{ alignItems: 'center', marginBottom: SPACING.md }}>
-                <Image source={{ uri: avatarUri }} style={[styles.modalAvatar, { borderColor: colors.accent[500] }]} />
-                <Button title="Change Photo" onPress={handleChangeAvatar} variant="secondary" />
-              </View>
-              <Input
-                label="Name"
-                placeholder="Your name"
-                value={displayName}
-                onChangeText={setDisplayName}
-                variant="outlined"
-              />
-              <View style={styles.modalActions}>
-                <Button title="Cancel" onPress={() => setIsEditProfileVisible(false)} variant="ghost" />
-                <Button
-                  title="Save"
-                  onPress={async () => {
-                    try {
-                      const nameToSave = (displayName || '').trim() || user.name;
-                      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify({ name: nameToSave, avatarUri }));
-                      setDisplayName(nameToSave);
-                    } catch {}
-                    setIsEditProfileVisible(false);
-                  }}
-                  variant="primary"
+        {isEditProfileVisible && (
+          <Modal
+            transparent
+            visible={isEditProfileVisible}
+            animationType="fade"
+            onRequestClose={() => setIsEditProfileVisible(false)}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={[styles.modalCard, { backgroundColor: colors.surface.primary, borderColor: colors.border.primary }]}> 
+                {/* Gradient header */}
+                <LinearGradient
+                  colors={[colors.primary[400], colors.primary[500]]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.modalHeader}
                 />
+                {/* Avatar */}
+                <View style={styles.modalAvatarWrap}>
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={[styles.modalAvatar, { borderColor: '#ffffff' }]}
+                    cachePolicy={'memory-disk'}
+                    contentFit="cover"
+                    accessibilityLabel="Profile picture preview"
+                  />
+                </View>
+                {/* Title moved into header */}
+                <View style={{ alignItems: 'center', marginBottom: SPACING.md }}>
+                  <Button title="Change Photo" onPress={handleChangeAvatar} variant="secondary" />
+                </View>
+                <Input
+                  label="Name"
+                  placeholder="Your name"
+                  value={tempName}
+                  onChangeText={setTempName}
+                  variant="outlined"
+                />
+                <View style={styles.modalActions}>
+                  <Button title="Cancel" onPress={() => setIsEditProfileVisible(false)} variant="ghost" />
+                  <Button
+                    title={isSavingProfile ? 'Saving…' : 'Save'}
+                    onPress={async () => {
+                      if (isSavingProfile) return;
+                      const trimmed = (tempName || '').trim();
+                      const hasNameChanged = trimmed !== displayName;
+                      if (!hasNameChanged) {
+                        setIsEditProfileVisible(false);
+                        return;
+                      }
+                      try {
+                        setIsSavingProfile(true);
+                        const nameToSave = trimmed || user.name;
+                        await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify({ name: nameToSave, avatarUri }));
+                        setDisplayName(nameToSave);
+                      } catch {}
+                      setIsSavingProfile(false);
+                      setIsEditProfileVisible(false);
+                    }}
+                    variant="primary"
+                    disabled={isSavingProfile}
+                  />
+                </View>
               </View>
             </View>
-          </View>
-        </Modal>
+          </Modal>
+        )}
       </ScrollView>
 
       {/* Trippin' Fullscreen Modal */}
@@ -639,9 +1030,12 @@ export default function ProfileTab() {
         visible={isGameVisible}
         animationType="slide"
         presentationStyle="fullScreen"
+        hardwareAccelerated
         onRequestClose={() => setIsGameVisible(false)}
       >
-        <TrippinGame onClose={() => setIsGameVisible(false)} />
+        <React.Suspense fallback={<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color="#f4845f" /></View>}>
+          <TrippinGameLazy onClose={() => setIsGameVisible(false)} />
+        </React.Suspense>
       </Modal>
     </SafeAreaView>
   );
@@ -657,8 +1051,11 @@ const styles = StyleSheet.create({
   
   progressSection: { paddingHorizontal: SPACING.xl, marginBottom: SPACING.xl, alignItems: 'center' },
   progressRow: { width: '100%' },
-  progressBarContainer: { height: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: '#F1F5F9' },
-  progressBar: { height: '100%', backgroundColor: '#EF6144' },
+  progressOuter: { padding: 2, borderRadius: 11, borderWidth: 1 },
+  progressBarContainer: { height: 18, borderRadius: 9, overflow: 'hidden', backgroundColor: '#F1F5F9' },
+  progressBar: { height: '100%', backgroundColor: '#EF6144', position: 'relative' },
+  progressStripes: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
+  progressStripe: { position: 'absolute', top: -8, bottom: -8, width: 6, backgroundColor: 'rgba(245, 166, 107, 0.18)', transform: [{ rotate: '18deg' }] },
   progressLevelTitle: { ...TYPOGRAPHY.styles.h3, marginTop: SPACING.sm },
   progressXpSmall: { ...TYPOGRAPHY.styles.caption, marginTop: 2 },
 
@@ -707,10 +1104,18 @@ const styles = StyleSheet.create({
   missionDonePill: { position: 'absolute', top: 8, right: 8, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
   missionDonePillText: { ...TYPOGRAPHY.styles.caption, color: '#FFFFFF', fontWeight: '800' },
 
+  // Share mission full-width tile
+  shareMissionTile: { width: '100%', borderRadius: BORDER_RADIUS.md, padding: SPACING.md, flexDirection: 'row', alignItems: 'center', position: 'relative', marginBottom: SPACING.md },
+  shareMissionLeft: { width: 110, alignItems: 'center', justifyContent: 'center' },
+  shareMissionRight: { flex: 1, paddingLeft: SPACING.sm, paddingRight: SPACING.sm },
+
   // Edit Profile Modal
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
-  modalCard: { width: '100%', maxWidth: 420, borderRadius: BORDER_RADIUS.lg, padding: SPACING.lg },
-  modalTitle: { ...TYPOGRAPHY.styles.h3, marginBottom: SPACING.md },
+  modalCard: { width: '100%', maxWidth: 420, borderRadius: BORDER_RADIUS.lg, padding: SPACING.lg, borderWidth: 1, overflow: 'hidden' },
+  modalHeader: { position: 'absolute', top: 0, left: 0, right: 0, height: 80 },
+  
+  modalAvatarWrap: { alignItems: 'center', marginTop: 30, marginBottom: SPACING.sm },
+  modalTitle: { ...TYPOGRAPHY.styles.h3, marginBottom: SPACING.md, textAlign: 'center' },
   modalAvatar: { width: 96, height: 96, borderRadius: 48, borderWidth: 2, marginBottom: SPACING.sm },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: SPACING.sm, marginTop: SPACING.md },
 

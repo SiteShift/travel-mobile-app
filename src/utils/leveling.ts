@@ -5,7 +5,7 @@ export type LevelingState = {
 };
 
 const STORAGE_KEY = 'leveling_v1_state';
-const XP_PER_LEVEL = 100; // simple linear curve: every 100 XP → next level
+export const XP_PER_LEVEL = 100; // simple linear curve: every 100 XP → next level
 const MAX_LEVEL = 10; // hard cap
 
 export const computeLevelFromXp = (xp: number): number => {
@@ -22,6 +22,12 @@ export const xpToNextLevel = (xp: number): { currentLevel: number; currentLevelX
     const nextLevelXp = level >= MAX_LEVEL ? currentLevelXp : level * XP_PER_LEVEL;
     const remaining = level >= MAX_LEVEL ? 0 : Math.max(0, nextLevelXp - xp);
     return { currentLevel: level, currentLevelXp, nextLevelXp, remaining };
+};
+
+// XP span required to complete a given level (kept linear, but exported so UI like LevelLightbox can query)
+export const xpSpanForLevel = (level: number): number => {
+  if (!Number.isFinite(level) || level < 1) return XP_PER_LEVEL;
+  return XP_PER_LEVEL;
 };
 
 export async function getLevelingState(): Promise<LevelingState> {
@@ -92,28 +98,34 @@ const LADDERS: Record<string, LadderDef> = {
 	},
 	// Add Photos ladder
 	add_photos: {
-		thresholds: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
+    thresholds: [5, 10, 25, 50],
 		titleFor: (n) => `Add ${n} photo${n > 1 ? 's' : ''}`,
 		rewardFor: (n) => 1 * n,
 	},
 	// Add Captions ladder
 	add_captions: {
-		thresholds: [1, 5, 10, 25, 50, 100],
+    thresholds: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
 		titleFor: (n) => `Add ${n} caption${n > 1 ? 's' : ''}`,
 		rewardFor: (n) => 2 * n,
 	},
 	// Open app streak ladder
 	open_streak: {
-		thresholds: [1, 3, 5, 7, 10, 20, 30],
-		titleFor: (n) => `Open the app ${n} day${n > 1 ? 's' : ''} in a row` ,
+    thresholds: [3, 5, 7, 10, 30],
+    titleFor: (n) => `${n} Day Streak`,
 		rewardFor: (n) => 10 * n,
 	},
 	// Visit Countries ladder
 	visit_countries: {
-		thresholds: [1, 2, 3, 4, 5, 6, 7, 35, 40, 45, 50, 100],
+    thresholds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 25, 50, 100],
 		titleFor: (n) => `Visit ${n} countr${n === 1 ? 'y' : 'ies'}`,
 		rewardFor: (n) => 20 * n,
 	},
+  // Achieve Level ladder (levels 2 → 10)
+  achieve_level: {
+    thresholds: [2, 3, 4, 5, 6, 7, 8, 9, 10],
+    titleFor: (n) => `Achieve Level ${n}`,
+    rewardFor: (n) => 50 * n,
+  },
 };
 
 async function getMissionStages(): Promise<MissionStagesMap> {
@@ -213,12 +225,15 @@ async function computeAppStats(): Promise<{
 export async function updateMissionLadders(): Promise<void> {
 	const stages = await getMissionStages();
 	const stats = await computeAppStats();
+  const levelState = await getLevelingState();
+  const { currentLevel } = xpToNextLevel(levelState.xp || 0);
 	const metrics: Record<string, number> = {
 		create_trips: stats.tripCount,
 		add_photos: stats.photoCount,
 		add_captions: stats.captionCount,
 		open_streak: stats.currentStreak,
 		visit_countries: stats.countryCount,
+    achieve_level: currentLevel,
 	};
 	let changed = false;
 	for (const key of Object.keys(LADDERS)) {
@@ -252,19 +267,35 @@ export async function getMissions(): Promise<Mission[]> {
 		await tickDailyStreak();
 		// Ensure ladders are advanced to current stats
 		await updateMissionLadders();
-		const stages = await getMissionStages();
-		const stats = await computeAppStats();
+    const stages = await getMissionStages();
+    const stats = await computeAppStats();
+    // Load current level for level-based ladder metrics
+    const levelState = await getLevelingState();
+    const { currentLevel } = xpToNextLevel(levelState.xp || 0);
+    // Load existing missions to preserve one-off mission progress
+    let existing: Mission[] = [];
+    try {
+      const rawExisting = await AsyncStorage.getItem(MISSIONS_KEY);
+      existing = rawExisting ? JSON.parse(rawExisting) : [];
+    } catch {}
+    const existingProgress: Record<string, number> = Object.create(null);
+    for (const m of existing) {
+      if (m && typeof m.id === 'string') {
+        existingProgress[m.id] = Number(m.progress) || 0;
+      }
+    }
 		const missions: Mission[] = [];
 		// Build ladder missions (one per ladder, at current stage)
 		for (const key of Object.keys(LADDERS)) {
 			const def = LADDERS[key];
 			const stage = Math.min(stages[key]?.stageIndex ?? 0, def.thresholds.length - 1);
 			const target = def.thresholds[stage];
-			const metric = key === 'create_trips' ? stats.tripCount
+      const metric = key === 'create_trips' ? stats.tripCount
 				: key === 'add_photos' ? stats.photoCount
 				: key === 'add_captions' ? stats.captionCount
 				: key === 'open_streak' ? stats.currentStreak
-				: key === 'visit_countries' ? stats.countryCount
+        : key === 'visit_countries' ? stats.countryCount
+        : key === 'achieve_level' ? currentLevel
 				: 0;
 			missions.push({
 				id: `ladder_${key}`,
@@ -275,10 +306,11 @@ export async function getMissions(): Promise<Mission[]> {
 			});
 		}
 		// Include simple, one-off missions
-		missions.push(
-			{ id: 'share_app', title: 'Share the app', rewardXp: 100, maxProgress: 1, progress: 0 },
-			{ id: 'add_profile_picture', title: 'Add a profile picture', rewardXp: 40, maxProgress: 1, progress: 0 },
-		);
+    missions.push(
+      { id: 'share_app', title: 'Share the app', rewardXp: 100, maxProgress: 1, progress: existingProgress['share_app'] ?? 0 },
+      { id: 'add_profile_picture', title: 'Add a profile picture', rewardXp: 40, maxProgress: 1, progress: existingProgress['add_profile_picture'] ?? 0 },
+      { id: 'play_trippin', title: 'Play Trippin', rewardXp: 80, maxProgress: 1, progress: existingProgress['play_trippin'] ?? 0 },
+    );
 		await AsyncStorage.setItem(MISSIONS_KEY, JSON.stringify(missions));
 		return missions;
 	} catch {

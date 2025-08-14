@@ -10,6 +10,7 @@ export type LoopState = {
   score: number;
   streak: number;
   elapsed: number; // seconds
+  worldX: number; // horizontal world offset in px
 };
 
 export type LoopApi = {
@@ -40,12 +41,16 @@ export function useTrippinLoop(
     score: 0,
     streak: 0,
     elapsed: 0,
+    worldX: 0,
   }));
 
   const rafRef = React.useRef<number | null>(null);
   const lastTsRef = React.useRef<number | null>(null);
   const speedRef = React.useRef<number>(config.speed);
   const gapRef = React.useRef<number>(config.gapHeight);
+  const worldXRef = React.useRef<number>(0);
+  const pipesRef = React.useRef<Pipe[]>([]);
+  const stampsRef = React.useRef<Stamp[]>([]);
 
   // Constants derived from static inputs to avoid recomputation every frame
   const BIRD_X = React.useMemo(() => Math.round(screenWidth * 0.25), [screenWidth]);
@@ -64,7 +69,10 @@ export function useTrippinLoop(
         stamps.push({ id: `s_${id}`, x: x + config.pipeWidth + 24, y: gapY, taken: false });
       }
     }
-    setState(s => ({ ...s, pipes: items, stamps }));
+    pipesRef.current = items;
+    stampsRef.current = stamps;
+    worldXRef.current = 0;
+    setState(s => ({ ...s, pipes: items.slice(), stamps: stamps.slice(), worldX: 0 }));
   }, [config.pipeSpacing, config.spawnOffset, config.pipeWidth, config.stampChance, screenHeight, screenWidth]);
 
   const start = React.useCallback(() => {
@@ -72,6 +80,9 @@ export function useTrippinLoop(
     lastTsRef.current = null;
     speedRef.current = config.speed;
     gapRef.current = config.gapHeight;
+    worldXRef.current = 0;
+    pipesRef.current = [];
+    stampsRef.current = [];
     setState(s => ({
       ...s,
       state: 'running',
@@ -82,6 +93,7 @@ export function useTrippinLoop(
       elapsed: 0,
       pipes: [],
       stamps: [],
+      worldX: 0,
     }));
     spawnInitial();
     const loop = (ts: number) => {
@@ -120,6 +132,9 @@ export function useTrippinLoop(
     lastTsRef.current = null;
     speedRef.current = config.speed;
     gapRef.current = config.gapHeight;
+    worldXRef.current = 0;
+    pipesRef.current = [];
+    stampsRef.current = [];
     setState({
       state: 'ready',
       birdY: Math.round(screenHeight * 0.5),
@@ -129,6 +144,7 @@ export function useTrippinLoop(
       score: 0,
       streak: 0,
       elapsed: 0,
+      worldX: 0,
     });
   }, [config.gapHeight, config.speed, screenHeight]);
 
@@ -163,36 +179,40 @@ export function useTrippinLoop(
       let velocityY = clamp(prev.velocityY + config.gravity * dt, -config.terminalVelocity, config.terminalVelocity);
       let birdY = clamp(prev.birdY + velocityY * dt, 0, screenHeight - config.floorPadding);
 
-      // Move and keep on-screen pipes and stamps using simple for-loops to reduce allocations
+      // Advance world offset
       const currentSpeed = speedRef.current;
-      const pipes: Pipe[] = [];
-      const stamps: Stamp[] = [];
-      for (let i = 0; i < prev.pipes.length; i++) {
-        const p = prev.pipes[i];
-        const newX = p.x - currentSpeed * dt;
-        if (newX + config.pipeWidth > -40) {
-          // retain existing object details, only update x
-          pipes.push(p.scored ? { ...p, x: newX } : { id: p.id, x: newX, gapY: p.gapY, scored: p.scored });
-        }
-      }
-      for (let i = 0; i < prev.stamps.length; i++) {
-        const s = prev.stamps[i];
-        const newX = s.x - currentSpeed * dt;
-        if (newX > -40) {
-          stamps.push(s.taken ? { ...s, x: newX } : { id: s.id, x: newX, y: s.y, taken: s.taken });
+      worldXRef.current += currentSpeed * dt;
+
+      // Spawn new pipes when last spawn is close to entering screen
+      const pipesArr = pipesRef.current;
+      const stampsArr = stampsRef.current;
+      let pipesDirty = false;
+      let stampsDirty = false;
+
+      const lastPipe = pipesArr[pipesArr.length - 1];
+      const needSpawn = !lastPipe || (lastPipe.x - worldXRef.current) < screenWidth;
+      if (needSpawn) {
+        const lastSpawnX = lastPipe ? lastPipe.x : screenWidth + config.spawnOffset;
+        const x = Math.max(lastSpawnX + config.pipeSpacing, screenWidth + config.spawnOffset);
+        const gapY = Math.round(screenHeight * 0.3 + Math.random() * (screenHeight * 0.4));
+        const np: Pipe = { id: `p_${Date.now()}`, x, gapY };
+        pipesArr.push(np);
+        pipesDirty = true;
+        if (Math.random() < config.stampChance) {
+          // Place stamp centered horizontally in the gap between stumps
+          stampsArr.push({ id: `s_${Date.now()}`, x: x + Math.floor(config.pipeWidth / 2), y: gapY, taken: false });
+          stampsDirty = true;
         }
       }
 
-      // Spawn new pipes when last is far enough left
-      const needSpawn = pipes.length === 0 || (pipes[pipes.length - 1].x < screenWidth);
-      if (needSpawn) {
-        const lastX = pipes.length ? pipes[pipes.length - 1].x : screenWidth + config.spawnOffset;
-        const x = Math.max(lastX + config.pipeSpacing, screenWidth + config.spawnOffset);
-        const gapY = Math.round(screenHeight * 0.3 + Math.random() * (screenHeight * 0.4));
-        pipes.push({ id: `p_${Date.now()}`, x, gapY });
-        if (Math.random() < config.stampChance) {
-          stamps.push({ id: `s_${Date.now()}`, x: x + config.pipeWidth + 24, y: gapY, taken: false });
-        }
+      // Remove off-screen pipes/stamps from the front
+      while (pipesArr.length && (pipesArr[0].x - worldXRef.current + config.pipeWidth) <= -40) {
+        pipesArr.shift();
+        pipesDirty = true;
+      }
+      while (stampsArr.length && (stampsArr[0].x - worldXRef.current) <= -40) {
+        stampsArr.shift();
+        stampsDirty = true;
       }
 
       // Collision + scoring
@@ -202,10 +222,10 @@ export function useTrippinLoop(
       const birdBottom = birdY + HALF_SIZE;
 
       let collided = false;
-      for (let i = 0; i < pipes.length; i++) {
-        const p = pipes[i];
-        const pipeLeft = p.x;
-        const pipeRight = p.x + config.pipeWidth;
+      for (let i = 0; i < pipesArr.length; i++) {
+        const p = pipesArr[i];
+        const pipeLeft = p.x - worldXRef.current;
+        const pipeRight = pipeLeft + config.pipeWidth;
         const gapTop = p.gapY - gapRef.current / 2;
         const gapBottom = p.gapY + gapRef.current / 2;
         const withinX = BIRD_X + HALF_SIZE > pipeLeft && BIRD_X - HALF_SIZE < pipeRight;
@@ -219,46 +239,43 @@ export function useTrippinLoop(
           score += 1;
           const centerDist = Math.abs(birdY - p.gapY);
           if (centerDist < 12) streak += 1; else streak = 0;
-          pipes[i] = { ...p, scored: true };
+          p.scored = true; // mutate ref only; render not dependent
         }
       }
 
       // Stamp pickups
       let didCollect = false;
-      for (let i = 0; i < stamps.length; i++) {
-        const s = stamps[i];
+      for (let i = 0; i < stampsArr.length; i++) {
+        const s = stampsArr[i];
         if (s.taken) continue;
-        const dx = Math.abs(s.x - BIRD_X);
+        const dx = Math.abs((s.x - worldXRef.current) - BIRD_X);
         const dy = Math.abs(s.y - birdY);
         if (dx < 18 && dy < 18) {
           score += 3;
           didCollect = true;
-          stamps[i] = { ...s, taken: true };
+          s.taken = true;
+          stampsDirty = true;
         }
       }
 
       if (collided) {
-        // Hard stop
         endGame(score);
         return { ...prev, state: 'gameover', score };
       }
 
       const elapsed = prev.elapsed + dt;
-      const nextState = {
+      const nextState: LoopState = {
         state: 'running',
         birdY,
         velocityY,
-        pipes,
-        stamps,
+        pipes: pipesDirty ? pipesArr.slice() : prev.pipes,
+        stamps: stampsDirty ? stampsArr.slice() : prev.stamps,
         score,
         streak,
         elapsed,
+        worldX: worldXRef.current,
       };
-      // Fire outside effects after we compute state
-      if (didCollect) {
-        // Call after state update microtask
-        setTimeout(() => onStampCollected?.(), 0);
-      }
+      if (didCollect) setTimeout(() => onStampCollected?.(), 0);
       return nextState;
     });
   }, [config.birdSize, config.floorPadding, config.gapHeight, config.gapShrinkPerSec, config.gravity, config.maxSpeed, config.pipeSpacing, config.pipeWidth, config.speed, config.speedRampPerSec, config.stampChance, config.terminalVelocity, endGame, onStampCollected, screenHeight, screenWidth]);
