@@ -113,6 +113,8 @@ export default function HomeTab() {
   const navigateFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingCreateTripId, setPendingCreateTripId] = useState<string | null>(null);
   const createFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMomentumScrollingRef = useRef(false);
+  const suppressNextPressRef = useRef(false);
   
   // Get user level data
   const userData = getMockDataForUser('user1');
@@ -583,7 +585,10 @@ export default function HomeTab() {
     };
 
     const safeLen = Math.max(2, tripsLength);
-    const isActive = (((index % safeLen) + safeLen) % safeLen) === activeIndexMod;
+    const indexMod = (((index % safeLen) + safeLen) % safeLen);
+    const isActive = indexMod === activeIndexMod;
+    const circularDistance = Math.min(Math.abs(indexMod - activeIndexMod), safeLen - Math.abs(indexMod - activeIndexMod));
+    const isNearActive = circularDistance === 1;
 
     if (trip.type === 'placeholder') {
       // Anticipation: press scale for the card
@@ -594,6 +599,14 @@ export default function HomeTab() {
           duration: 90,
           useNativeDriver: true,
         }).start();
+        if (isMomentumScrollingRef.current) {
+          suppressNextPressRef.current = true;
+          // Stop momentum immediately and keep current item centered
+          flatListRef.current?.scrollToIndex({ index, animated: false });
+          if (isActive) {
+            setTimeout(() => handleTripPress(trip), 120);
+          }
+        }
       };
       const onPressOut = () => {
         Animated.timing(pressScale, {
@@ -623,7 +636,7 @@ export default function HomeTab() {
       };
         return (
           <View style={styles.itemContainer}>
-            <Animated.View style={[styles.unifiedWrapper, unifiedTransform, { transform: [...(unifiedTransform as any).transform, { scale: pressScale }] }]}> 
+            <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[styles.unifiedWrapper, unifiedTransform, { transform: [...(unifiedTransform as any).transform, { scale: pressScale }] }]}> 
               <Pressable 
                 style={[
                   styles.tripCard, 
@@ -643,7 +656,13 @@ export default function HomeTab() {
                     elevation: 3,
                   }
                 ]} 
-              onPress={cardPress}
+              onPress={() => {
+                if (suppressNextPressRef.current) {
+                  suppressNextPressRef.current = false;
+                  return;
+                }
+                cardPress();
+              }}
               onPressIn={onPressIn}
               onPressOut={onPressOut}
               accessibilityLabel="Add Trip"
@@ -681,7 +700,7 @@ export default function HomeTab() {
     // Real trip card
     return (
       <View style={styles.itemContainer}>
-        <Animated.View style={[styles.unifiedWrapper, unifiedTransform]}>
+        <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[styles.unifiedWrapper, unifiedTransform]}>
           {/* Outer right cast shadow on background (behind the book) */}
           {isActive && (
             <LinearGradient
@@ -697,6 +716,10 @@ export default function HomeTab() {
           <Pressable 
             style={[styles.tripCard, !isActive && styles.tripCardInactive]}
             onPress={() => {
+              if (suppressNextPressRef.current) {
+                suppressNextPressRef.current = false;
+                return;
+              }
               if (isOptionsPressRef.current) return;
               if (isActive) {
                 handleTripPress(trip);
@@ -715,6 +738,16 @@ export default function HomeTab() {
                 }, 800);
               }
             }}
+            onPressIn={() => {
+              if (isMomentumScrollingRef.current) {
+                suppressNextPressRef.current = true;
+                // Halt momentum immediately on the exact tapped index to keep UX consistent
+                flatListRef.current?.scrollToIndex({ index, animated: false });
+                if (isActive && !isOptionsPressRef.current) {
+                  setTimeout(() => handleTripPress(trip), 120);
+                }
+              }
+            }}
           >
             <Image 
               source={trip.image} 
@@ -723,7 +756,8 @@ export default function HomeTab() {
               contentFit="cover" 
               transition={0} 
               cachePolicy="memory-disk"
-              priority="high"
+              priority={isActive || isNearActive ? 'high' : 'low'}
+              recyclingKey={trip.id}
             />
             {/* Book cover overlay on top of image */}
             <Image
@@ -740,16 +774,6 @@ export default function HomeTab() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.leftInnerShadow}
-                pointerEvents="none"
-              />
-            )}
-            {/* Book spine overlay on top of the image (no corner rounding) */}
-            {isActive && (
-              <Image
-                source={require('../../public/assets/NEW-trip-shadow-overlay.webp')}
-                style={styles.bookSpineOverlay}
-                contentFit="cover"
-                transition={0}
                 pointerEvents="none"
               />
             )}
@@ -813,9 +837,13 @@ export default function HomeTab() {
   const TripCard = React.memo(TripCardBase, (prev, next) => {
     const prevLen = Math.max(2, prev.tripsLength);
     const nextLen = Math.max(2, next.tripsLength);
-    const prevActive = (((prev.index % prevLen) + prevLen) % prevLen) === prev.activeIndexMod;
-    const nextActive = (((next.index % nextLen) + nextLen) % nextLen) === next.activeIndexMod;
-    return prev.item.id === next.item.id && prevActive === nextActive;
+    const prevIndexMod = (((prev.index % prevLen) + prevLen) % prevLen);
+    const nextIndexMod = (((next.index % nextLen) + nextLen) % nextLen);
+    const prevActive = prevIndexMod === prev.activeIndexMod;
+    const nextActive = nextIndexMod === next.activeIndexMod;
+    const prevNear = Math.min(Math.abs(prevIndexMod - prev.activeIndexMod), prevLen - Math.abs(prevIndexMod - prev.activeIndexMod)) === 1;
+    const nextNear = Math.min(Math.abs(nextIndexMod - next.activeIndexMod), nextLen - Math.abs(nextIndexMod - next.activeIndexMod)) === 1;
+    return prev.item.id === next.item.id && prevActive === nextActive && prevNear === nextNear;
   });
 
   const renderDots = () => {
@@ -1130,7 +1158,15 @@ export default function HomeTab() {
         contentContainerStyle={{ 
           paddingHorizontal: (screenWidth - ITEM_SPACING) / 2,
         }}
-        onMomentumScrollEnd={onMomentumScrollEnd}
+        onMomentumScrollBegin={() => { isMomentumScrollingRef.current = true; }}
+        onMomentumScrollEnd={(e) => {
+          isMomentumScrollingRef.current = false;
+          onMomentumScrollEnd(e);
+        }}
+        onScrollEndDrag={() => {
+          // If there was no momentum phase after drag, clear the flag to allow immediate tap
+          if (!isMomentumScrollingRef.current) suppressNextPressRef.current = false;
+        }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }], 
           { useNativeDriver: true }

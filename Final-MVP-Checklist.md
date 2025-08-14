@@ -42,7 +42,14 @@ Final MVP Checklist
 
 The functionaity is complexy so need to be careful. 
 
-[ ] Make trip image overlay cover the image properly and make sure there is only 1 image overlay per trip image. This needs to be coded carefully, cleanly and optimised for performance.
+[x] Make trip image overlay cover the image properly and make sure there is only 1 image overlay per trip image. This needs to be coded carefully, cleanly and optimised for performance.
+  ✅ Implemented 2025-08-14: Ensured a single decorative overlay per trip card and removed redundant spine image layer to cut overdraw. Kept left-edge inner shadow and gradient for the book effect. Updated in `app/(tabs)/index.tsx`.
+
+  ✅ Performance tuning 2025-08-14: Home carousel smoothness
+  - Rasterized card wrappers (`renderToHardwareTextureAndroid`, `shouldRasterizeIOS`) for cheaper 3D transforms
+  - Image loading priority now favors active/adjacent cards; distant cards downgraded to `low` and use `recyclingKey` for reuse
+  - Maintained virtualization (initialNumToRender=3, maxToRenderPerBatch=2, windowSize=2, removeClippedSubviews) and native-driven scroll
+  - No visual or functional changes to interactions or design
 
 
 
